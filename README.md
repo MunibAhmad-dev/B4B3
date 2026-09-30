@@ -126,10 +126,11 @@ pm2 restart c2-server
 ### File Manager
 | Command | Parameters | Description |
 |---------|-----------|-------------|
-| `dir show` | `[C:\Folder]` | List files in directory |
+| `dir show` | `[C:\Folder]` | List directory — entries prefixed `[D]` (dir) or `[F]` (file) |
 | `dir del_file` | `[C:\path\file.exe]` | Delete a file |
 | `dir read` | `[C:\path\file.txt]` | Read file contents |
 | `dir write` | `[C:\path\file.txt] [text]` | Write text to file |
+| `pull` | `[C:\path\to\file]` | Upload file to C2 server — appears under Files tab as a download link |
 
 ### Service Manager
 | Command | Parameters | Description |

