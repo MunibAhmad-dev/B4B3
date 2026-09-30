@@ -53,8 +53,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(session({
   secret:            "b4b3-c2-session-secret-change-me",
-  resave:            false,
-  saveUninitialized: false,
+  resave:            true,
+  saveUninitialized: true,
   cookie: {
     secure:   hasTLS,                            // true only when cert.pem exists
     httpOnly: true,

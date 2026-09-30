@@ -55,7 +55,11 @@ router.post("/api/auth/login", (req, res) => {
   const pass = req.body.pass || req.body.password || "";
   if (pass === ADMIN_PASS) {
     req.session.admin = true;
-    return res.json({ ok: true });
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ ok: false, error: "Session save failed" });
+      res.json({ ok: true });
+    });
+    return;
   }
   res.status(401).json({ ok: false, error: "Incorrect password" });
 });
