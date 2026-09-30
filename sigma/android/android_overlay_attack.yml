@@ -1,0 +1,42 @@
+title: Android Overlay Attack via SYSTEM_ALERT_WINDOW
+id: d0b8e9c1-5f68-0e91-a6d0-5b4c3d2e1f0a
+status: experimental
+description: |
+    Detects applications using SYSTEM_ALERT_WINDOW to draw overlays on top of other apps.
+    Malware creates fake login screens over banking and social media apps to steal credentials.
+    Combined with accessibility service (AACC_001) enables full credential interception
+    and auto-submission (ATT&CK Mobile T1411 — Input Injection, overlay variant).
+references:
+    - https://attack.mitre.org/techniques/T1411/
+    - https://developer.android.com/reference/android/Manifest.permission#SYSTEM_ALERT_WINDOW
+    - https://www.bankinfosecurity.com/overlay-attacks-mobile-banking-a-9516
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.credential_access
+    - attack.t1411
+    - b4db4b3.rule.AOVL_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AOVL_001'
+    condition: selection
+fields:
+    - pkg
+    - target_pkg
+    - permission
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Screen overlay / always-on-top utilities (chat heads, floating timers)
+    - Assistive technology apps
+    - Legitimate app-over-app features (e.g., screen recorders showing controls)
+level: high
+# Confidence: 80% — false-positive rate higher than other rules due to legitimate overlay apps
+# Escalate when target_pkg is a banking, payment, or auth application
+# Correlate with AACC_001 for ACOR_005 (Overlay Credential Theft, 90% confidence, critical)

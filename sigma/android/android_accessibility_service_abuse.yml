@@ -1,0 +1,42 @@
+title: Android Accessibility Service Abuse for Keylogging
+id: a7e5b6f8-2c35-7b6e-d3a7-2e1f0a9b8c7d
+status: experimental
+description: |
+    Detects a third-party app binding BIND_ACCESSIBILITY_SERVICE. Legitimate accessibility
+    services are rare; spyware abuses this permission to intercept all UI events, read
+    all text on screen, simulate input, and perform full keylogging (ATT&CK Mobile T1411).
+    This is the highest-impact Android spyware capability — confidence 85%.
+references:
+    - https://attack.mitre.org/techniques/T1411/
+    - https://developer.android.com/reference/android/accessibilityservice/AccessibilityService
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.credential_access
+    - attack.t1411
+    - b4db4b3.rule.AACC_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AACC_001'
+    condition: selection
+fields:
+    - pkg
+    - permission
+    - component
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Screen readers for visually impaired users (TalkBack)
+    - Switch Access for motor-impaired users
+    - Password managers with autofill via accessibility
+    - MDM-deployed enterprise accessibility tools
+level: critical
+# Confidence: 85% — some legitimate apps use accessibility APIs
+# High-priority escalation when combined with ACAM_001 or AOVL_001 (ACOR_005)

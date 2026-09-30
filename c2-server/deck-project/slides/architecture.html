@@ -1,0 +1,36 @@
+<section id="architecture" data-section="Technical changes made to the RAT implant and builder" data-transition="fade" style="background:#F4F7F6; color:#0D1B2A; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:48px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">SYSTEM ARCHITECTURE</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">Three-Component Design</h2>
+  </div>
+  <div style="display:flex; gap:0; align-items:center; flex:1">
+    <div style="display:flex; flex-direction:column; gap:12px; background:#0D1B2A; color:#E8EEF4; padding:48px; border-radius:16px; width:340px; align-items:center">
+      <x-icon name="Tool" style="color:#00C2A8; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:36px; font-weight:700; color:#F4F7F6; text-align:center">Builder</h3>
+      <p style="font-size:22px; color:#6B7FA3; text-align:center; line-height:1.5">Win32 GUI. Operator fills in C2 host, auth key, persistence options. Bakes config into Stub.exe.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#1A2E42; padding:8px 16px; border-radius:6px">Builder.exe</p>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 24px">
+      <p style="font-size:20px; color:#4A5568; font-weight:500">generates</p>
+      <x-connector x1="0" y1="50%" x2="100%" y2="50%" route="straight" head="end" style="color:#00C2A8; border-width:3px; width:80px"></x-connector>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; background:#0D1B2A; color:#E8EEF4; padding:48px; border-radius:16px; width:340px; align-items:center">
+      <x-icon name="Code" style="color:#F4A261; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:36px; font-weight:700; color:#F4F7F6; text-align:center">Stub</h3>
+      <p style="font-size:22px; color:#6B7FA3; text-align:center; line-height:1.5">Implant deployed on target. Reads embedded config, connects to C2, executes operator commands.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#F4A261; background:#1A2E42; padding:8px 16px; border-radius:6px">payload.exe</p>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 24px">
+      <p style="font-size:20px; color:#4A5568; font-weight:500">HTTPS to</p>
+      <x-connector x1="0" y1="50%" x2="100%" y2="50%" route="straight" head="end" style="color:#F4A261; border-width:3px; width:80px"></x-connector>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; background:#0D1B2A; color:#E8EEF4; padding:48px; border-radius:16px; width:340px; align-items:center">
+      <x-icon name="Cloud" style="color:#00C2A8; width:48px; height:48px"></x-icon>
+      <h3 style="font-size:36px; font-weight:700; color:#F4F7F6; text-align:center">C2 Server</h3>
+      <p style="font-size:22px; color:#6B7FA3; text-align:center; line-height:1.5">Self-hosted. Receives check-ins, stores results &amp; screenshots, serves commands to bots.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#1A2E42; padding:8px 16px; border-radius:6px">c2-server (Node.js)</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Config encrypted (AES-128 CBC + XOR) · All traffic TLS with cert pinning · No third-party services</p>
+  <aside>Walk through left to right. Operator runs Builder → delivers Stub to target → C2 server sits on your VPS waiting. Stub phones home on every beacon interval.</aside>
+</section>

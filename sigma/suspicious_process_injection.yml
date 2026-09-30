@@ -1,0 +1,74 @@
+title: Suspicious Process Injection via Cross-Process Memory Write
+id: 8e1b4c7f-d3a5-6d9e-0f2a-5b6c7d8e9f0a
+status: experimental
+description: >
+  Detects indicators of classic DLL/shellcode injection: a process opening a remote
+  process with VM write + thread create rights, or rundll32/regsvr32 launched with
+  suspicious parent processes or from user-writable paths.
+  Covers VirtualAllocEx + WriteProcessMemory + CreateRemoteThread pattern
+  observable as child process anomalies and access patterns.
+references:
+  - https://attack.mitre.org/techniques/T1055/
+  - https://attack.mitre.org/techniques/T1055/001/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.defense_evasion
+  - attack.privilege_escalation
+  - attack.t1055
+  - attack.t1055.001
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_injector_tools:
+    Image|endswith:
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+  filter_expected_parents:
+    ParentImage|contains:
+      - '\Windows\System32\'
+      - '\Windows\SysWOW64\'
+      - '\Program Files\'
+  condition: selection_injector_tools and not filter_expected_parents
+falsepositives:
+  - Legitimate applications invoking rundll32 from non-system paths
+  - Software update mechanisms
+level: medium
+---
+title: Shellcode Injection via Suspicious Child Process Hollowing
+id: 9f2c5d8a-e4b6-7e0f-1a3b-6c7d8e9f0a1b
+status: experimental
+description: >
+  Detects process hollowing / shellcode injection patterns where a known Windows
+  binary is spawned in suspended state and then resumed with substituted image,
+  indicated by unusual parent-child relationships and the child starting from
+  a different path than expected.
+references:
+  - https://attack.mitre.org/techniques/T1055/012/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.defense_evasion
+  - attack.t1055.012
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_hollow_target:
+    Image|endswith:
+      - '\svchost.exe'
+      - '\notepad.exe'
+      - '\explorer.exe'
+      - '\msiexec.exe'
+  filter_legit_parent:
+    ParentImage|contains:
+      - '\Windows\System32\'
+      - '\Windows\SysWOW64\'
+      - 'services.exe'
+      - 'wininit.exe'
+  condition: selection_hollow_target and not filter_legit_parent
+falsepositives:
+  - Virtualization or containerization software
+  - Some legitimate security products
+level: high

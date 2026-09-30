@@ -1,0 +1,38 @@
+title: Android External Storage Access for Data Exfiltration
+id: a9e7b8f0-4c51-9b80-d5a9-4e3f2a1b0c9d
+status: experimental
+description: |
+    Detects an Android application accessing external storage (SD card, shared storage).
+    Spyware searches external storage for documents, images, and videos to exfiltrate.
+    Rule AFILE_001 fires on READ_EXTERNAL_STORAGE or WRITE_EXTERNAL_STORAGE access
+    by a package not in the expected media apps allowlist (ATT&CK Mobile T1533 — Data from Local System).
+references:
+    - https://attack.mitre.org/techniques/T1533/
+    - https://developer.android.com/reference/android/Manifest.permission#READ_EXTERNAL_STORAGE
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1533
+    - b4db4b3.rule.AFILE_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AFILE_001'
+    condition: selection
+fields:
+    - pkg
+    - permission
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - File manager applications
+    - Photo editors and gallery apps
+    - Cloud backup applications (Google Photos, Dropbox)
+    - Media players accessing music/video files
+level: medium

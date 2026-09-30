@@ -1,0 +1,41 @@
+title: Android Suspicious Camera Permission Access
+id: c3a1f2b4-e891-4d2a-9f3c-8a7b6c5d4e3f
+status: experimental
+description: |
+    Detects a non-system Android application requesting or exercising the CAMERA permission.
+    Malware may silently capture photos or video for surveillance (ATT&CK Mobile T1512).
+    Correlate with microphone and location access for spyware profiling (ACOR_001).
+references:
+    - https://attack.mitre.org/techniques/T1512/
+    - https://developer.android.com/reference/android/Manifest.permission#CAMERA
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1512
+    - b4db4b3.rule.ACAM_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'ACAM_001'
+    condition: selection
+fields:
+    - pkg
+    - permission
+    - tid
+    - sev
+    - ts
+falsepositives:
+    - Legitimate camera applications (Gallery, video calling apps)
+    - QR-code scanner apps
+    - Document scanner apps
+level: high
+# Alternative logsource mappings for production MDM/SIEM environments:
+# - VMware Workspace ONE: app_permission_event, permission=android.permission.CAMERA
+# - Microsoft Intune: mobileapp_permission_audit
+# - Zimperium zIPS: behavioral_threat, category=camera_access
+# - ADB logcat: ActivityManager permission grant events

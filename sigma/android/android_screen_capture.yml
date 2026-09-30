@@ -1,0 +1,38 @@
+title: Android Screen Capture via MediaProjection API
+id: a3e1b2f4-8c9b-3b24-d9a3-8e7f6a5b4c3d
+status: experimental
+description: |
+    Detects Android applications using the MediaProjection API to capture screen content.
+    Unlike legitimate screen recorders that show a persistent notification, spyware performs
+    silent screen capture to harvest credentials, OTPs, and sensitive data displayed on screen
+    (ATT&CK Mobile T1513 — Screen Capture).
+references:
+    - https://attack.mitre.org/techniques/T1513/
+    - https://developer.android.com/reference/android/media/projection/MediaProjectionManager
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1513
+    - b4db4b3.rule.ASCR_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'ASCR_001'
+    condition: selection
+fields:
+    - pkg
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Screen recording applications (AZ Screen Recorder, DU Recorder)
+    - Remote desktop clients
+    - Accessibility apps that process screen content
+level: high
+# MediaProjection requires user consent dialog on modern Android, but malware can
+# re-request or use accessibility service to auto-dismiss the consent dialog (AACC_001)

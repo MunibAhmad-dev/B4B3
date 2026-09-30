@@ -1,0 +1,38 @@
+title: Android Root Access Privilege Escalation Attempt
+id: b4f2c3a5-9d0c-4c35-e0b4-9f8a7b6c5d4e
+status: experimental
+description: |
+    Detects an Android application attempting to gain root (superuser) access via su binary
+    execution or exploitation of known privilege escalation vulnerabilities.
+    Root access allows bypassing Android's permission model entirely and persists across
+    factory resets if system partition is modified (ATT&CK Mobile T1626 — Exploitation
+    for Privilege Escalation).
+references:
+    - https://attack.mitre.org/techniques/T1626/
+    - https://source.android.com/docs/security/overview/app-sandbox
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.privilege_escalation
+    - attack.t1626
+    - b4db4b3.rule.AROOT_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AROOT_001'
+    condition: selection
+fields:
+    - pkg
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Root management applications on intentionally rooted research/dev devices
+    - su binary execution during authorized penetration testing
+level: critical
+# Confidence: 90% — third-party su execution outside of known root managers is highly anomalous
+# On a production/MDM-enrolled device, any root attempt should be treated as critical incident

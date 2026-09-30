@@ -1,0 +1,51 @@
+<section id="builder_gui" data-transition="fade" style="background:#F4F7F6; color:#0D1B2A; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:40px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">BUILDER GUI</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">What Each Field Means</h2>
+  </div>
+  <div style="display:flex; gap:32px; flex:1">
+    <div style="display:flex; flex-direction:column; gap:12px; flex:1">
+      <p style="font-size:24px; font-weight:600; color:#0D1B2A; border-bottom:2px solid #00C2A8; padding-bottom:8px">C2 Configuration</p>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">C2 Host</p>
+        <p style="font-size:22px; color:#BDD3E8; line-height:1.4">Your server's hostname or IP. Must match the CN in your TLS certificate exactly.</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#6B7FA3">e.g. c2.redteam.local or 192.168.1.5</p>
+      </div>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">Auth Key</p>
+        <p style="font-size:22px; color:#BDD3E8; line-height:1.4">Secret shared with the C2 server. Set the same value in <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">C2_AUTH</span> env var on the server.</p>
+      </div>
+      <p style="font-size:24px; font-weight:600; color:#0D1B2A; border-bottom:2px solid #00C2A8; padding-bottom:8px; margin-top:8px">Payload Settings</p>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">Output filename</p>
+        <p style="font-size:22px; color:#BDD3E8">Name of the generated .exe</p>
+      </div>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">Beacon interval (ms)</p>
+        <p style="font-size:22px; color:#BDD3E8">How often the stub polls for commands. 5000 = 5 sec.</p>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; flex:1">
+      <p style="font-size:24px; font-weight:600; color:#0D1B2A; border-bottom:2px solid #F4A261; padding-bottom:8px">Persistence (optional)</p>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#F4A261">Add registry autorun entry</p>
+        <p style="font-size:22px; color:#BDD3E8">Adds HKLM Run key so stub starts on Windows boot. Autorun entry name = the registry value name.</p>
+      </div>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#F4A261">Add scheduled task</p>
+        <p style="font-size:22px; color:#BDD3E8">Creates ONLOGON task in Task Scheduler. Task name = the display name in taskschd.msc.</p>
+      </div>
+      <p style="font-size:24px; font-weight:600; color:#0D1B2A; border-bottom:2px solid #00C2A8; padding-bottom:8px; margin-top:8px">Delivery</p>
+      <div style="background:#0D1B2A; padding:20px 28px; border-radius:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">Drop &amp;&amp; run</p>
+        <p style="font-size:22px; color:#BDD3E8">Copies itself to Drop path, runs from there, optionally auto-deletes the original.</p>
+      </div>
+      <div style="background:#1A2E42; padding:20px 28px; border-radius:8px; border:1px solid #243C57; margin-top:4px">
+        <p style="font-size:22px; font-weight:600; color:#00C2A8">Watchdog copy path</p>
+        <p style="font-size:22px; color:#BDD3E8">Where the stub copies itself to run the anti-analysis watchdog process.</p>
+      </div>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Click "Test C2 Server" before building — confirms server is reachable and auth key is correct</p>
+  <aside>Walk through each field on the live Builder GUI during demo. Show Test C2 Server button working against the running Express server.</aside>
+</section>

@@ -1,0 +1,35 @@
+title: Suspicious Scheduled Task Creation from Non-Standard Path
+id: 7d3e9b1a-c4f2-5a8d-9e0b-3c4d5e6f7a8b
+status: experimental
+description: >
+  Detects scheduled task creation where the task action binary is located in
+  user-writable directories (Temp, AppData, Downloads, ProgramData).
+  Legitimate scheduled tasks typically reference binaries in system or program paths.
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+  - https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.persistence
+  - attack.execution
+  - attack.t1053.005
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_schtasks:
+    Image|endswith: '\schtasks.exe'
+    CommandLine|contains: '/create'
+  selection_suspicious_path:
+    CommandLine|contains:
+      - '\Temp\'
+      - '\AppData\'
+      - '\ProgramData\'
+      - '\Users\Public\'
+      - '\Downloads\'
+  condition: selection_schtasks and selection_suspicious_path
+falsepositives:
+  - Software installers that use temp directories during installation
+  - Some legitimate portable applications
+level: high

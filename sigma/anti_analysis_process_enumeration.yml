@@ -1,0 +1,114 @@
+title: Anti-Analysis: Known Security Tool Terminated by Suspicious Process
+id: 8c1f4a7d-b3e5-6b9c-0d2e-5f6a7b8c9d0e
+status: experimental
+description: >
+  Detects termination of known security analysis tools (AV, sandbox, debuggers,
+  monitoring utilities) by a process that is not a system binary or security product
+  itself. RATs with anti-analysis protection enumerate running processes and kill
+  any matching known analysis tool names before proceeding.
+references:
+  - https://attack.mitre.org/techniques/T1562/001/
+  - https://attack.mitre.org/techniques/T1497/001/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.defense_evasion
+  - attack.t1562.001
+  - attack.t1497.001
+logsource:
+  product: windows
+  category: process_creation
+detection:
+  selection_taskkill_analysis_tools:
+    Image|endswith: '\taskkill.exe'
+    CommandLine|contains:
+      - 'wireshark'
+      - 'processhacker'
+      - 'procmon'
+      - 'procexp'
+      - 'ollydbg'
+      - 'x64dbg'
+      - 'x32dbg'
+      - 'windbg'
+      - 'idag'
+      - 'idag64'
+      - 'fiddler'
+      - 'charles'
+      - 'tcpview'
+      - 'regmon'
+      - 'filemon'
+      - 'autoruns'
+      - 'dumpcap'
+  condition: selection_taskkill_analysis_tools
+falsepositives:
+  - Security teams running automated cleanup scripts
+  - IT policies that terminate unlicensed tools
+level: high
+---
+title: Rapid Process Enumeration via CreateToolhelp32Snapshot
+id: 9d2a5b8e-c4f6-7c0d-1e3f-6a7b8c9d0e1f
+status: experimental
+description: >
+  Detects unusually high-frequency process listing activity as seen in RAT
+  anti-analysis loops that continuously poll for analysis tools. Measured by
+  high rate of Sysmon process access events (Event ID 10) against many distinct
+  target PIDs from a single source process within a short window.
+references:
+  - https://attack.mitre.org/techniques/T1057/
+  - https://attack.mitre.org/techniques/T1497/001/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.discovery
+  - attack.defense_evasion
+  - attack.t1057
+  - attack.t1497.001
+logsource:
+  product: windows
+  category: process_access
+detection:
+  selection:
+    GrantedAccess|contains:
+      - '0x1410'   # PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION
+      - '0x0410'
+  condition: selection | count(TargetImage) by SourceImage > 30
+  timeframe: 5s
+falsepositives:
+  - Legitimate system monitoring agents (AV, EDR) that enumerate processes at startup
+  - Task managers and process explorers
+level: medium
+---
+title: Executable Checks for Virtualization or Sandbox Artifacts
+id: ae3b6c9f-d5a7-8d1e-2f4a-7b8c9d0e1f2a
+status: experimental
+description: >
+  Detects file system or registry reads for known sandbox/VM artifact names
+  (e.g., VBOX, VMware device names, Sandboxie DLLs) — a pattern used by malware
+  to detect analysis environments before revealing malicious behavior.
+references:
+  - https://attack.mitre.org/techniques/T1497/001/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.defense_evasion
+  - attack.t1497.001
+logsource:
+  product: windows
+  category: registry_event
+detection:
+  selection:
+    TargetObject|contains:
+      - 'VBOX'
+      - 'VBoxService'
+      - 'VBoxTray'
+      - 'VMware'
+      - 'VMTools'
+      - 'VirtualBox'
+      - 'QEMU'
+      - 'Sandboxie'
+      - 'SbieDll'
+  condition: selection
+falsepositives:
+  - Virtualization management software
+  - Migration tools on hypervisor hosts
+level: medium

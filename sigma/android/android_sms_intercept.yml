@@ -1,0 +1,42 @@
+title: Android SMS Read or Send Abuse
+id: f6d4a5e7-1b24-6a5d-c2f6-1d0e9f8a7b6c
+status: experimental
+description: |
+    Detects Android applications accessing READ_SMS or SEND_SMS permissions.
+    Spyware uses SMS read for 2FA token harvesting and banking credential theft.
+    SEND_SMS may indicate premium-rate SMS fraud (ATT&CK Mobile T1412).
+references:
+    - https://attack.mitre.org/techniques/T1412/
+    - https://developer.android.com/reference/android/Manifest.permission#READ_SMS
+    - https://developer.android.com/reference/android/Manifest.permission#SEND_SMS
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1412
+    - b4db4b3.rule.ASMS_001
+    - b4db4b3.rule.ASMS_002
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection_read:
+        platform: 'android'
+        rule: 'ASMS_001'
+    selection_send:
+        platform: 'android'
+        rule: 'ASMS_002'
+    condition: selection_read or selection_send
+fields:
+    - pkg
+    - permission
+    - rule
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Default SMS/messaging applications
+    - Business communication apps with SMS integration
+    - Two-factor authentication apps (some require READ_SMS for auto-fill)
+level: critical

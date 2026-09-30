@@ -1,0 +1,36 @@
+title: Android Suspicious Microphone Permission Access
+id: d4b2e3c5-f902-4e3b-a0d4-9b8c7d6e5f4a
+status: experimental
+description: |
+    Detects a non-system Android application requesting or exercising the RECORD_AUDIO permission.
+    Malware uses silent audio capture to intercept conversations (ATT&CK Mobile T1429).
+    High-confidence indicator when combined with camera or location access (ACOR_001).
+references:
+    - https://attack.mitre.org/techniques/T1429/
+    - https://developer.android.com/reference/android/Manifest.permission#RECORD_AUDIO
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1429
+    - b4db4b3.rule.AMIC_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AMIC_001'
+    condition: selection
+fields:
+    - pkg
+    - permission
+    - tid
+    - sev
+    - ts
+falsepositives:
+    - Voice-calling applications (WhatsApp, Teams, Zoom)
+    - Voice assistants
+    - Voice recorder apps installed by the user
+level: high

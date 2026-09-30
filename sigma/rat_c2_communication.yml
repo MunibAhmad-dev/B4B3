@@ -1,0 +1,81 @@
+title: RAT-Like C2 Communication over HTTPS to Non-Browser Process
+id: 1b4e7f0c-a6d8-9a2b-3c5d-8e9f0a1b2c3d
+status: experimental
+description: >
+  Detects non-browser, non-system processes making outbound HTTPS connections to
+  IPs or hostnames on port 443. RATs embedded as plain Win32 executables typically
+  use WinInet directly rather than a browser process, making the parent process
+  identity a strong indicator. Covers both Telegram-style cloud C2
+  (api.telegram.org) and custom HTTPS C2 servers.
+references:
+  - https://attack.mitre.org/techniques/T1071/001/
+  - https://attack.mitre.org/techniques/T1102/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.command_and_control
+  - attack.t1071.001
+  - attack.t1102
+logsource:
+  product: windows
+  category: network_connection
+detection:
+  selection_https:
+    DestinationPort: 443
+    Initiated: 'true'
+  filter_known_browsers:
+    Image|endswith:
+      - '\chrome.exe'
+      - '\firefox.exe'
+      - '\msedge.exe'
+      - '\iexplore.exe'
+      - '\opera.exe'
+      - '\brave.exe'
+      - '\safari.exe'
+  filter_system:
+    Image|contains:
+      - '\Windows\System32\'
+      - '\Windows\SysWOW64\'
+      - '\Program Files\WindowsApps\'
+  filter_known_updaters:
+    Image|endswith:
+      - '\MicrosoftEdgeUpdate.exe'
+      - '\GoogleUpdate.exe'
+      - '\OneDrive.exe'
+      - '\Teams.exe'
+  condition: selection_https and not filter_known_browsers and not filter_system and not filter_known_updaters
+falsepositives:
+  - Any legitimate application that makes HTTPS calls (Electron apps, update tools, etc.)
+  - Narrow with additional process name or path filters for your environment
+level: low
+---
+title: Network Connection to Telegram API from Non-Messaging Application
+id: 2c5f8a1d-b7e9-0b3c-4d6e-9f0a1b2c3d4e
+status: experimental
+description: >
+  Detects outbound connections to api.telegram.org from processes that are not
+  known Telegram client binaries. Malware frequently abuses Telegram as a free,
+  resilient C2 channel.
+references:
+  - https://attack.mitre.org/techniques/T1102/
+author: B4B3-RAT Red Team
+date: 2026/09/29
+tags:
+  - attack.command_and_control
+  - attack.t1102
+logsource:
+  product: windows
+  category: network_connection
+detection:
+  selection:
+    DestinationHostname|contains:
+      - 'api.telegram.org'
+      - 'telegram.org'
+  filter_legit_clients:
+    Image|endswith:
+      - '\Telegram.exe'
+      - '\telegram.exe'
+  condition: selection and not filter_legit_clients
+falsepositives:
+  - Custom bots or automation tools intentionally using the Telegram API
+level: high

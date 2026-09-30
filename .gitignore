@@ -1,0 +1,24 @@
+# TLS private keys — NEVER commit these
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Uploads from bots
+c2-server/uploads/*
+!c2-server/uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Env files
+.env
+.env.*

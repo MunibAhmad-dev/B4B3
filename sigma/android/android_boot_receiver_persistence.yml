@@ -1,0 +1,39 @@
+title: Android Boot Receiver for Autostart Persistence
+id: c9a7d8b0-4e57-9d80-f5c9-4a3b2c1d0e9f
+status: experimental
+description: |
+    Detects an Android application registering a BOOT_COMPLETED broadcast receiver.
+    This allows the application to auto-start every time the device reboots without
+    user interaction — a core persistence mechanism for mobile spyware (ATT&CK Mobile T1624.001).
+references:
+    - https://attack.mitre.org/techniques/T1624/001/
+    - https://developer.android.com/reference/android/content/Intent#ACTION_BOOT_COMPLETED
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.persistence
+    - attack.t1624.001
+    - b4db4b3.rule.ABOOT_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'ABOOT_001'
+    condition: selection
+fields:
+    - pkg
+    - component
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Alarm clock and reminder applications
+    - VPN clients that reconnect on boot
+    - Battery-saving and background task manager apps
+    - Messaging apps with push notification services
+level: medium
+# Note: BOOT_COMPLETED alone is medium severity but escalates in combination with
+# collection capabilities (ACAM_001, AMIC_001) → ACOR_003 (Spyware Profile, critical)

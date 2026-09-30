@@ -1,0 +1,38 @@
+title: Android Notification Listener Service Abuse
+id: c5a3d4b6-0e1d-5d46-f1c5-0a9b8c7d6e5f
+status: experimental
+description: |
+    Detects an Android application binding a NotificationListenerService. This grants
+    access to all notifications from all applications on the device, including OTP codes,
+    banking alerts, message previews, and security alerts from other apps
+    (ATT&CK Mobile T1517 — Access Notifications).
+references:
+    - https://attack.mitre.org/techniques/T1517/
+    - https://developer.android.com/reference/android/service/notification/NotificationListenerService
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1517
+    - b4db4b3.rule.ANOT_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'ANOT_001'
+    condition: selection
+fields:
+    - pkg
+    - component
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Notification mirroring apps (Android Auto, Wear OS companion)
+    - Do Not Disturb management apps
+    - Notification manager apps (Daywise, Notisave)
+    - Smart home voice assistant integrations
+level: high

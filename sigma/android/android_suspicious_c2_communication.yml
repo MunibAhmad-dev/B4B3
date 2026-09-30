@@ -1,0 +1,47 @@
+title: Android Suspicious C2 Network Communication
+id: e1c9f0d2-6a79-1f02-b7e1-6c5d4e3f2a1b
+status: experimental
+description: |
+    Detects Android applications making suspicious outbound network connections that
+    match C2 communication patterns: non-standard ports, raw IP endpoints, or
+    unrecognized domain names. ANET_002 specifically flags encrypted channel abuse
+    (ATT&CK Mobile T1521 — Encrypted Channel / SSL/TLS).
+references:
+    - https://attack.mitre.org/techniques/T1437/
+    - https://attack.mitre.org/techniques/T1521/
+    - https://attack.mitre.org/techniques/T1571/
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.command_and_control
+    - attack.t1437
+    - attack.t1521
+    - b4db4b3.rule.ANET_001
+    - b4db4b3.rule.ANET_002
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection_appproto:
+        platform: 'android'
+        rule: 'ANET_001'
+    selection_encrypted:
+        platform: 'android'
+        rule: 'ANET_002'
+    condition: selection_appproto or selection_encrypted
+fields:
+    - pkg
+    - remote
+    - domain
+    - rule
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Applications with legitimate custom protocols (game servers, media streaming)
+    - VPN client applications
+    - CDN-backed apps connecting to edge nodes on non-standard ports
+level: high
+# When remote is a raw IP address with no PTR record, confidence increases significantly
+# Correlate with persistence events for ACOR_003 (Spyware Profile)

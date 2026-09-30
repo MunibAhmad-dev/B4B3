@@ -1,0 +1,39 @@
+title: Android Clipboard Monitoring for Credential Theft
+id: b0f8c9a1-5d62-0c91-e6b0-5f4a3b2c1d0e
+status: experimental
+description: |
+    Detects an Android application accessing the clipboard (ClipboardManager) without
+    user interaction context. Malware monitors clipboard to steal cryptocurrency wallet
+    addresses, passwords copied from password managers, and authentication tokens
+    (ATT&CK Mobile T1409 — Stored Application Data — clipboard variant).
+references:
+    - https://attack.mitre.org/techniques/T1409/
+    - https://developer.android.com/reference/android/content/ClipboardManager
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.credential_access
+    - attack.t1409
+    - b4db4b3.rule.ACLIP_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'ACLIP_001'
+    condition: selection
+fields:
+    - pkg
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Clipboard manager apps
+    - Password managers with clipboard clear functionality
+    - Copy-paste utilities
+level: high
+# Note: Android 10+ restricts background clipboard access; on older versions this
+# is a silent persistent attack vector with no user visibility

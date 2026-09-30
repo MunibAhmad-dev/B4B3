@@ -1,0 +1,42 @@
+title: Android Anti-Analysis and Sandbox Evasion Techniques
+id: f2d0a1e3-7b8a-2a13-c8f2-7d6e5f4a3b2c
+status: experimental
+description: |
+    Detects Android applications checking for emulator, debugger, or hooking framework
+    presence (Frida, Xposed) to evade analysis. This is a strong indicator of malware
+    attempting to behave differently in sandbox/analysis environments vs. real devices
+    (ATT&CK Mobile T1633 — Virtualization/Sandbox Evasion).
+    Rule AEMU_001 fires when checks for frida-agent, XposedBridge, or de.robv.android.xposed
+    are detected in the application's runtime behavior.
+references:
+    - https://attack.mitre.org/techniques/T1633/
+    - https://frida.re/docs/android/
+    - https://github.com/rovo89/XposedBridge
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.defense_evasion
+    - attack.t1633
+    - b4db4b3.rule.AEMU_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AEMU_001'
+    condition: selection
+fields:
+    - pkg
+    - checks
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Mobile security SDK vendors that check for root/hook (SafetyNet, Play Integrity API)
+    - Enterprise security apps performing tamper detection
+    - Root checker utility apps
+level: high
+# Artifacts checked: frida-agent.so, XposedBridge, de.robv.android.xposed, /proc/self/maps Frida patterns
+# Any app actively scanning for Frida/Xposed has anti-analysis logic — treat as malware indicator

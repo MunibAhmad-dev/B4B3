@@ -1,0 +1,40 @@
+title: Android Foreground Service for Persistent Background Operation
+id: d6b4e5c7-1f2e-6e57-a2d6-1b0c9d8e7f6a
+status: experimental
+description: |
+    Detects an Android application starting a foreground service to maintain persistent
+    background operation. While Android requires a visible notification for foreground
+    services, malware uses low-visibility notifications (empty icon, minimal text) to
+    persist while performing surveillance activities (ATT&CK Mobile T1541 — Foreground Persistence).
+references:
+    - https://attack.mitre.org/techniques/T1541/
+    - https://developer.android.com/guide/components/foreground-services
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.persistence
+    - attack.t1541
+    - b4db4b3.rule.AFGS_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AFGS_001'
+    condition: selection
+fields:
+    - pkg
+    - component
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Music players and podcast apps
+    - Navigation apps with active turn-by-turn
+    - Download managers with active transfers
+    - Legitimate VoIP apps keeping calls alive
+level: medium
+# Severity is medium alone but escalates to high/critical when the foreground service
+# package also has ACAM_001, AMIC_001, or ALOC_002 events (ACOR_003 Spyware Profile)

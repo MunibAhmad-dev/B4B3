@@ -1,0 +1,45 @@
+<section id="changes" data-transition="fade" style="background:#0D1B2A; color:#E8EEF4; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:48px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">WHAT CHANGED</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">5 Key Changes from Original</h2>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:20px; flex:1">
+    <div style="display:flex; gap:24px; align-items:flex-start; background:#1A2E42; padding:32px; border-radius:10px; border-left:4px solid #00C2A8">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; font-weight:500; color:#00C2A8; min-width:40px">1</p>
+      <div>
+        <p style="font-size:28px; font-weight:600; color:#F4F7F6">Telegram → Custom C2 Server</p>
+        <p style="font-size:22px; color:#6B7FA3; line-height:1.5">All C2 traffic now hits your server. Endpoints: <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">/checkin /cmd /result /upload</span>. Auth via key on every request.</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:24px; align-items:flex-start; background:#1A2E42; padding:32px; border-radius:10px; border-left:4px solid #00C2A8">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; font-weight:500; color:#00C2A8; min-width:40px">2</p>
+      <div>
+        <p style="font-size:28px; font-weight:600; color:#F4F7F6">Config Encrypted + Obfuscated</p>
+        <p style="font-size:22px; color:#6B7FA3; line-height:1.5">AES-128 CBC for the C2 hostname field. XOR with magic marker over entire config blob — key derived from binary content, no static key in strings.</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:24px; align-items:flex-start; background:#1A2E42; padding:32px; border-radius:10px; border-left:4px solid #00C2A8">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; font-weight:500; color:#00C2A8; min-width:40px">3</p>
+      <div>
+        <p style="font-size:28px; font-weight:600; color:#F4F7F6">TLS Certificate Pinning</p>
+        <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Stub validates cert CN matches C2 hostname AND that it's self-signed. Blocks TLS-inspection proxies from intercepting comms.</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:24px; align-items:flex-start; background:#1A2E42; padding:32px; border-radius:10px; border-left:4px solid #F4A261">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; font-weight:500; color:#F4A261; min-width:40px">4</p>
+      <div>
+        <p style="font-size:28px; font-weight:600; color:#F4F7F6">Anti-Analysis Protection</p>
+        <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Checks: <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">IsDebuggerPresent</span>, remote debugger, 29 analysis tool process names, window title scan for Wireshark/IDA/Fiddler etc.</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:24px; align-items:flex-start; background:#1A2E42; padding:32px; border-radius:10px; border-left:4px solid #00C2A8">
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:28px; font-weight:500; color:#00C2A8; min-width:40px">5</p>
+      <div>
+        <p style="font-size:28px; font-weight:600; color:#F4F7F6">Screenshots to C2 (not prntscr.com)</p>
+        <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Screenshot command now POST-uploads the JPEG directly to <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">/upload</span> on your server. Files in <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">uploads/</span>, visible in admin UI.</p>
+      </div>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Original source: B4DB4B3-RAT (GitHub) · All changes made for authorized engagement use</p>
+  <aside>If they ask why each matters: #1 keeps traffic off Telegram's servers; #2 prevents hex-editor config extraction; #3 stops TLS inspection; #4 evades sandbox analysis; #5 data sovereignty.</aside>
+</section>

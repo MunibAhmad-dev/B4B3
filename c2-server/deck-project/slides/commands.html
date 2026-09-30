@@ -1,0 +1,90 @@
+<section id="commands" data-transition="fade" style="background:#F4F7F6; color:#0D1B2A; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:40px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">OPERATOR REFERENCE</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">Implant Command Reference</h2>
+  </div>
+  <div style="display:flex; gap:32px; flex:1">
+    <div style="flex:1">
+      <table style="font-size:22px; border:1px solid #D6E0DF; border-radius:8px; overflow:hidden; width:100%">
+        <tr style="background:#0D1B2A; color:#E8EEF4">
+          <th style="width:48%; text-align:left; padding:12px 16px; font-family:'JetBrains Mono', 'Courier New', monospace">Command</th>
+          <th style="width:52%; text-align:left; padding:12px 16px">What it does</th>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">processes</td>
+          <td style="padding:10px 16px; color:#4A5568">List running processes</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">closeproc &lt;name.exe&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Kill a process by name</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">screenshot</td>
+          <td style="padding:10px 16px; color:#4A5568">Capture screen → upload to C2</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">dir show &lt;C:\Path&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">List directory contents</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">dir read &lt;C:\file.txt&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Read file contents</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">system &lt;cmd args&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Run via cmd.exe (blind)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">run &lt;path&gt; [args]</td>
+          <td style="padding:10px 16px; color:#4A5568">Execute a file</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">loader &lt;url&gt; &lt;dest&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Download file to target</td>
+        </tr>
+      </table>
+    </div>
+    <div style="flex:1">
+      <table style="font-size:22px; border:1px solid #D6E0DF; border-radius:8px; overflow:hidden; width:100%">
+        <tr style="background:#0D1B2A; color:#E8EEF4">
+          <th style="width:48%; text-align:left; padding:12px 16px; font-family:'JetBrains Mono', 'Courier New', monospace">Command</th>
+          <th style="width:52%; text-align:left; padding:12px 16px">What it does</th>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">inject_dll &lt;proc&gt; &lt;dll&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">DLL injection into process</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">inject_shell &lt;proc&gt; &lt;sc&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Shellcode injection</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">service show</td>
+          <td style="padding:10px 16px; color:#4A5568">List device drivers/services</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">filecrypt &lt;path&gt; &lt;key&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">AES-encrypt a file</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">filedecrypt &lt;path&gt; &lt;key&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">AES-decrypt a file</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">botnet start &lt;url&gt;</td>
+          <td style="padding:10px 16px; color:#4A5568">Start HTTP flood thread</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">botnet stop</td>
+          <td style="padding:10px 16px; color:#4A5568">Stop flood thread</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">close</td>
+          <td style="padding:10px 16px; color:#4A5568">Terminate implant process</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Commands are issued from the admin dashboard → sent to bot → result returns on next beacon tick</p>
+  <aside>For the demo: use "processes" first (safe, informational), then "screenshot" to show the upload flow. Avoid inject or botnet in a live demo unless specifically asked.</aside>
+</section>

@@ -1,0 +1,37 @@
+title: Suspicious Run Key Persistence via Registry
+id: 4a1f8c2e-b3d7-4e9a-8f1c-2b3e4d5f6a7b
+status: experimental
+description: >
+  Detects modification of Windows Autostart Run registry keys from unusual locations.
+  Legitimate installers typically write from %ProgramFiles% or %SystemRoot%; writes
+  from Temp, AppData (non-Microsoft paths), or user profile roots are suspicious.
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+  - https://docs.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys
+author: B4B3-RAT Red Team
+date: 2026/09/29
+modified: 2026/09/29
+tags:
+  - attack.persistence
+  - attack.t1547.001
+logsource:
+  product: windows
+  category: registry_event
+detection:
+  selection_key:
+    EventType: SetValue
+    TargetObject|contains:
+      - '\Software\Microsoft\Windows\CurrentVersion\Run'
+      - '\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+      - '\Software\Microsoft\Windows\CurrentVersion\RunOnceEx'
+  filter_legit_paths:
+    Details|contains:
+      - '\Program Files\'
+      - '\Program Files (x86)\'
+      - '\Windows\System32\'
+      - '\Windows\SysWOW64\'
+  condition: selection_key and not filter_legit_paths
+falsepositives:
+  - Software installers writing to Run keys from staging directories
+  - Portable applications launched by users
+level: high

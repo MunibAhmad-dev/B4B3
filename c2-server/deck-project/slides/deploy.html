@@ -1,0 +1,57 @@
+<section id="deploy" data-section="Deployment, operations, and next steps" data-transition="fade" style="background:#0D1B2A; color:#E8EEF4; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:40px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">DEPLOYMENT</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">Standing Up the C2 — Step by Step</h2>
+  </div>
+  <div style="display:flex; gap:48px; flex:1">
+    <div style="display:flex; flex-direction:column; gap:20px; flex:1">
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">1</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Install dependencies</p>
+          <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8; margin-top:8px">cd c2-server &amp;&amp; npm install</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">2</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Generate TLS certificate</p>
+          <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; margin-top:8px; line-height:1.8">openssl req -x509 -newkey rsa:2048<br>-keyout key.pem -out cert.pem<br>-days 365 -nodes -subj "/CN=&lt;YOUR_HOST&gt;"</p>
+          <p style="font-size:20px; color:#6B7FA3; margin-top:8px">CN must match Builder's C2 Host field</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">3</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Start the server</p>
+          <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8; margin-top:8px">C2_AUTH=mysecret C2_PORT=443 npm start</p>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:20px; flex:1">
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">4</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Open Builder</p>
+          <p style="font-size:22px; color:#6B7FA3; line-height:1.5; margin-top:4px">Fill in C2 Host (your server IP/hostname), Auth Key (same as C2_AUTH). Click <b>Test C2 Server</b> — should say "reachable".</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">5</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Configure &amp; build payload</p>
+          <p style="font-size:22px; color:#6B7FA3; line-height:1.5; margin-top:4px">Set persistence, delivery, protection options. Click <b>Build Payload</b>. Output .exe is ready for delivery.</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:20px; align-items:flex-start; background:#1A2E42; padding:28px; border-radius:10px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:32px; font-weight:500; color:#00C2A8; min-width:32px; line-height:1">6</p>
+        <div>
+          <p style="font-size:26px; font-weight:600; color:#F4F7F6">Monitor via admin dashboard</p>
+          <p style="font-size:22px; color:#6B7FA3; line-height:1.5; margin-top:4px">Open <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#00C2A8">https://&lt;your-host&gt;:443</span> in browser. Login with admin password to see connected bots and issue commands.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Full source in c2-server/ directory · Node.js 18+ · cert.pem &amp; key.pem must be in c2-server/</p>
+  <aside>This is the demo flow. Have the server already running before the screen share. Walk steps 4–6 live with them watching.</aside>
+</section>

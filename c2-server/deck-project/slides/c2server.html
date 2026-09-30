@@ -1,0 +1,59 @@
+<section id="c2server" data-transition="fade" style="background:#F4F7F6; color:#0D1B2A; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:40px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#00C2A8; letter-spacing:2px">C2 SERVER</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">Custom Backend — How It Works</h2>
+  </div>
+  <div style="display:flex; gap:32px; flex:1">
+    <div style="display:flex; flex-direction:column; gap:16px; flex:1">
+      <p style="font-size:26px; font-weight:600; color:#0D1B2A">API Endpoints</p>
+      <table style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; border:1px solid #D6E0DF; border-radius:8px; overflow:hidden">
+        <tr style="background:#0D1B2A; color:#E8EEF4">
+          <th style="width:45%; text-align:left; padding:12px 16px">Route</th>
+          <th style="width:55%; text-align:left; padding:12px 16px">Purpose</th>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; color:#00C2A8">GET /ping</td>
+          <td style="padding:10px 16px; color:#4A5568; font-family:'IBM Plex Sans', Arial, sans-serif">Builder connectivity test</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; color:#00C2A8">GET /checkin</td>
+          <td style="padding:10px 16px; color:#4A5568; font-family:'IBM Plex Sans', Arial, sans-serif">Bot registers, sends system info</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; color:#00C2A8">GET /cmd</td>
+          <td style="padding:10px 16px; color:#4A5568; font-family:'IBM Plex Sans', Arial, sans-serif">Poll for next command (consumed on read)</td>
+        </tr>
+        <tr style="background:#EDF2F1">
+          <td style="padding:10px 16px; color:#00C2A8">GET /result</td>
+          <td style="padding:10px 16px; color:#4A5568; font-family:'IBM Plex Sans', Arial, sans-serif">Bot returns command output</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 16px; color:#F4A261">POST /upload</td>
+          <td style="padding:10px 16px; color:#4A5568; font-family:'IBM Plex Sans', Arial, sans-serif">File / screenshot upload (multipart)</td>
+        </tr>
+      </table>
+      <div style="background:#0D1B2A; padding:24px; border-radius:8px; margin-top:8px">
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#00C2A8">Auth: every request requires</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:20px; color:#E8EEF4">?auth=&lt;AUTH_KEY&gt;</p>
+        <p style="font-size:20px; color:#6B7FA3; margin-top:8px">Set via environment variable <span style="font-family:'JetBrains Mono', 'Courier New', monospace; color:#F4A261">C2_AUTH</span></p>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; flex:1">
+      <p style="font-size:26px; font-weight:600; color:#0D1B2A">Admin Dashboard Features</p>
+      <ul style="font-size:26px; line-height:1.7; color:#0D1B2A">
+        <li>Live bot list — ID, last seen, system info</li>
+        <li>Send commands to any bot</li>
+        <li>View command results per bot</li>
+        <li>Browse uploaded screenshots / files</li>
+        <li>Auth-gated — password required to access</li>
+      </ul>
+      <div style="background:#0D1B2A; padding:24px; border-radius:8px; margin-top:8px">
+        <p style="font-size:22px; font-weight:600; color:#00C2A8">TLS Requirement</p>
+        <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#BDD3E8; line-height:1.6">openssl req -x509 -newkey rsa:2048<br>-keyout key.pem -out cert.pem<br>-days 365 -nodes -subj "/CN=c2.host"</p>
+        <p style="font-size:20px; color:#6B7FA3; margin-top:8px">CN must match the C2 Host field in Builder</p>
+      </div>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">Runs on Node.js (Express) · Port 443 default · Self-signed TLS required for cert pinning</p>
+  <aside>Show them the admin UI live here during demo. Walk through: bots list, click a bot, show info panel, send a command, watch result come back.</aside>
+</section>

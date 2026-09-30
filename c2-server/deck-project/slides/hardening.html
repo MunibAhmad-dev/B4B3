@@ -1,0 +1,46 @@
+<section id="hardening" data-transition="fade" style="background:#0D1B2A; color:#E8EEF4; font-family:'IBM Plex Sans', Arial, sans-serif; display:flex; flex-direction:column; padding:128px 128px 160px; gap:40px">
+  <div>
+    <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:22px; color:#F4A261; letter-spacing:2px">SECURITY HARDENING</p>
+    <h2 style="font-size:64px; font-weight:700; line-height:1.1; margin-top:16px">Defense Against Analysis &amp; Interception</h2>
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; flex:1">
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #00C2A8">
+      <x-icon name="Lock" style="color:#00C2A8; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">Config Encryption</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">C2 hostname encrypted with AES-128 CBC. Random IV per build — no two payloads produce same ciphertext.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#0D1B2A; padding:8px 12px; border-radius:6px">AES-128 CBC + random IV</p>
+    </div>
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #00C2A8">
+      <x-icon name="Key" style="color:#00C2A8; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">XOR Obfuscation</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Full config blob XOR'd. Key derived from first 1024 bytes of the binary itself — no static key string exists in the file.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#0D1B2A; padding:8px 12px; border-radius:6px">8-byte magic marker</p>
+    </div>
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #00C2A8">
+      <x-icon name="Verified" style="color:#00C2A8; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">Cert Pinning</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Every HTTPS call validates the cert: CN must match the C2 host AND cert must be self-signed. CA-signed proxy certs are rejected.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#0D1B2A; padding:8px 12px; border-radius:6px">Blocks TLS inspection</p>
+    </div>
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #F4A261">
+      <x-icon name="Warning" style="color:#F4A261; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">Anti-Debug</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Checks IsDebuggerPresent and CheckRemoteDebuggerPresent on startup. ExitProcess(0) if detected.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#F4A261; background:#0D1B2A; padding:8px 12px; border-radius:6px">WinAPI debug checks</p>
+    </div>
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #F4A261">
+      <x-icon name="Search" style="color:#F4A261; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">Tool Detection</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Scans 29 analyst tool process names + EnumWindows scan for Wireshark, IDA, Fiddler, x64dbg, ProcHacker window titles.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#F4A261; background:#0D1B2A; padding:8px 12px; border-radius:6px">29 processes + window scan</p>
+    </div>
+    <div style="background:#1A2E42; padding:40px; border-radius:12px; display:flex; flex-direction:column; gap:16px; border-top:4px solid #00C2A8">
+      <x-icon name="Cloud" style="color:#00C2A8; width:40px; height:40px"></x-icon>
+      <h3 style="font-size:30px; font-weight:600; color:#F4F7F6">In-House Exfil</h3>
+      <p style="font-size:22px; color:#6B7FA3; line-height:1.5">Screenshots multipart-POST directly to /upload. No prntscr.com. Files land in uploads/ on your server.</p>
+      <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:18px; color:#00C2A8; background:#0D1B2A; padding:8px 12px; border-radius:6px">Zero third-party traffic</p>
+    </div>
+  </div>
+  <p style="position:absolute; left:128px; bottom:64px; font-size:22px; color:#6B7FA3">All hardening is togglable via Builder checkboxes where applicable</p>
+  <aside>Blue team note: IOCs are now purely HTTPS to your C2 IP, random bot ID integers, and the user-agent "Mozilla/5.0" on the WinInet calls.</aside>
+</section>

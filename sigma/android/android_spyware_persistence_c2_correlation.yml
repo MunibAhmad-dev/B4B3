@@ -1,0 +1,63 @@
+title: Android Spyware Profile - Persistence Plus Collection Plus C2 (Correlation)
+id: d2b0e1c3-7f84-2e13-a8d2-7b6c5d4e3f2a
+status: experimental
+description: |
+    Correlation rule: detects a single Android application package generating persistence
+    events (ABOOT_001 or AFGS_001), collection events (ACAM_001/AMIC_001/ALOC_001-002),
+    AND C2 network events (ANET_001/ANET_002) within a 10-minute window.
+    This three-phase pattern (persist → collect → exfiltrate) is the complete spyware
+    operational cycle. Confidence: 90%. Maps to ACOR_003 in the B4DB4B3-RAT correlation engine.
+
+    ATT&CK coverage: T1624.001 (Boot Receiver) + T1541 (Foreground) + collection TTPs + T1437/T1521 (C2)
+references:
+    - https://attack.mitre.org/techniques/T1624/001/
+    - https://attack.mitre.org/techniques/T1541/
+    - https://attack.mitre.org/techniques/T1437/
+    - https://attack.mitre.org/techniques/T1521/
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.persistence
+    - attack.collection
+    - attack.command_and_control
+    - attack.t1624.001
+    - attack.t1541
+    - attack.t1437
+    - attack.t1521
+    - b4db4b3.correlation.ACOR_003
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    persistence:
+        platform: 'android'
+        rule|contains:
+            - 'ABOOT_001'
+            - 'AFGS_001'
+            - 'AADM_001'
+    collection:
+        platform: 'android'
+        rule|contains:
+            - 'ACAM_001'
+            - 'AMIC_001'
+            - 'ALOC_'
+            - 'ASMS_'
+            - 'AACC_001'
+    c2:
+        platform: 'android'
+        rule|contains:
+            - 'ANET_001'
+            - 'ANET_002'
+    condition: persistence and collection and c2
+timeframe: 10m
+group-by:
+    - pkg
+fields:
+    - pkg
+    - ts
+falsepositives:
+    - Enterprise MDM agent with push notification and management capabilities
+level: critical
+# Confidence: 90% — three-phase profile across 10-minute window is highly indicative
+# Response: immediate device quarantine, forensic preservation, IR escalation

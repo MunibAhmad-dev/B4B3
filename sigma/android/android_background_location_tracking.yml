@@ -1,0 +1,42 @@
+title: Android Background Location Tracking
+id: e5c3f4d6-0a13-5f4c-b1e5-0c9d8e7f6a5b
+status: experimental
+description: |
+    Detects Android applications using ACCESS_BACKGROUND_LOCATION or ACCESS_FINE_LOCATION.
+    Background location access (ALOC_002) is critical-severity — the app can track the device
+    24/7 without any visible indicator to the user (ATT&CK Mobile T1430).
+references:
+    - https://attack.mitre.org/techniques/T1430/
+    - https://developer.android.com/reference/android/Manifest.permission#ACCESS_BACKGROUND_LOCATION
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1430
+    - b4db4b3.rule.ALOC_001
+    - b4db4b3.rule.ALOC_002
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection_background:
+        platform: 'android'
+        rule: 'ALOC_002'
+    selection_fine:
+        platform: 'android'
+        rule: 'ALOC_001'
+    condition: selection_background or selection_fine
+fields:
+    - pkg
+    - permission
+    - rule
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - Navigation and mapping applications (Google Maps, Waze)
+    - Delivery and ride-sharing apps with active trips
+    - Fleet management MDM-enrolled devices (expected behavior)
+level: high
+# Note: ALOC_002 (background) is critical severity; ALOC_001 (foreground fine) is high severity

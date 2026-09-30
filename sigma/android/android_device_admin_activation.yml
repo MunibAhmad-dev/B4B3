@@ -1,0 +1,41 @@
+title: Android Device Administrator Activation for Anti-Uninstall
+id: b8f6c7a9-3d46-8c7f-e4b8-3f2a1b0c9d8e
+status: experimental
+description: |
+    Detects an application activating the Device Administration API (BIND_DEVICE_ADMIN).
+    Malware uses device admin rights to block its own removal — the user sees a warning
+    if they attempt to uninstall and cannot proceed without revoking admin first.
+    Combined with persistence (ABOOT_001) this creates a resilient implant (ATT&CK Mobile T1626).
+references:
+    - https://attack.mitre.org/techniques/T1626/
+    - https://developer.android.com/guide/topics/admin/device-admin
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.defense_evasion
+    - attack.persistence
+    - attack.t1626
+    - b4db4b3.rule.AADM_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    selection:
+        platform: 'android'
+        rule: 'AADM_001'
+    condition: selection
+fields:
+    - pkg
+    - permission
+    - component
+    - sev
+    - tid
+    - ts
+falsepositives:
+    - MDM enrollment agents (Microsoft Intune Company Portal, VMware Intelligent Hub)
+    - Corporate-managed device management applications
+    - Mobile security products (Lookout, Zimperium)
+level: critical
+# Confidence: 90% — very few legitimate apps require device admin outside MDM scenarios
+# Correlate with ACOR_006 (Android Device Admin Anti-Uninstall)

@@ -1,0 +1,51 @@
+title: Android Full Surveillance Spyware Profile (Correlation)
+id: c1a9d0b2-6e73-1d02-f7c1-6a5b4c3d2e1f
+status: experimental
+description: |
+    Correlation rule: detects a single Android application package generating events
+    across camera access (ACAM_001), microphone access (AMIC_001), AND location tracking
+    (ALOC_001/ALOC_002) within a 10-minute window. This triple-capability profile is the
+    hallmark of commercial spyware and surveillance-as-a-service implants. Confidence: 95%.
+    Maps to ACOR_001 in the B4DB4B3-RAT correlation engine.
+
+    ATT&CK coverage: T1512 (Video Capture) + T1429 (Audio Capture) + T1430 (Location Tracking)
+references:
+    - https://attack.mitre.org/techniques/T1512/
+    - https://attack.mitre.org/techniques/T1429/
+    - https://attack.mitre.org/techniques/T1430/
+    - https://citizenlab.ca/2022/07/geckospy-dragino/
+author: B4DB4B3-RAT Detection Team
+date: 2026-09-29
+modified: 2026-09-29
+tags:
+    - attack.collection
+    - attack.t1512
+    - attack.t1429
+    - attack.t1430
+    - b4db4b3.correlation.ACOR_001
+logsource:
+    product: b4db4b3_rat
+    category: android_telemetry
+detection:
+    camera:
+        platform: 'android'
+        rule: 'ACAM_001'
+    microphone:
+        platform: 'android'
+        rule: 'AMIC_001'
+    location:
+        platform: 'android'
+        rule|startswith: 'ALOC_'
+    condition: camera and microphone and location
+timeframe: 10m
+group-by:
+    - pkg
+fields:
+    - pkg
+    - ts
+falsepositives:
+    - Video calling apps (WhatsApp, Teams, Zoom) — they use all three during calls
+    - Social media live streaming apps
+level: critical
+# Confidence: 95% — exclude known video calling packages from alerting
+# Immediate escalation: isolate device from network, preserve forensic image
