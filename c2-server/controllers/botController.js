@@ -3,6 +3,7 @@
 const { MAX_NETLOG } = require("../config/constants");
 const { bots }       = require("../state");
 const { computeRiskScore } = require("./detectionEngine");
+const persist = require("../persist");
 
 function getOrCreate(id) {
   if (!bots[id]) {
@@ -22,7 +23,9 @@ function getOrCreate(id) {
       riskScore:     0,
       riskBreakdown: [],
       tasks:         [],
+      blocked:       false,
     };
+    persist.scheduleSave();
   }
   return bots[id];
 }
@@ -45,6 +48,7 @@ function recordNetlog(bot, req, _res, bodyBytes) {
   if (bot.netlog.length > MAX_NETLOG)
     bot.netlog.splice(0, bot.netlog.length - MAX_NETLOG);
   analyzeBeaconing(bot);
+  persist.scheduleSave();
 }
 
 function analyzeBeaconing(bot) {

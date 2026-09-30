@@ -25,6 +25,11 @@ const session      = require("express-session");
 const cookieParser = require("cookie-parser");
 
 const { PORT, CORS_ORIGIN, UPLOADS_DIR } = require("./config/constants");
+const persist = require("./persist");
+const { bots } = require("./state");
+
+persist.init(bots);
+persist.load();   // restore bots from previous run
 
 const certPath = path.join(__dirname, "cert.pem");
 const keyPath  = path.join(__dirname, "key.pem");
@@ -32,6 +37,11 @@ const hasTLS   = fs.existsSync(certPath) && fs.existsSync(keyPath);
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+// Save bots on clean shutdown
+function onExit() { persist.flush(); process.exit(0); }
+process.on("SIGTERM", onExit);
+process.on("SIGINT",  onExit);
 
 const app = express();
 

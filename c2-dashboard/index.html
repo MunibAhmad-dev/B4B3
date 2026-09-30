@@ -279,6 +279,16 @@ a{color:var(--accent);text-decoration:none}
   .atk-grid{grid-template-columns:1fr}
   .pnav{font-size:11px;padding:4px 6px}
 }
+/* ── Bot sidebar actions ── */
+.bot-blocked{opacity:.65;border-left:3px solid #e84242!important}
+.bot-actions{display:none;gap:4px;margin-top:6px}
+.bot-item:hover .bot-actions{display:flex}
+.bot-act-btn{font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--bg3);background:var(--bg3);color:var(--light);cursor:pointer;font-family:inherit}
+.bot-act-btn:hover{background:var(--warn);color:var(--bg);border-color:var(--warn)}
+.bot-act-del:hover{background:#e84242;color:#fff;border-color:#e84242}
+.bot-status-online{color:#00C2A8;font-size:10px;font-weight:700}
+.bot-status-offline{color:#6B7FA3;font-size:10px}
+.bot-status-blocked{color:#e84242;font-size:10px;font-weight:700}
 /* ── File Manager Terminal ── */
 .fm-wrap{display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--bg3);border-radius:14px;overflow:hidden;flex:1;min-height:500px}
 .fm-titlebar{padding:12px 16px;border-bottom:1px solid var(--bg3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
@@ -419,14 +429,23 @@ async function loadBots() {
     bots.sort((a,b)=>new Date(b.lastSeen)-new Date(a.lastSeen));
     bots.forEach(b => {
       const age = Math.floor((Date.now()-new Date(b.lastSeen))/1000);
-      const alive = age<60;
+      const alive = age<60 && !b.blocked;
       const score = b.riskScore||0;
       const fillPct = Math.min(score/200*100,100);
       const d = document.createElement('div');
-      d.className = 'bot-item'+(b.id===selId?' active':'');
+      d.className = 'bot-item'+(b.id===selId?' active':'')+(b.blocked?' bot-blocked':'');
+      d.dataset.botId = b.id;
+      const statusHtml = b.blocked
+        ? '<span class="bot-status-blocked">⛔ BLOCKED</span>'
+        : alive
+          ? '<span class="bot-status-online">● ONLINE</span>'
+          : '<span class="bot-status-offline">○ OFFLINE</span>';
       d.innerHTML = `
-        <div class="bot-id"><span class="ping ${alive?'ping-alive':'ping-stale'}"></span>Bot #${b.id}</div>
-        <div class="bot-seen">${age<5?'just now':age+'s ago'}</div>
+        <div class="bot-id" style="display:flex;align-items:center;justify-content:space-between">
+          <span><span class="ping ${alive?'ping-alive':'ping-stale'}"></span>Bot #${esc(b.id)}</span>
+          ${statusHtml}
+        </div>
+        <div class="bot-seen">${b.blocked?'blocked':'last seen '+(age<5?'just now':age+'s ago')}</div>
         <div class="bot-badges">
           ${b.openIncidents?'<span class="bdg bdg-inc">'+b.openIncidents+' inc</span>':''}
           ${b.highEvents?'<span class="bdg bdg-high">'+b.highEvents+' alert</span>':''}
@@ -435,8 +454,14 @@ async function loadBots() {
         <div class="bot-risk">
           <div class="bot-risk-bar"><div class="bot-risk-fill" style="width:${fillPct}%;background:${riskColor(score)}"></div></div>
           <span class="bot-risk-score">${score}</span>
+        </div>
+        <div class="bot-actions">
+          <button class="bot-act-btn" title="${b.blocked?'Unblock':'Block'} bot"
+            onclick="event.stopPropagation();botBlock('${esc(b.id)}')">${b.blocked?'✔ Unblock':'🚫 Block'}</button>
+          <button class="bot-act-btn bot-act-del" title="Delete bot from dashboard"
+            onclick="event.stopPropagation();botDelete('${esc(b.id)}')">🗑 Delete</button>
         </div>`;
-      d.onclick = ()=>selectBot(b.id);
+      d.onclick = ()=>{ if(!b.blocked) selectBot(b.id); };
       list.appendChild(d);
     });
   } catch(e) { console.error(e); }
@@ -757,13 +782,31 @@ async function renderOverview() {
 async function selectBot(id) {
   selId = id;
   document.querySelectorAll('.bot-item').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.bot-item').forEach(el=>{if(el.querySelector('.bot-id')?.textContent.includes(id))el.classList.add('active');});
+  document.querySelectorAll('.bot-item[data-bot-id="'+id+'"]').forEach(el=>el.classList.add('active'));
   document.getElementById('pnav-bot').style.display='';
-  // Close sidebar on mobile after selecting a bot
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('sidebar-overlay');
   if(sb.classList.contains('open')){ sb.classList.remove('open'); ov.classList.remove('open'); }
   showPage('bot');
+}
+
+async function botBlock(id) {
+  try {
+    await api('/api/bot/'+id+'/block', { method: 'PATCH', body: '{}' });
+    await loadBots();
+    // If currently viewing this bot, refresh it
+    if (selId === id) { selId = null; document.getElementById('pnav-bot').style.display='none'; renderOverview(); }
+  } catch(e) { alert('Block failed: ' + e.message); }
+}
+
+async function botDelete(id) {
+  if (!confirm('Delete Bot #' + id + ' from the dashboard?\n\nThe bot data will be saved to disk. If the bot checks in again it will re-appear as a new entry.')) return;
+  try {
+    await api('/api/bot/'+id, { method: 'DELETE' });
+    if (selId === id) { selId = null; document.getElementById('pnav-bot').style.display='none'; }
+    await loadBots();
+    if (selId === id) renderOverview();
+  } catch(e) { alert('Delete failed: ' + e.message); }
 }
 
 async function renderTab(id, tab) {

