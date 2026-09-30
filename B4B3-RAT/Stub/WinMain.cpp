@@ -39,7 +39,37 @@ SOFTWARE.
 #include "WebcamTool.h"
 #include "MicTool.h"
 
+// Returns true if this process token is elevated (admin)
+static bool IsElevated() {
+	BOOL elevated = FALSE;
+	HANDLE hToken = NULL;
+	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) {
+		TOKEN_ELEVATION te = {};
+		DWORD sz = sizeof(te);
+		if (GetTokenInformation(hToken, TokenElevation, &te, sz, &sz))
+			elevated = te.TokenIsElevated;
+		CloseHandle(hToken);
+	}
+	return elevated != FALSE;
+}
+
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
+	// Auto-elevate: if not running as admin, re-launch via "runas" (triggers UAC once)
+	// Children launched by this elevated process via ShellExecuteA("open") inherit
+	// the elevated token automatically — no second UAC prompt.
+	if (!IsElevated()) {
+		char me[MAX_PATH] = {};
+		GetModuleFileNameA(NULL, me, MAX_PATH - 1);
+		SHELLEXECUTEINFOA sei = {};
+		sei.cbSize      = sizeof(sei);
+		sei.lpVerb      = "runas";
+		sei.lpFile      = me;
+		sei.lpParameters = (lpCmdLine && *lpCmdLine) ? lpCmdLine : NULL;
+		sei.nShow       = SW_HIDE;
+		ShellExecuteExA(&sei);
+		return 0;
+	}
+
 	srand((unsigned int)time(NULL));
 	Manager::Settings s;
 	Manager::ReadData(&s);
