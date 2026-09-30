@@ -233,13 +233,14 @@ static void DiffRunKey(const RegSnap& old_, const RegSnap& new_,
     }
 }
 
-static const char* REG_RUN = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
-
 static void CheckRegistry() {
-    RegSnap nh = SnapRunKey(HKEY_LOCAL_MACHINE, REG_RUN);
-    RegSnap nu = SnapRunKey(HKEY_CURRENT_USER,  REG_RUN);
-    DiffRunKey(g_reg_hklm, nh, "HKLM\\Run");
-    DiffRunKey(g_reg_hkcu, nu, "HKCU\\Run");
+    std::string regRun  = S("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
+    std::string hklmLbl = S("HKLM\\Run");
+    std::string hkcuLbl = S("HKCU\\Run");
+    RegSnap nh = SnapRunKey(HKEY_LOCAL_MACHINE, regRun.c_str());
+    RegSnap nu = SnapRunKey(HKEY_CURRENT_USER,  regRun.c_str());
+    DiffRunKey(g_reg_hklm, nh, hklmLbl.c_str());
+    DiffRunKey(g_reg_hkcu, nu, hkcuLbl.c_str());
     g_reg_hklm = nh;
     g_reg_hkcu = nu;
 }

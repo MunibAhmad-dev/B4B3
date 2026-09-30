@@ -26,6 +26,10 @@ $args = $Sources + 'Stub_res.o' + @(
     '-fno-ident',             # suppress GCC version string in .comment section
     '-ffunction-sections', '-fdata-sections',  # allow linker to remove dead code
     '-Wl,--gc-sections',      # remove unused sections
+    '-static-libgcc',         # embed libgcc — removes libgcc_s_seh-1.dll dependency
+    '-static-libstdc++',      # embed libstdc++ — removes libstdc++-6.dll dependency
+    # Explicitly link the static winpthread archive to avoid the DLL dependency
+    'C:/MinGW/x86_64-w64-mingw32/lib/libwinpthread.a',
     "-I$CryptoPP",
     "-I$NlohmannInc",
     "-L$CryptoPP",
