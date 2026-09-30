@@ -36,6 +36,7 @@ std::string FileManager::DirectoryObjectsList(std::string dir) {
 				index++;
 				continue;
 			}
+			names.append((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? "[D]" : "[F]");
 			names.append(fd.cFileName);
 			names.append("%0A");
 		} while (::FindNextFile(hFind, &fd));
