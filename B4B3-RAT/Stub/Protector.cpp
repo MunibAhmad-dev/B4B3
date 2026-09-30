@@ -24,6 +24,22 @@ SOFTWARE.
 
 #include "Protector.h"
 #include "Manager.h"
+#include <intrin.h>
+
+// Returns true if running inside a hypervisor (VM/sandbox)
+static bool IsHypervisor() {
+	int cpui[4] = {};
+	__cpuid(cpui, 1);
+	return (cpui[2] & (1 << 31)) != 0;
+}
+
+// Returns true if sleep is being accelerated (sandbox behaviour)
+static bool IsSleepSkipped() {
+	DWORD t1 = GetTickCount();
+	Sleep(500);
+	DWORD elapsed = GetTickCount() - t1;
+	return elapsed < 400; // sandbox accelerated time
+}
 
 // Window title substrings that survive a process rename
 static const std::vector<std::string> g_windowTitles = {
@@ -89,6 +105,11 @@ void Protector::AntiProcesses() {
 
 	size_t size = processes.size();
 	std::string process = "";
+	// One-time sandbox checks at startup
+	if (IsHypervisor() || IsSleepSkipped()) {
+		ExitProcess(0);
+	}
+
 	while (true) {
 		// 1. Debugger-presence checks — survive any process rename
 		if (IsDebuggerPresent()) {

