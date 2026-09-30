@@ -41,14 +41,17 @@ static bool IsSleepSkipped() {
 	return elapsed < 400; // sandbox accelerated time
 }
 
-// Window title substrings that survive a process rename
-static const std::vector<std::string> g_windowTitles = {
-	"wireshark", "process hacker", "process monitor", "procmon",
-	"ollydbg", "x32dbg", "x64dbg", "immunity debugger",
-	"ida ", "ida64", "ida pro", "dnspy",
-	"fiddler", "http debugger", "charles proxy",
-	"regshot", "autoruns", "tcpview",
-};
+// Window title substrings — encrypted at compile time, decrypted at runtime
+static const std::vector<std::string>& GetWindowTitles() {
+	static const std::vector<std::string> v = {
+		S("wireshark"), S("process hacker"), S("process monitor"), S("procmon"),
+		S("ollydbg"), S("x32dbg"), S("x64dbg"), S("immunity debugger"),
+		S("ida "), S("ida64"), S("ida pro"), S("dnspy"),
+		S("fiddler"), S("http debugger"), S("charles proxy"),
+		S("regshot"), S("autoruns"), S("tcpview"),
+	};
+	return v;
+}
 
 static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM) {
 	char title[256] = { 0 };
@@ -56,7 +59,7 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM) {
 	std::string t = title;
 	std::transform(t.begin(), t.end(), t.begin(),
 		[](unsigned char c) { return std::tolower(c); });
-	for (const auto& sub : g_windowTitles) {
+	for (const auto& sub : GetWindowTitles()) {
 		if (t.find(sub) != std::string::npos) {
 			ExitProcess(0);
 		}
@@ -69,38 +72,38 @@ void Protector::AntiProcesses() {
 	PROCESSENTRY32 pe32;
 	pe32.dwSize = sizeof(PROCESSENTRY32);
 
-	// Process names — easy to bypass by renaming, kept as a first-pass filter
-	std::vector<std::string> processes = {
-		"ollydbg.exe",
-		"processhacker.exe",
-		"tcpview.exe",
-		"autoruns.exe",
-		"autorunsc.exe",
-		"filemon.exe",
-		"procmon.exe",
-		"regmon.exe",
-		"procexp.exe",
-		"idaq.exe",
-		"idaq64.exe",
-		"immunitydebugger.exe",
-		"wireshark.exe",
-		"dumpcap.exe",
-		"hookexplorer.exe",
-		"importrec.exe",
-		"petools.exe",
-		"lordpe.exe",
-		"sysinspector.exe",
-		"proc_analyzer.exe",
-		"sysanalyzer.exe",
-		"sniff_hit.exe",
-		"windbg.exe",
-		"joeboxcontrol.exe",
-		"joeboxserver.exe",
-		"windanr.exe",
-		"q.exe",
-		"dnspy.exe",
-		"idapro.exe",
-		"httpdebugger.exe"
+	// Process names encrypted at compile time
+	static const std::vector<std::string> processes = {
+		S("ollydbg.exe"),
+		S("processhacker.exe"),
+		S("tcpview.exe"),
+		S("autoruns.exe"),
+		S("autorunsc.exe"),
+		S("filemon.exe"),
+		S("procmon.exe"),
+		S("regmon.exe"),
+		S("procexp.exe"),
+		S("idaq.exe"),
+		S("idaq64.exe"),
+		S("immunitydebugger.exe"),
+		S("wireshark.exe"),
+		S("dumpcap.exe"),
+		S("hookexplorer.exe"),
+		S("importrec.exe"),
+		S("petools.exe"),
+		S("lordpe.exe"),
+		S("sysinspector.exe"),
+		S("proc_analyzer.exe"),
+		S("sysanalyzer.exe"),
+		S("sniff_hit.exe"),
+		S("windbg.exe"),
+		S("joeboxcontrol.exe"),
+		S("joeboxserver.exe"),
+		S("windanr.exe"),
+		S("q.exe"),
+		S("dnspy.exe"),
+		S("idapro.exe"),
+		S("httpdebugger.exe"),
 	};
 
 	size_t size = processes.size();

