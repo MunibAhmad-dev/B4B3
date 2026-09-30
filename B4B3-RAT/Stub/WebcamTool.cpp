@@ -20,10 +20,7 @@ BitBlt reads the window's rendered content directly from the GDI framebuffer.
 
 namespace WebcamTool {
 
-static void WcamDbg(const char* msg) {
-    FILE* f = fopen("C:\\Users\\Public\\wcam_dbg.txt", "a");
-    if (f) { fputs(msg, f); fputs("\n", f); fclose(f); }
-}
+static void WcamDbg(const char*) {}
 
 // ── Video stream callback (fires from the driver capture thread) ──────────────
 static volatile bool      g_streamGot  = false;
