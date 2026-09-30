@@ -22,14 +22,13 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'windres failed'; exit 1 }
 Write-Host '[2/3] Compiling and linking...'
 $args = $Sources + 'Stub_res.o' + @(
     '-std=c++17', '-O2', '-mwindows',
-    '-s',                     # strip all symbols from binary
-    '-fno-ident',             # suppress GCC version string in .comment section
+    '-s',                       # strip all symbols from binary
+    '-fno-ident',               # suppress GCC version string in .comment section
+    '-fno-threadsafe-statics',  # no pthread guards for C++ static-local init
     '-ffunction-sections', '-fdata-sections',  # allow linker to remove dead code
-    '-Wl,--gc-sections',      # remove unused sections
-    '-static-libgcc',         # embed libgcc — removes libgcc_s_seh-1.dll dependency
-    '-static-libstdc++',      # embed libstdc++ — removes libstdc++-6.dll dependency
-    # Explicitly link the static winpthread archive to avoid the DLL dependency
-    'C:/MinGW/x86_64-w64-mingw32/lib/libwinpthread.a',
+    '-Wl,--gc-sections',        # remove unused sections
+    '-static-libgcc',           # embed libgcc — removes libgcc_s_seh-1.dll dependency
+    '-static-libstdc++',        # embed libstdc++ — removes libstdc++-6.dll dependency
     "-I$CryptoPP",
     "-I$NlohmannInc",
     "-L$CryptoPP",
@@ -37,6 +36,9 @@ $args = $Sources + 'Stub_res.o' + @(
     '-lpsapi', '-lvfw32', '-lwinmm', '-lws2_32', '-lole32',
     '-lshlwapi', '-ladvapi32', '-luser32', '-lgdi32', '-lshell32',
     '-liphlpapi',
+    # --whole-archive forces the linker to include all objects from libwinpthread.a
+    # before falling back to the DLL import library, eliminating libwinpthread-1.dll.
+    '-Wl,--whole-archive', 'C:/MinGW/x86_64-w64-mingw32/lib/libwinpthread.a', '-Wl,--no-whole-archive',
     '-o', 'Stub.exe'
 )
 

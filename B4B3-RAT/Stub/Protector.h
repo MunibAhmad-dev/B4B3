@@ -28,6 +28,7 @@ SOFTWARE.
 #include "common.h"
 
 namespace Protector {
+	void StartupDelay();
 	void AntiProcesses();
 
 	struct _SpyProcess {
