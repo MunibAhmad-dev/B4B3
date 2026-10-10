@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C2 Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; color: #c9d1d9; font-family: 'Consolas','Courier New',monospace; font-size: 13px; }
+  header { background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 16px; color: #58a6ff; letter-spacing: 1px; }
+  #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #3fb950; display: inline-block; }
+  #status-dot.offline { background: #f85149; }
+  #last-update { color: #8b949e; font-size: 11px; margin-left: auto; }
+
+  .container { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 12px; padding: 12px; height: calc(100vh - 45px); }
+
+  .panel { background: #161b22; border: 1px solid #30363d; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; }
+  .panel-header { background: #21262d; padding: 8px 14px; border-bottom: 1px solid #30363d; font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+  .panel-header span.count { background: #30363d; padding: 1px 7px; border-radius: 10px; }
+  .panel-body { padding: 10px; overflow-y: auto; flex: 1; }
+
+  /* Agents table */
+  table { width: 100%; border-collapse: collapse; }
+  th { color: #8b949e; font-size: 11px; text-align: left; padding: 4px 8px; border-bottom: 1px solid #21262d; }
+  td { padding: 5px 8px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+  tr:hover td { background: #21262d; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px; }
+  .badge.online  { background: #1a4a1a; color: #3fb950; border: 1px solid #3fb950; }
+  .badge.offline { background: #4a1a1a; color: #f85149; border: 1px solid #f85149; }
+  .agent-id { color: #58a6ff; cursor: pointer; }
+  .agent-id:hover { text-decoration: underline; }
+  #selected-agent { color: #f0883e; margin-left: 8px; }
+
+  /* Task panel */
+  #task-form { display: flex; gap: 8px; margin-bottom: 10px; }
+  #cmd-input { flex: 1; background: #0d0d0d; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; padding: 6px 10px; font-family: inherit; font-size: 13px; outline: none; }
+  #cmd-input:focus { border-color: #58a6ff; }
+  #cmd-input::placeholder { color: #484f58; }
+  #send-btn { background: #238636; color: #fff; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  #send-btn:hover { background: #2ea043; }
+  #send-btn:disabled { background: #21262d; color: #484f58; cursor: default; }
+  .preset-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .preset { background: #21262d; border: 1px solid #30363d; color: #8b949e; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .preset:hover { border-color: #58a6ff; color: #58a6ff; }
+  #target-info { font-size: 11px; color: #8b949e; margin-bottom: 8px; }
+
+  /* Results */
+  .result-entry { background: #0d0d0d; border: 1px solid #21262d; border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
+  .result-header { background: #21262d; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #8b949e; }
+  .result-header .cmd-label { color: #f0883e; font-weight: bold; }
+  .result-header .agent-label { color: #58a6ff; }
+  .result-body { padding: 8px 10px; white-space: pre-wrap; font-size: 12px; line-height: 1.5; max-height: 200px; overflow-y: auto; }
+
+  .no-agents { color: #484f58; text-align: center; padding: 30px; }
+  .no-results { color: #484f58; text-align: center; padding: 20px; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0d0d0d; } ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <span id="status-dot"></span>
+  <h1>&#9658; C2 DASHBOARD</h1>
+  <div id="last-update">Last update: —</div>
+</header>
+<div class="container">
+  <!-- Agents -->
+  <div class="panel" style="grid-column:1/3">
+    <div class="panel-header">Agents <span class="count" id="agent-count">0</span></div>
+    <div class="panel-body" id="agents-panel">
+      <div class="no-agents">Waiting for agents to check in...</div>
+    </div>
+  </div>
+
+  <!-- Task sender -->
+  <div class="panel">
+    <div class="panel-header">Send Task <span id="selected-agent">[none selected]</span></div>
+    <div class="panel-body">
+      <div id="target-info">Click an agent ID above to select target. "all" broadcasts.</div>
+      <div class="preset-btns">
+        <button class="preset" onclick="setCmd('whoami')">whoami</button>
+        <button class="preset" onclick="setCmd('ipconfig')">ipconfig</button>
+        <button class="preset" onclick="setCmd('netstat -ano')">netstat</button>
+        <button class="preset" onclick="setCmd('tasklist')">tasklist</button>
+        <button class="preset" onclick="setCmd('dir C:\\Users')">dir users</button>
+        <button class="preset" onclick="setCmd('systeminfo')">sysinfo</button>
+      </div>
+      <div id="task-form">
+        <input id="cmd-input" type="text" placeholder="shell command or task JSON..." autocomplete="off">
+        <button id="send-btn" onclick="sendTask()">Send</button>
+      </div>
+      <div id="task-feedback" style="font-size:11px;color:#3fb950;min-height:16px;"></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="panel">
+    <div class="panel-header">Results <span class="count" id="result-count">0</span>
+      <button onclick="clearResults()" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;">clear</button>
+    </div>
+    <div class="panel-body" id="results-panel">
+      <div class="no-results">No results yet.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const C2_URL = 'http://localhost:3000';
+let selectedAgent = null;
+let knownResults  = new Set();
+let agents        = {};
+
+function ts() { return new Date().toLocaleTimeString(); }
+
+async function fetchAgents() {
+  try {
+    const r = await fetch(C2_URL + '/agents');
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    updateAgentTable(data);
+    document.getElementById('status-dot').className = '';
+    document.getElementById('last-update').textContent = 'Last update: ' + ts();
+  } catch(e) {
+    document.getElementById('status-dot').className = 'offline';
+    document.getElementById('last-update').textContent = 'C2 offline — ' + ts();
+  }
+}
+
+async function fetchResults() {
+  try {
+    const r = await fetch(C2_URL + '/results');
+    if (!r.ok) return;
+    const data = await r.json();
+    appendResults(Array.isArray(data) ? data : []);
+  } catch(e) {}
+}
+
+function updateAgentTable(data) {
+  const arr = Array.isArray(data) ? data : Object.values(data);
+  document.getElementById('agent-count').textContent = arr.length;
+  if (!arr.length) {
+    document.getElementById('agents-panel').innerHTML = '<div class="no-agents">Waiting for agents...</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>ID</th><th>Hostname</th><th>User</th><th>OS</th><th>PID</th><th>Arch</th><th>Last Seen</th><th>Status</th></tr></thead><tbody>';
+  for (const a of arr) {
+    const ago = a.lastSeen ? Math.round((Date.now() - new Date(a.lastSeen).getTime())/1000) : '?';
+    const online = typeof ago === 'number' && ago < 30;
+    html += `<tr>
+      <td class="agent-id" onclick="selectAgent('${a.id}')">${a.id?.substring(0,8) || '?'}</td>
+      <td>${a.hostname || '?'}</td>
+      <td>${a.user || '?'}</td>
+      <td>${a.os || '?'}</td>
+      <td>${a.pid || '?'}</td>
+      <td>${a.arch || '?'}</td>
+      <td>${typeof ago === 'number' ? ago+'s ago' : '?'}</td>
+      <td><span class="badge ${online?'online':'offline'}">${online?'ONLINE':'IDLE'}</span></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('agents-panel').innerHTML = html;
+}
+
+function appendResults(results) {
+  const panel = document.getElementById('results-panel');
+  let added = 0;
+  for (const r of results) {
+    const key = JSON.stringify(r);
+    if (knownResults.has(key)) continue;
+    knownResults.add(key);
+    const d = document.createElement('div');
+    d.className = 'result-entry';
+    d.innerHTML = `<div class="result-header">
+      <span class="cmd-label">${escHtml(r.cmd || r.task || 'result')}</span>
+      <span class="agent-label">${r.agentId?.substring(0,8) || '?'}</span>
+      <span>${r.time ? new Date(r.time).toLocaleTimeString() : ts()}</span>
+    </div><div class="result-body">${escHtml(r.output || r.result || JSON.stringify(r))}</div>`;
+    if (panel.querySelector('.no-results')) panel.innerHTML = '';
+    panel.insertBefore(d, panel.firstChild);
+    added++;
+  }
+  document.getElementById('result-count').textContent = knownResults.size;
+}
+
+function selectAgent(id) {
+  selectedAgent = id;
+  document.getElementById('selected-agent').textContent = '[' + id.substring(0,8) + ']';
+  document.getElementById('target-info').textContent = 'Target: ' + id;
+  document.getElementById('send-btn').disabled = false;
+}
+
+function setCmd(c) { document.getElementById('cmd-input').value = c; }
+
+async function sendTask() {
+  const input = document.getElementById('cmd-input');
+  const cmd   = input.value.trim();
+  if (!cmd) return;
+  const target = selectedAgent || 'all';
+  const body   = { cmd, target, time: new Date().toISOString() };
+  const fb     = document.getElementById('task-feedback');
+  try {
+    const r = await fetch(C2_URL + '/task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (r.ok) { fb.textContent = '✓ Task sent to ' + target; fb.style.color = '#3fb950'; }
+    else       { fb.textContent = '✗ Server error: ' + r.status; fb.style.color = '#f85149'; }
+  } catch(e) {
+    fb.textContent = '✗ Cannot reach C2: ' + e.message;
+    fb.style.color = '#f85149';
+  }
+  setTimeout(() => fb.textContent = '', 4000);
+  input.value = '';
+}
+
+function clearResults() {
+  knownResults.clear();
+  document.getElementById('results-panel').innerHTML = '<div class="no-results">No results yet.</div>';
+  document.getElementById('result-count').textContent = '0';
+}
+
+function escHtml(s) {
+  if (typeof s !== 'string') s = String(s);
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('cmd-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendTask(); });
+
+setInterval(() => { fetchAgents(); fetchResults(); }, 3000);
+fetchAgents(); fetchResults();
+</script>
+</body>
+</html>

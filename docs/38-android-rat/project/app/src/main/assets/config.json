@@ -1,0 +1,6 @@
+{
+  "host": "https://192.168.1.100:4444",
+  "auth": "changeme",
+  "trust_all": true,
+  "beacon_interval_ms": 30000
+}

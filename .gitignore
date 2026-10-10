@@ -1,24 +1,81 @@
-# TLS private keys — NEVER commit these
+# ── TLS / Certificates — NEVER commit private keys ───────────────────────────
 *.pem
 *.key
 *.p12
 *.pfx
+*.crt
+*.cer
 
-# Node
+# ── Node ──────────────────────────────────────────────────────────────────────
 node_modules/
 npm-debug.log*
+yarn-error.log
 
-# Uploads from bots
+# ── Bot uploads — runtime data, not source ────────────────────────────────────
 c2-server/uploads/*
 !c2-server/uploads/.gitkeep
 
-# OS
-.DS_Store
-Thumbs.db
-
-# VS Code
-.vscode/
-
-# Env files
+# ── Env / secrets ─────────────────────────────────────────────────────────────
 .env
 .env.*
+*.secret
+
+# ── Android project build outputs ─────────────────────────────────────────────
+docs/38-android-rat/project/app/build/
+docs/38-android-rat/project/build/
+docs/38-android-rat/project/.gradle/
+docs/38-android-rat/project/local.properties
+*.apk
+*.aab
+*.dex
+*.ap_
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.idea/**
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ── Windows stub — compiled outputs ───────────────────────────────────────────
+B4B3-RAT/Stub/Release/
+B4B3-RAT/Stub/Debug/
+B4B3-RAT/Stub/x64/
+B4B3-RAT/Builder/Release/
+B4B3-RAT/Builder/Debug/
+B4B3-RAT/Builder/x64/
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.tlog
+*.iobj
+*.ipdb
+*.suo
+*.user
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Visual Studio
+.vs/
+*.ncb
+*.aps
+**/x64/
+**/Win32/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+*.swp
+*~
