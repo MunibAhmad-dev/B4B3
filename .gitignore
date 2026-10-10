@@ -25,8 +25,6 @@ docs/38-android-rat/project/app/build/
 docs/38-android-rat/project/build/
 docs/38-android-rat/project/.gradle/
 docs/38-android-rat/project/local.properties
-*.apk
-*.aab
 *.dex
 *.ap_
 
@@ -45,9 +43,7 @@ B4B3-RAT/Stub/x64/
 B4B3-RAT/Builder/Release/
 B4B3-RAT/Builder/Debug/
 B4B3-RAT/Builder/x64/
-*.exe
 *.obj
-*.pdb
 *.ilk
 *.lib
 *.exp
