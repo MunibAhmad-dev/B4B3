@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
         Manifest.permission.READ_CONTACTS,
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.RECORD_AUDIO,
     };
 
     @Override

