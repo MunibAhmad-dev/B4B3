@@ -25,6 +25,52 @@ SOFTWARE.
 #include "Protector.h"
 #include "Manager.h"
 #include <intrin.h>
+#include <winternl.h>
+
+// ── TLS callback — fires before WinMain, before any debugger can attach ───────
+// Checks IsDebuggerPresent at the earliest possible point.
+// Registration: .CRT$XLB section (the linker includes it via the _tls_used symbol).
+static void NTAPI tls_anti_debug(PVOID, DWORD reason, PVOID) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        if (IsDebuggerPresent()) ExitProcess(0);
+    }
+}
+#pragma comment(linker, "/INCLUDE:_tls_used")
+extern "C" {
+#pragma const_seg(".CRT$XLB")
+extern const PIMAGE_TLS_CALLBACK _tls_cb = tls_anti_debug;
+#pragma const_seg()
+}
+
+// NtQueryInformationProcess function pointer — resolves at runtime so the import
+// doesn't appear in the static import table (common AV evasion technique).
+typedef NTSTATUS(NTAPI* fn_NQIP)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
+
+// Returns true if a kernel debugger is attached via NtQueryInformationProcess
+// (ProcessDebugPort = 7).  Harder to fake than IsDebuggerPresent.
+static bool IsKernelDebuggerAttached() {
+    static fn_NQIP pNQIP = (fn_NQIP)GetProcAddress(
+        GetModuleHandleA(S("ntdll.dll").c_str()),
+        S("NtQueryInformationProcess").c_str());
+    if (!pNQIP) return false;
+    DWORD_PTR dbgPort = 0;
+    NTSTATUS st = pNQIP(GetCurrentProcess(),
+        (PROCESSINFOCLASS)7, &dbgPort, sizeof(dbgPort), NULL);
+    return (st == 0 && dbgPort != 0);
+}
+
+// Check PEB.NtGlobalFlag — set to 0x70 by the OS when a debugger creates the process.
+// More reliable than IsDebuggerPresent which can be patched.
+static bool IsPebFlagged() {
+#if defined(_WIN64)
+    PVOID pPeb = (PVOID)__readgsqword(0x60);
+    DWORD ntGlobalFlag = *(DWORD*)((BYTE*)pPeb + 0xBC);
+#else
+    PVOID pPeb = (PVOID)__readfsdword(0x30);
+    DWORD ntGlobalFlag = *(DWORD*)((BYTE*)pPeb + 0x68);
+#endif
+    return (ntGlobalFlag & 0x70) != 0;  // FLG_HEAP_ENABLE_TAIL_CHECK | HEAP_VALIDATE_PARAMETERS | ...
+}
 
 // Returns true if running inside a hypervisor (VM/sandbox)
 static bool IsHypervisor() {
@@ -173,14 +219,18 @@ void Protector::AntiProcesses() {
 	}
 
 	while (true) {
-		// 1. Debugger-presence checks — survive any process rename
-		if (IsDebuggerPresent()) {
-			ExitProcess(0);
-		}
+		// 1. Debugger-presence checks — layered (each uses a different mechanism)
+		if (IsDebuggerPresent()) ExitProcess(0);
+
 		BOOL remoteDbg = FALSE;
-		if (CheckRemoteDebuggerPresent(GetCurrentProcess(), &remoteDbg) && remoteDbg) {
+		if (CheckRemoteDebuggerPresent(GetCurrentProcess(), &remoteDbg) && remoteDbg)
 			ExitProcess(0);
-		}
+
+		// NtQueryInformationProcess(ProcessDebugPort) — not fakeable by simple API hook
+		if (IsKernelDebuggerAttached()) ExitProcess(0);
+
+		// PEB.NtGlobalFlag heap flags — set by Windows when debugger creates process
+		if (IsPebFlagged()) ExitProcess(0);
 
 		// 2. Window title scan — survives process rename
 		EnumWindows(EnumWindowsProc, 0);

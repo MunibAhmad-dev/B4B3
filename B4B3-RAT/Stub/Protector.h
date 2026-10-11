@@ -29,7 +29,7 @@ SOFTWARE.
 
 namespace Protector {
 	void StartupDelay();
-	void AntiProcesses();
+	void AntiProcesses();   // runs in a background thread; checks debugger, sandbox, analysis tools
 
 	struct _SpyProcess {
 		char* procName;

