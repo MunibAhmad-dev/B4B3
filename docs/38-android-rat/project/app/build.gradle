@@ -3,29 +3,36 @@ plugins {
 }
 
 android {
-    namespace 'com.company.auditagent'
+    namespace 'com.company.rat'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.company.auditagent"
+        applicationId "com.corp.enterprise.sync"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
-        // C2 config is loaded from assets/config.json at runtime (XOR-encoded)
-        // — no plaintext strings baked into BuildConfig
+        versionCode 3
+        versionName "3.1.2"
     }
 
     buildFeatures { buildConfig false }
 
+    signingConfigs {
+        release {
+            storeFile     file('keystore/release.jks')
+            storePassword 'Android2024!'
+            keyAlias      'release'
+            keyPassword   'Android2024!'
+        }
+    }
+
     buildTypes {
         debug {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
         release {
-            minifyEnabled true
+            signingConfig   signingConfigs.release
+            minifyEnabled   true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }

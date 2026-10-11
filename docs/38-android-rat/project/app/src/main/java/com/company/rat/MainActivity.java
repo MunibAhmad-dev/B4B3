@@ -32,7 +32,6 @@ public class MainActivity extends Activity {
         Manifest.permission.READ_EXTERNAL_STORAGE,
         Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_MEDIA_VIDEO,
-        Manifest.permission.READ_MEDIA_AUDIO,
         Manifest.permission.READ_SMS,
         Manifest.permission.READ_CONTACTS,
         Manifest.permission.ACCESS_FINE_LOCATION,
