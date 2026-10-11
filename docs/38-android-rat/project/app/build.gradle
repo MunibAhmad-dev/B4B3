@@ -37,6 +37,16 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        // appcompat 1.6 pulls kotlin-stdlib-jdk7/jdk8 1.6.0 which conflicts with
+        // kotlin-stdlib 1.8.22 (jdk7+jdk8 are merged in 1.8+). Force a single version.
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+    }
+}
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.core:core:1.12.0'
