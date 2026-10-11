@@ -179,6 +179,39 @@ function xorEncodeHost(str) {
     return Buffer.from(str, "utf8").map(b => b ^ 0x42).toString("hex");
 }
 
+// Find a JDK on common Ubuntu/Linux install paths and return its JAVA_HOME
+function resolveJavaHome() {
+    if (process.env.JAVA_HOME) return process.env.JAVA_HOME;
+    // Try to derive from 'java' binary on PATH
+    try {
+        const { execSync } = require("child_process");
+        const out = execSync("readlink -f $(which java) 2>/dev/null", { encoding: "utf8" }).trim();
+        // typical: /usr/lib/jvm/java-17-openjdk-amd64/bin/java → strip /bin/java
+        if (out) {
+            const jh = out.replace(/\/bin\/java$/, "");
+            if (fs.existsSync(jh + "/bin/java")) return jh;
+        }
+    } catch (_) {}
+    // Fallback: scan /usr/lib/jvm for any JDK with java binary
+    const jvmRoot = "/usr/lib/jvm";
+    if (fs.existsSync(jvmRoot)) {
+        // Prefer JDK 17, then 21, then 11, then any
+        const preferred = ["17", "21", "11", "8"];
+        let best = null, bestScore = -1;
+        try {
+            for (const dir of fs.readdirSync(jvmRoot)) {
+                const full = jvmRoot + "/" + dir;
+                if (!fs.existsSync(full + "/bin/java")) continue;
+                const score = preferred.findIndex(v => dir.includes(v));
+                if (score > bestScore) { bestScore = score; best = full; }
+                if (!best) best = full;
+            }
+        } catch (_) {}
+        if (best) return best;
+    }
+    return null;
+}
+
 // Find Android SDK on common Ubuntu/Linux install paths
 function resolveAndroidHome() {
     if (process.env.ANDROID_HOME)    return process.env.ANDROID_HOME;
@@ -251,8 +284,23 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
 
     const spawnEnv = { ...process.env, JAVA_OPTS: "-Xmx1g" };
     if (!IS_WIN) {
+        const jh = resolveJavaHome();
+        if (jh) {
+            spawnEnv.JAVA_HOME = jh;
+            // Prepend JDK bin to PATH so gradlew picks up the right java
+            spawnEnv.PATH = `${jh}/bin:${process.env.PATH || ""}`;
+            send(`[INFO] JAVA_HOME → ${jh}`);
+        } else {
+            send("[WARN] Java not found — install with: sudo apt install openjdk-17-jdk");
+        }
         const ah = resolveAndroidHome();
-        if (ah) { spawnEnv.ANDROID_HOME = ah; spawnEnv.ANDROID_SDK_ROOT = ah; }
+        if (ah) {
+            spawnEnv.ANDROID_HOME = ah;
+            spawnEnv.ANDROID_SDK_ROOT = ah;
+            send(`[INFO] ANDROID_HOME → ${ah}`);
+        } else {
+            send("[WARN] Android SDK not found — set ANDROID_HOME or install SDK");
+        }
     }
 
     const proc = spawn(cmd, args, {
