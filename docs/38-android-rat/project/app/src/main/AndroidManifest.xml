@@ -55,20 +55,6 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Keylogger — declared as AccessibilityService -->
-        <service
-            android:name=".KeylogService"
-            android:exported="false"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:label="@string/keylog_service_label">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
         <!-- Screen capture activity (hosts MediaProjection permission request) -->
         <activity
             android:name=".ScreenCaptureActivity"

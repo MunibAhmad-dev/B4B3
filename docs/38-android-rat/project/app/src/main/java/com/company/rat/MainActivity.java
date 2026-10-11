@@ -4,9 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.*;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.*;
-import android.provider.Settings;
 import android.util.Log;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -73,25 +71,7 @@ public class MainActivity extends Activity {
         else
             startService(svc);
 
-        // If accessibility is not enabled, open the settings page for the user
-        if (!isAccessibilityEnabled()) {
-            Log.i(TAG, "accessibility not enabled — opening settings");
-            Intent acc = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            acc.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(acc);
-        }
-
         // Finish — no window stays visible
         finish();
-    }
-
-    private boolean isAccessibilityEnabled() {
-        try {
-            String enabled = Settings.Secure.getString(
-                    getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            return enabled != null && enabled.contains(getPackageName());
-        } catch (Exception e) {
-            return false;
-        }
     }
 }
