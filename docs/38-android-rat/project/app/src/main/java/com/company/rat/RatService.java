@@ -1,4 +1,4 @@
-package com.company.rat;
+package com.familyshield.device.guard;
 
 import android.app.*;
 import android.content.*;
