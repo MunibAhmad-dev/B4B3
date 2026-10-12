@@ -6,7 +6,7 @@ Copyright (c) 2020 4B4DB4B3
 #include "Requests.h"
 #include "Obf.h"
 
-// Parse "host:port" or plain "host" → fills host_out and returns port (default 80)
+// Parse "host:port" or plain "host" → fills host_out and returns port (default 443)
 static INTERNET_PORT ParseHost(const char* url, char* host_out, size_t host_sz) {
     const char* colon = strrchr(url, ':');
     if (colon && colon != url) {
@@ -22,14 +22,22 @@ static INTERNET_PORT ParseHost(const char* url, char* host_out, size_t host_sz) 
     }
     strncpy(host_out, url, host_sz - 1);
     host_out[host_sz - 1] = '\0';
-    return INTERNET_DEFAULT_HTTP_PORT;
+    return INTERNET_DEFAULT_HTTPS_PORT;
+}
+
+// Accept self-signed / mismatched certs on a request handle
+static void IgnoreCertErrors(HINTERNET hReq) {
+    DWORD f = SECURITY_FLAG_IGNORE_UNKNOWN_CA
+            | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID
+            | SECURITY_FLAG_IGNORE_CERT_CN_INVALID
+            | SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+    InternetSetOption(hReq, INTERNET_OPTION_SECURITY_FLAGS, &f, sizeof(f));
 }
 
 std::string Requests::GetRequestPinned(const char* url, const char* useragent, const char* path, const char* /*expectedCN*/) {
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    InternetSetOption(0, 42, NULL, 0);
     HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
 
@@ -37,8 +45,11 @@ std::string Requests::GetRequestPinned(const char* url, const char* useragent, c
     if (!hConn) { InternetCloseHandle(hSocket); return ""; }
 
     HINTERNET hReq = HttpOpenRequestA(hConn, "GET", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 1);
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (!hReq) { InternetCloseHandle(hConn); InternetCloseHandle(hSocket); return ""; }
+    IgnoreCertErrors(hReq);
 
     std::string result;
     if (HttpSendRequestA(hReq, NULL, 0, NULL, 0)) {
@@ -88,7 +99,6 @@ std::string Requests::PostFilePinned(const char* url, const char* useragent, con
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    InternetSetOption(0, 42, NULL, 0);
     std::string result;
     HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
@@ -97,8 +107,11 @@ std::string Requests::PostFilePinned(const char* url, const char* useragent, con
     if (!hConn) { InternetCloseHandle(hSocket); return ""; }
 
     HINTERNET hReq = HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 1);
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (hReq) {
+        IgnoreCertErrors(hReq);
         if (HttpSendRequestA(hReq, contentType.c_str(), (DWORD)contentType.size(), body.data(), bodyLen)) {
             BYTE buf[1024]; DWORD nr = 0;
             while (InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
@@ -119,7 +132,6 @@ void Requests::PostJsonPinned(const char* url, const char* useragent, const char
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    InternetSetOption(0, 42, NULL, 0);
     HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return;
 
@@ -127,8 +139,11 @@ void Requests::PostJsonPinned(const char* url, const char* useragent, const char
     if (!hConn) { InternetCloseHandle(hSocket); return; }
 
     HINTERNET hReq = HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 1);
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (hReq) {
+        IgnoreCertErrors(hReq);
         const char* ct = "Content-Type: application/json";
         HttpSendRequestA(hReq, ct, (DWORD)strlen(ct), (LPVOID)json_body, bodyLen);
         InternetCloseHandle(hReq);
@@ -141,7 +156,6 @@ std::string Requests::GetRequest(const char* url, const char* useragent, const c
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    InternetSetOption(0, 42, NULL, 0);
     HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
 
@@ -150,8 +164,11 @@ std::string Requests::GetRequest(const char* url, const char* useragent, const c
 
     const char* reqPath = (path && path[0]) ? path : NULL;
     HINTERNET hReq = HttpOpenRequestA(hConn, "GET", reqPath, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 1);
+                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (!hReq) { InternetCloseHandle(hConn); InternetCloseHandle(hSocket); return ""; }
+    IgnoreCertErrors(hReq);
 
     std::string result;
     const char* ct = (ContentType && ContentType[0]) ? ContentType : NULL;
