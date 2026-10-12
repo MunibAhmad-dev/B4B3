@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.company.rat'
+    namespace 'com.familyshield.device.guard'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.corp.enterprise.sync"
+        applicationId "com.familyshield.device.guard"
         minSdk 26
         targetSdk 34
         versionCode 4

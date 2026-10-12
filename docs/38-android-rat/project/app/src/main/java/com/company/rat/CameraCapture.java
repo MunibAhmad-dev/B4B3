@@ -1,4 +1,4 @@
-package com.company.rat;
+package com.familyshield.device.guard;
 
 import android.content.Context;
 import android.graphics.ImageFormat;

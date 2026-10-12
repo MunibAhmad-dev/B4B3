@@ -1,4 +1,4 @@
-package com.company.rat;
+package com.familyshield.device.guard;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
