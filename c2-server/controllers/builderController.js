@@ -28,7 +28,8 @@ function buildStubBinary(opts) {
   };
   const putBool = (field, val) => { settings[STUB_STRUCT[field].off] = val ? 1 : 0; };
 
-  const hostBuf = Buffer.from(opts.c2Host || "", "binary");
+  const rawHost = (opts.c2Host || "").replace(/^https?:\/\//i, "").trim();
+  const hostBuf = Buffer.from(rawHost, "binary");
   if (hostBuf.length > 126) throw new Error("c2_host too long (max 126 chars)");
   hostBuf.copy(settings, STUB_STRUCT.botapi.off);
 
