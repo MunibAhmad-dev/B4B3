@@ -90,7 +90,7 @@ void Manager::ReadData(Settings* s) {
 void Manager::Autorun(const char* path, const char* name) {
 	HKEY reg_key = 0;
 	std::string address = S("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-	if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, address.c_str(), 0, KEY_SET_VALUE, &reg_key) != ERROR_SUCCESS)
+	if (RegOpenKeyExA(HKEY_CURRENT_USER, address.c_str(), 0, KEY_SET_VALUE, &reg_key) != ERROR_SUCCESS)
 		return;
 	DWORD len = (DWORD)(strlen(path) + 1);
 	RegSetValueExA(reg_key, name, 0, REG_SZ, (const BYTE*)path, len);
