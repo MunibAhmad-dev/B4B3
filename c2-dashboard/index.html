@@ -618,7 +618,7 @@ function renderBuilder() {
       &#128196; PDF Decoy<br><span style="font-size:10px;color:var(--muted)">mshta.exe (.pdf.hta)</span>
     </button>
     <button class="btn btn-sec" onclick="downloadCarrier('pdfexec')" style="font-size:12px;padding:9px 10px;border-color:var(--warn)">
-      &#128196; PDF Real<br><span style="font-size:10px;color:var(--warn)">genuine .pdf + /Launch</span>
+      &#128196; PDF Real<br><span style="font-size:10px;color:var(--warn)">self-contained · exe inside</span>
     </button>
     <button class="btn btn-sec" onclick="downloadCarrier('word')" style="font-size:12px;padding:9px 10px">
       &#128196; Word Decoy<br><span style="font-size:10px;color:var(--muted)">mshta.exe (.docx.hta)</span>
@@ -638,16 +638,20 @@ function renderBuilder() {
   <div style="display:flex;flex-direction:column;gap:10px">
 
     <div style="background:var(--bg);border-radius:8px;padding:12px;border-left:3px solid #e74c3c">
-      <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:4px">&#9733; GENUINE PDF (.pdf) — Real file + embedded /Launch action</div>
+      <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:4px">&#9733; GENUINE PDF (.pdf) — Self-contained · exe embedded after %%EOF</div>
       <div style="font-size:11px;color:var(--light);line-height:1.9">
-        <b>How:</b> A real <code style="color:var(--accent)">.pdf</code> file (not a renamed HTA). The invoice is fully readable in any PDF viewer.
-        The PDF <code style="color:var(--accent)">/OpenAction /Launch</code> entry runs
-        <code style="color:var(--accent)">powershell.exe -w hidden</code> silently at the same moment the document renders.<br>
-        <b>Adobe Reader v10+:</b> Shows a one-click "Allow" dialog — most non-IT users click through.<br>
-        <b>Foxit / SumatraPDF / unpatched readers:</b> Fires with no dialog at all.<br>
-        <b>Detection:</b> pname=AcroRd32.exe / Acrobat.exe / FoxitReader.exe &rarr; <span style="color:#F4A261">DR_016</span> (PDF Reader, HIGH, 85%)
-        + if C2 follows &rarr; <span style="color:#e74c3c">COR_009</span> (critical, 95%)<br>
-        <b>MITRE:</b> T1566.001 + T1059.001
+        <b>How:</b> A real <code style="color:var(--accent)">.pdf</code> file. The invoice renders in any viewer.
+        OneDriveHelper.exe is appended verbatim after <code>%%EOF</code> (PDF readers ignore trailing bytes).
+        <code style="color:var(--accent)">/OpenAction /Launch</code> fires <code style="color:var(--accent)">powershell -w hidden</code>
+        which finds the PDF by filename, reads the exe bytes at a patched offset, writes to <code>%TEMP%</code>, and executes.
+        No network download during delivery — fully self-contained.<br>
+        <b>SmartScreen:</b> The extracted exe has no Zone.Identifier ADS (not browser-downloaded) → SmartScreen does not prompt.
+        Smart App Control (Windows 11) can still block unsigned binaries — disable SAC on test VMs.<br>
+        <b>Adobe Reader v10+:</b> One-click "Allow" dialog before /Launch fires.<br>
+        <b>Foxit / SumatraPDF / unpatched readers:</b> Fires with no dialog.<br>
+        <b>Detection:</b> pname=AcroRd32.exe / Acrobat.exe / FoxitReader.exe &rarr; <span style="color:#F4A261">DR_016</span> (HIGH, 85%)
+        + C2 follows &rarr; <span style="color:#e74c3c">COR_009</span> (critical, 95%)<br>
+        <b>MITRE:</b> T1566.001 + T1059.001 + T1027.009 (embedded payload)
       </div>
     </div>
 
