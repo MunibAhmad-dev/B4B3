@@ -14,11 +14,10 @@ public class NativeProbe {
 
     static {
         try {
-            System.loadLibrary("rat_native");
+            System.loadLibrary("fsgcore");
             loaded = true;
-            Log.i(TAG, "librat_native.so loaded");
         } catch (UnsatisfiedLinkError e) {
-            Log.w(TAG, "librat_native.so not available: " + e.getMessage());
+            Log.w(TAG, "native lib not available: " + e.getMessage());
         }
     }
 

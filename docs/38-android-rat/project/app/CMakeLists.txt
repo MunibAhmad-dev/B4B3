@@ -1,23 +1,23 @@
 cmake_minimum_required(VERSION 3.22.1)
-project("rat_native" CXX)
+project("fsgcore" CXX)
 
-add_library(rat_native SHARED
+add_library(fsgcore SHARED
     src/main/cpp/native_probe.cpp
 )
 
 find_library(log-lib log)
 
-target_compile_options(rat_native PRIVATE
+target_compile_options(fsgcore PRIVATE
     -std=c++17
     -O2
-    -fvisibility=hidden        # hide all symbols except JNI exports
+    -fvisibility=hidden
     -fstack-protector-strong
 )
 
-target_compile_definitions(rat_native PRIVATE
+target_compile_definitions(fsgcore PRIVATE
     ANDROID
 )
 
-target_link_libraries(rat_native
+target_link_libraries(fsgcore
     ${log-lib}
 )

