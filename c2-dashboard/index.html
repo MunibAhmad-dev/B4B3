@@ -519,7 +519,7 @@ function renderBuilder() {
     <button class="btn btn-send" id="b-btn" onclick="doBuild()" style="padding:11px 28px;font-size:14px">
       &#8659; Build &amp; Download OneDriveHelper.exe
     </button>
-    <button class="btn btn-sec" onclick="document.getElementById('b-host').value=new URL(API_BASE||location.href).host">
+    <button class="btn btn-sec" onclick="fillBuilderFromServer()">
       Use This Server
     </button>
   </div>
@@ -531,10 +531,20 @@ function renderBuilder() {
   </div>
 </div>`;
 
+  // Auto-fill both fields from server config on first open
   const hostInput = document.getElementById('b-host');
-  if (!hostInput.value) {
-    try { hostInput.value = new URL(API_BASE || location.href).host || ''; } catch(_){}
-  }
+  const authInput = document.getElementById('b-auth');
+  if (!hostInput.value && !authInput.value) fillBuilderFromServer();
+}
+
+async function fillBuilderFromServer() {
+  try {
+    const r = await fetch(API_BASE + '/api/builder/config', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.host)    document.getElementById('b-host').value = d.host;
+    if (d.authKey) document.getElementById('b-auth').value = d.authKey;
+  } catch(_) {}
 }
 
 async function doBuild() {

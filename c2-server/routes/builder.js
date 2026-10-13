@@ -6,6 +6,13 @@ const { buildStubBinary } = require("../controllers/builderController");
 
 const router = express.Router();
 
+// Returns this server's host and auth key so the dashboard can auto-fill the builder form.
+router.get("/api/builder/config", requireAdmin, (req, res) => {
+  const { AUTH_KEY, PORT } = require("../config/constants");
+  const host = req.headers.host || `localhost:${PORT}`;
+  res.json({ host, authKey: AUTH_KEY });
+});
+
 router.post("/api/build", requireAdmin, (req, res) => {
   try {
     const out = buildStubBinary(req.body);
