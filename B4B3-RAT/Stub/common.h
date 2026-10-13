@@ -29,6 +29,8 @@ SOFTWARE.
 
 #include "Obf.h"
 #include <Windows.h>
+#include <intrin.h>
+#include "nt_compat.h"
 
 #include <WinInet.h>
 #pragma comment(lib, "WinInet.lib")
@@ -54,5 +56,7 @@ SOFTWARE.
 #include <modes.h>
 #include <aes.h>
 #include <filters.h>
+
+using std::min;
 
 #endif

@@ -31,7 +31,7 @@ static bool FindTextSection(PVOID* outBase, DWORD* outSize) {
 //   C3                               ret
 
 static void* BuildSleepStub(DWORD ms) {
-    BYTE stub[20] = {
+    BYTE stub[23] = {
         0x48, 0xB9, 0,0,0,0, 0,0,0,0,  // mov rcx, ms (64-bit zero-extended)
         0x48, 0xB8, 0,0,0,0, 0,0,0,0,  // mov rax, Sleep
         0xFF, 0xD0,                      // call rax

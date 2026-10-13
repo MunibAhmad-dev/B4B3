@@ -42,11 +42,10 @@ PVOID ModuleStomp::Stomp(const char* dllName, const BYTE* code, SIZE_T codeSize)
 
 std::string ModuleStomp::Execute(PVOID stompedAddr) {
     if (!stompedAddr) return "ModuleStomp: NULL address";
-    __try {
+    try {
         ((void(*)())stompedAddr)();
-    } __except(EXCEPTION_EXECUTE_HANDLER) {
-        return "ModuleStomp: exception during execution (code=" +
-               std::to_string(GetExceptionCode()) + ")";
+    } catch (...) {
+        return "ModuleStomp: exception during execution";
     }
     return "ModuleStomp: execution returned normally";
 }

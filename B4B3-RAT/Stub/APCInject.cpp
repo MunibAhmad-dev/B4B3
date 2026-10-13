@@ -105,7 +105,7 @@ std::string APCInject::Demo(const char* targetExe) {
     // 48 B8 xx..xx      mov rax, Sleep
     // FF D0             call rax
     // C3                ret
-    BYTE sc[14] = {
+    BYTE sc[16] = {
         0x48, 0x31, 0xC9,
         0x48, 0xB8, 0,0,0,0,0,0,0,0,
         0xFF, 0xD0,
