@@ -28,6 +28,8 @@ SOFTWARE.
 #define COMMON_H
 
 #include "Obf.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <Windows.h>
 #include <intrin.h>
 #include "nt_compat.h"

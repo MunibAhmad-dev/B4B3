@@ -15,10 +15,12 @@ static PVOID GetNtdllBase() {
 #else
     PPEB peb = (PPEB)__readfsdword(0x30);
 #endif
-    auto* ldr   = peb->Ldr;
-    auto* entry = (PLDR_DATA_TABLE_ENTRY)ldr->InMemoryOrderModuleList.Flink;
-    entry = (PLDR_DATA_TABLE_ENTRY)entry->InMemoryOrderLinks.Flink; // [1] = ntdll
-    return entry->DllBase;
+    auto* ldr = peb->Ldr;
+    auto* le  = ldr->InMemoryOrderModuleList.Flink;
+    auto* e   = CONTAINING_RECORD(le, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+    le = e->InMemoryOrderLinks.Flink; // [1] = ntdll
+    e  = CONTAINING_RECORD(le, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+    return e->DllBase;
 }
 
 // ── Walk EAT and fill the SSN table ──────────────────────────────────────────

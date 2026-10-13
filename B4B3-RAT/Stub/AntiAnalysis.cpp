@@ -41,9 +41,9 @@ std::string AntiAnalysis::CheckDebugger() {
 #else
     peb = (PPEB)__readfsdword(0x30);
 #endif
-    if (peb && peb->ProcessHeap) {
+    if (peb && PEB_PROCESS_HEAP(peb)) {
         // Heap flags at +0x40 (x64) or +0x28 (x86)
-        DWORD* heapFlags = (DWORD*)((BYTE*)peb->ProcessHeap +
+        DWORD* heapFlags = (DWORD*)((BYTE*)PEB_PROCESS_HEAP(peb) +
 #ifdef _WIN64
             0x70   // Win10 x64 HeapFlags offset
 #else
@@ -242,8 +242,7 @@ bool AntiAnalysis::IsSafeEnvironment() {
     __cpuid(cpuInfo, 1);
     if ((cpuInfo[2] >> 31) & 1) return false; // hypervisor
     if (GetSystemMetrics(SM_CXSCREEN) < 800) return false;
-    if (GetSystemInfo((LPSYSTEM_INFO)alloca(sizeof(SYSTEM_INFO))),
-        SYSTEM_INFO si; GetSystemInfo(&si), si.dwNumberOfProcessors == 1) return false;
+    { SYSTEM_INFO si; GetSystemInfo(&si); if (si.dwNumberOfProcessors == 1) return false; }
     return true;
 }
 
