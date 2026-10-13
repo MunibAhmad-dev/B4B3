@@ -334,8 +334,8 @@ router.post("/api/android/builder/build", requireAdmin, (req, res) => {
 
     // On Linux: run ./gradlew directly; on Windows: run via cmd.exe
     const [cmd, args] = IS_WIN
-        ? ["cmd.exe", ["/c", `"${GRADLEW}" assembleRelease`]]
-        : [GRADLEW, ["assembleRelease"]];
+        ? ["cmd.exe", ["/c", `"${GRADLEW}" clean assembleRelease`]]
+        : [GRADLEW, ["clean", "assembleRelease"]];
 
     const spawnEnv = { ...process.env, JAVA_OPTS: "-Xmx1g" };
     if (!IS_WIN) {
