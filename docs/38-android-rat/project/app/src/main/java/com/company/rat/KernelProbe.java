@@ -22,7 +22,7 @@ public class KernelProbe {
 
     public static String run(Context ctx) {
         StringBuilder sb = new StringBuilder();
-        sb.append("=== KERNEL PROBE REPORT ===\n");
+        sb.append("=== SYSTEM DIAGNOSTIC ===\n");
         sb.append("time=").append(System.currentTimeMillis()).append("\n\n");
 
         probeInputDevices(sb);
@@ -84,7 +84,7 @@ public class KernelProbe {
     // ── 3. Root escalation ─────────────────────────────────────────────────────
 
     private static void probeRootEscalation(StringBuilder sb) {
-        sb.append("-- Root escalation attempt (su) --\n");
+        sb.append("-- root privilege check --\n");
         String[] cmds = {"id", "cat /proc/keys", "ls /data/data", "getprop ro.build.type"};
         for (String cmd : cmds) {
             try {

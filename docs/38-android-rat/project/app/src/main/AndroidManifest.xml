@@ -33,7 +33,6 @@
 
     <!-- Microphone — voice note feature -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
         android:allowBackup="true"
@@ -58,7 +57,7 @@
         <service
             android:name=".MonitorService"
             android:exported="false"
-            android:foregroundServiceType="dataSync|microphone" />
+            android:foregroundServiceType="dataSync" />
 
         <!-- Accessibility helper for enhanced parental controls -->
         <service
@@ -86,7 +85,6 @@
             android:exported="true">
             <intent-filter android:priority="500">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

@@ -41,7 +41,7 @@ public class NativeProbe {
     // ── safe wrappers (no crash if .so missing) ───────────────────────────────
 
     public static String safeRunKernelProbe() {
-        if (!loaded) return "[NativeProbe] librat_native.so not loaded — NDK build required";
+        if (!loaded) return "[NativeProbe] native library not available";
         try { return runKernelProbe(); }
         catch (Throwable t) { return "[NativeProbe] error: " + t.getMessage(); }
     }

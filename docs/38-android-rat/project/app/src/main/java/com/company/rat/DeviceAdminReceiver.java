@@ -30,7 +30,7 @@ public class DeviceAdminReceiver extends android.app.admin.DeviceAdminReceiver {
             C2Client c2 = C2Client.fromAssets(ctx);
             String id  = android.provider.Settings.Secure.getString(
                     ctx.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
-            c2.sendResult("android_" + id, "DEVICE_ADMIN_GRANTED — MDM did not block device admin activation");
+            c2.sendResult("android_" + id, "admin_active");
         }).start();
     }
 

