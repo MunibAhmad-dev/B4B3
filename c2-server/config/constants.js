@@ -53,6 +53,13 @@ const DETECTION_RULES = [
   { id:"ADR_021", name:"Android: Overlay Attack",              match:{rule:"AOVL_001" }, tags:["android_input"],                               confidence:80, tid:"T1411"     },
   { id:"ADR_022", name:"Android: Foreground Persistence Svc",  match:{rule:"AFGS_001" }, tags:["android_persistence"],                         confidence:45, tid:"T1541"     },
   { id:"ADR_023", name:"Android: APK Static Analysis Event",   match:{rule:"AAPK_001" }, tags:["android_discovery"],                           confidence:40, tid:"T1418"     },
+
+  // File-carrier delivery detection — triggered when stub reports its parent process
+  { id:"DR_015", name:"Spawned by Office Application",  match:{rule:"PROC_PARENT_OFFICE"  }, tags:["doc_carrier","carrier_delivery"],     confidence:90, tid:"T1566.001" },
+  { id:"DR_016", name:"Spawned by PDF Reader",          match:{rule:"PROC_PARENT_PDF"     }, tags:["pdf_carrier","carrier_delivery"],     confidence:85, tid:"T1566.001" },
+  { id:"DR_017", name:"Spawned by Script Engine",       match:{rule:"PROC_PARENT_SCRIPT"  }, tags:["script_carrier","carrier_delivery"],  confidence:80, tid:"T1059"     },
+  { id:"DR_018", name:"Spawned by Archive Tool",        match:{rule:"PROC_PARENT_ARCHIVE" }, tags:["archive_carrier","carrier_delivery"], confidence:70, tid:"T1204.002" },
+  { id:"DR_019", name:"Spawned by Web Browser",         match:{rule:"PROC_PARENT_BROWSER" }, tags:["browser_carrier","carrier_delivery"], confidence:60, tid:"T1189"     },
 ];
 
 // ── Correlation Rules ─────────────────────────────────────────────────────────
@@ -100,6 +107,20 @@ const CORRELATION_RULES = [
   { id:"ACOR_006", name:"Android: Device Admin Anti-Uninstall",
     description:"Device admin combined with persistence mechanism — anti-removal malware.",
     requires:["android_da","android_persistence"], window_sec:300, confidence:88, severity:"high" },
+
+  // File-carrier correlation rules
+  { id:"COR_009", name:"Phishing Carrier: Document → Payload → C2",
+    description:"Payload spawned by an Office/PDF document and C2 channel established — confirmed phishing carrier delivery via malicious document.",
+    requires:["doc_carrier","network_c2"], window_sec:120, confidence:95, severity:"critical" },
+  { id:"COR_010", name:"Script Dropper → Payload → C2",
+    description:"Script engine (HTA/WScript/PowerShell) spawned the payload and C2 established — dropper-based initial access.",
+    requires:["script_carrier","network_c2"], window_sec:120, confidence:92, severity:"critical" },
+  { id:"COR_011", name:"Carrier Delivery + Persistence",
+    description:"Payload arrived via a file carrier and immediately established persistence — staged implant deployment detected.",
+    requires:["carrier_delivery","persistence"], window_sec:300, confidence:90, severity:"critical" },
+  { id:"COR_012", name:"Carrier Delivery + Full Execution Chain",
+    description:"File carrier → payload execution → persistence → C2 contact — complete initial-access-to-implant chain observed.",
+    requires:["carrier_delivery","proc_suspicious","persistence","network_c2"], window_sec:300, confidence:98, severity:"critical" },
 ];
 
 // ── Simulation Actions ────────────────────────────────────────────────────────
@@ -155,6 +176,9 @@ const KNOWN_TECHNIQUES = [
   { tid:"T1624",     name:"Boot Broadcast Receiver Persistence",    phase:"Persistence",  platform:"android" },
   { tid:"T1541",     name:"Foreground Service Persistence",         phase:"Persistence",  platform:"android" },
   { tid:"T1633",     name:"Virtualization/Sandbox Evasion",         phase:"DefenseEvasion",platform:"android"},
+  { tid:"T1566.001", name:"Phishing: Spearphishing Attachment",     phase:"InitialAccess" },
+  { tid:"T1189",     name:"Drive-by Compromise",                    phase:"InitialAccess" },
+  { tid:"T1059",     name:"Command and Scripting Interpreter",      phase:"Execution"     },
 ];
 
 // ── Risk Scoring ──────────────────────────────────────────────────────────────
