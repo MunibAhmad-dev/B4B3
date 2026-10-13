@@ -645,8 +645,10 @@ function renderBuilder() {
         <code style="color:var(--accent)">/OpenAction /Launch</code> fires <code style="color:var(--accent)">powershell -w hidden</code>
         which finds the PDF by filename, reads the exe bytes at a patched offset, writes to <code>%TEMP%</code>, and executes.
         No network download during delivery — fully self-contained.<br>
-        <b>SmartScreen:</b> The extracted exe has no Zone.Identifier ADS (not browser-downloaded) → SmartScreen does not prompt.
-        Smart App Control (Windows 11) can still block unsigned binaries — disable SAC on test VMs.<br>
+        <b>SmartScreen bypass:</b> extracted exe has no MOTW ADS → SmartScreen does not prompt.
+        <code>Add-MpPreference -ExclusionProcess</code> (admin required — UAC bypass provides it) excludes the binary from Defender/SmartScreen scans.
+        Execution via <code>Win32_Process.Create</code> (WMI) bypasses ShellExecute-level SmartScreen hooks.<br>
+        <b>Smart App Control (SAC, Win11):</b> SAC enforces at kernel via WDAC. For test VMs → Windows Security → Smart App Control → Off. For in-scope red team: SAC blocking confirms your WDAC policy IS working — that is a positive blue team finding. T1562.001.<br>
         <b>Adobe Reader v10+:</b> One-click "Allow" dialog before /Launch fires.<br>
         <b>Foxit / SumatraPDF / unpatched readers:</b> Fires with no dialog.<br>
         <b>Detection:</b> pname=AcroRd32.exe / Acrobat.exe / FoxitReader.exe &rarr; <span style="color:#F4A261">DR_016</span> (HIGH, 85%)
