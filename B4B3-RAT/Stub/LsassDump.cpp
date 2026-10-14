@@ -13,7 +13,7 @@ static BOOL DynMiniDumpWriteDump(HANDLE hProc, DWORD pid, HANDLE hFile, MINIDUMP
     if (!fn) {
         std::string dll = S("dbghelp.dll");
         HMODULE h = LoadLibraryA(dll.c_str());
-        if (h) fn = (fpMiniDumpWriteDump)GetProcAddress(h, "MiniDumpWriteDump");
+        if (h) fn = (fpMiniDumpWriteDump)GetProcAddress(h, S("MiniDumpWriteDump").c_str());
     }
     return fn ? fn(hProc, pid, hFile, dt, exc, usr, cb) : FALSE;
 }
@@ -25,7 +25,7 @@ static DWORD FindLsassPid() {
     DWORD pid = 0;
     if (Process32First(hSnap, &pe)) {
         do {
-            if (_stricmp(pe.szExeFile, "lsass.exe") == 0) {
+            if (_stricmp(pe.szExeFile, S("lsass.exe").c_str()) == 0) {
                 pid = pe.th32ProcessID;
                 break;
             }

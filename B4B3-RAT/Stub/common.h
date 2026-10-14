@@ -52,8 +52,6 @@ SOFTWARE.
 #include <gdiplus.h>
 #pragma comment(lib, "GdiPlus.lib")
 
-#pragma comment(lib, "Urlmon.lib")
-
 #include <modes.h>
 #include <aes.h>
 #include <filters.h>
