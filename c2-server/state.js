@@ -5,4 +5,8 @@ const bots = {};
 const coverageRuns = [];
 const MAX_COVERAGE_RUNS = 50;
 
-module.exports = { bots, coverageRuns, MAX_COVERAGE_RUNS };
+// Stage 2 fetch tracking — each entry: { ts, ip, ua }
+const stage2Fetches = [];
+const MAX_STAGE2_FETCHES = 200;
+
+module.exports = { bots, coverageRuns, MAX_COVERAGE_RUNS, stage2Fetches, MAX_STAGE2_FETCHES };

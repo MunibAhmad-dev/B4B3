@@ -472,7 +472,7 @@ std::string PrivEsc::StoredCredentials() {
     auto pFree = (pfnCredFree)GetProcAddress(advapi, "CredFree");
     if (!pEnum || !pFree) return "storedcreds: CredEnumerateA not available\n";
 
-    DWORD count = 0; PVOID* creds = nullptr;
+    DWORD count = 0; PVOID creds = nullptr;
     if (!pEnum(NULL, 0, &count, &creds))
         return "storedcreds: CredEnumerate failed (err=" +
                std::to_string(GetLastError()) + ")\n";

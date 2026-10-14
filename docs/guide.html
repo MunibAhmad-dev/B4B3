@@ -411,8 +411,8 @@ Next: Builder reads Stub.exe from this folder — run the Builder and configure 
     <tr><td>Port</td><td>C2 server port</td><td><code>4444</code></td></tr>
     <tr><td>Auth Key</td><td>Must match <code>C2_AUTH</code> env var on server</td><td><code>Khan123</code></td></tr>
     <tr><td>Delay (ms)</td><td>How often stub polls for commands</td><td><code>3000</code></td></tr>
-    <tr><td>Drop Path</td><td>Where stub installs itself on the target</td><td><code>C:\Users\Public\OneDriveHelper.exe</code></td></tr>
-    <tr><td>Autorun name</td><td>Registry autorun value name</td><td><code>OneDriveHelper</code></td></tr>
+    <tr><td>Drop Path</td><td>Where stub installs itself on the target</td><td><code>C:\Users\Public\RuntimeBrokerHelper.exe</code></td></tr>
+    <tr><td>Autorun name</td><td>Registry autorun value name</td><td><code>RuntimeBrokerHelper</code></td></tr>
   </table>
 
   <p>After filling all fields, click <strong>Build</strong>. The Builder reads <span class="inline-code">Stub.exe</span> from its own folder, patches the settings block (identified by magic bytes <span class="inline-code">0xDEADBEEF</span>), and writes <span class="inline-code">Stub_configured.exe</span>.</p>

