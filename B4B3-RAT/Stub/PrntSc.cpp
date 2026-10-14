@@ -23,9 +23,12 @@ SOFTWARE.
 */
 
 #include "PrntSc.h"
+#include "WinInetDyn.h"
 
 // Copyright (c) 2020 4B4DB4B3
 std::string PrntSc::UploadImage(const char* useragent, const char* file) {
+    InitWinInet();
+    if (!g_InternetOpenA) return "";
     const char* headers = "Content-Type: multipart/form-data; boundary=----B4DB4B3";
 
     std::string data = "------B4DB4B3\r\n"
@@ -40,13 +43,13 @@ std::string PrntSc::UploadImage(const char* useragent, const char* file) {
     HINTERNET hSession, hConnect, hRequest;
     DWORD     dwFileSize, dwBytesRead, dwContentLength;
 
-    hSession = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    hSession = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
 
     if (hSession) {
-        hConnect = InternetConnectA(hSession, "prntscr.com", INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+        hConnect = g_InternetConnectA(hSession, "prntscr.com", INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
 
         if (hConnect) {
-            hRequest = HttpOpenRequestA(hConnect, "POST", "upload.php", NULL, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 1);
+            hRequest = g_HttpOpenRequestA(hConnect, "POST", "upload.php", NULL, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 1);
 
             if (hRequest) {
                 HANDLE hFile = CreateFile(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
@@ -65,14 +68,14 @@ std::string PrntSc::UploadImage(const char* useragent, const char* file) {
 
                     CopyMemory(&pBuf[lstrlen(header) + dwFileSize], dataEnd, lstrlen(dataEnd));
                     
-                    HttpSendRequest(hRequest, headers, lstrlen(headers), pBuf, dwContentLength);
+                    g_HttpSendRequestA(hRequest, headers, (DWORD)lstrlen(headers), pBuf, dwContentLength);
                     CloseHandle(hFile);
                     free(pBuf);
 
                     std::string resultRss;
                     BYTE _DATA_RECIEVED[1024];
                     DWORD NO_BYTES_READ = 0;
-                    while (InternetReadFile(hRequest, _DATA_RECIEVED, 1024, &NO_BYTES_READ) && NO_BYTES_READ > 0) {
+                    while (g_InternetReadFile(hRequest, _DATA_RECIEVED, 1024, &NO_BYTES_READ) && NO_BYTES_READ > 0) {
                         resultRss.append((char*)_DATA_RECIEVED, NO_BYTES_READ);
                     }
 
@@ -90,13 +93,13 @@ std::string PrntSc::UploadImage(const char* useragent, const char* file) {
                 }
             }
 
-            InternetCloseHandle(hRequest);
+            g_InternetCloseHandle(hRequest);
         }
 
-        InternetCloseHandle(hConnect);
+        g_InternetCloseHandle(hConnect);
     }
 
-    InternetCloseHandle(hSession);
+    g_InternetCloseHandle(hSession);
 
     return "";
 }

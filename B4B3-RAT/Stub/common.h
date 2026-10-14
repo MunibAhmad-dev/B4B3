@@ -35,7 +35,6 @@ SOFTWARE.
 #include "nt_compat.h"
 
 #include <WinInet.h>
-#pragma comment(lib, "WinInet.lib")
 
 #include <fstream>
 #include <nlohmann/json.hpp>

@@ -103,13 +103,13 @@ $compilerArgs = $Sources + 'Stub_res.o' + @(
     "-I$CryptoPP",
     "-I$NlohmannInc",
     "-L$CryptoPP",
-    '-lcryptopp', '-lwininet', '-lgdiplus', '-lurlmon',
+    '-lcryptopp', '-lgdiplus', '-lurlmon',
     '-lpsapi', '-lvfw32', '-lwinmm', '-lws2_32', '-lole32',
     '-lshlwapi', '-ladvapi32', '-luser32', '-lgdi32', '-lshell32',
     '-liphlpapi',
     '-loleaut32', '-luuid', '-lcrypt32', '-lbcrypt',
-    '-lwlanapi', '-lwevtapi', '-lwbemuuid',
-    '-ldbghelp', '-lnetapi32', '-lwldap32',
+    '-lwlanapi', '-lwbemuuid',
+    '-lnetapi32', '-lwldap32',
     '-o', 'Stub.exe'
 )
 

