@@ -84,6 +84,74 @@ router.delete("/api/bot/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Delete ALL bots ───────────────────────────────────────────────────────────
+
+router.delete("/api/bots", requireAdmin, (_req, res) => {
+  const count = Object.keys(bots).length;
+  Object.keys(bots).forEach(k => delete bots[k]);
+  require("../persist").flush();
+  console.log(`[admin]  ALL bots deleted (${count})`);
+  res.json({ ok: true, deleted: count });
+});
+
+// ── Downloads directory listing + file delete ─────────────────────────────────
+
+const DL_DIR = path.join(__dirname, "..", "downloads");
+
+router.get("/api/admin/downloads", requireAdmin, (_req, res) => {
+  try {
+    if (!fs.existsSync(DL_DIR)) return res.json([]);
+    const files = fs.readdirSync(DL_DIR).map(name => {
+      try {
+        const st = fs.statSync(path.join(DL_DIR, name));
+        return { name, size: st.size, mtime: st.mtime };
+      } catch (_) { return { name, size: 0, mtime: null }; }
+    });
+    res.json(files);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete("/api/admin/downloads/:filename", requireAdmin, (req, res) => {
+  const name = path.basename(req.params.filename);
+  const fp   = path.join(DL_DIR, name);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: "not found" });
+  try { fs.unlinkSync(fp); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Server info summary ───────────────────────────────────────────────────────
+
+router.get("/api/admin/info", requireAdmin, (_req, res) => {
+  const DATA_DIR    = path.join(__dirname, "..", "data");
+  const STAGE_LOG   = path.join(DATA_DIR, "stage_events.json");
+  const BOTS_FILE   = path.join(DATA_DIR, "bots.json");
+  const ACCESS_LOG  = path.join(__dirname, "..", "downloads", "access.log");
+
+  let stageCount = 0;
+  try { stageCount = JSON.parse(fs.readFileSync(STAGE_LOG, "utf8")).length; } catch (_) {}
+
+  let botsFileSize = 0;
+  try { botsFileSize = fs.statSync(BOTS_FILE).size; } catch (_) {}
+
+  let dlFiles = [];
+  try { dlFiles = fs.existsSync(DL_DIR) ? fs.readdirSync(DL_DIR) : []; } catch (_) {}
+
+  let accessLines = 0;
+  try { accessLines = fs.readFileSync(ACCESS_LOG, "utf8").split("\n").filter(Boolean).length; } catch (_) {}
+
+  const mem = process.memoryUsage();
+  res.json({
+    uptime:      Math.floor(process.uptime()),
+    botCount:    Object.keys(bots).length,
+    stageEvents: stageCount,
+    botsFileKB:  Math.round(botsFileSize / 1024),
+    dlFiles:     dlFiles.filter(f => f !== "access.log"),
+    dlFileCount: dlFiles.filter(f => f !== "access.log").length,
+    accessLogs:  accessLines,
+    memMB:       Math.round(mem.rss / 1024 / 1024),
+  });
+});
+
 router.delete("/api/bot/:id/events", requireAdmin, (req, res) => {
   const bot = bots[req.params.id];
   if (!bot) return res.status(404).json({ error: "not found" });
