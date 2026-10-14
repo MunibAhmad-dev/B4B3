@@ -9,6 +9,7 @@ BitBlt reads the window's rendered content directly from the GDI framebuffer.
 #pragma warning(disable: 4996)
 
 #include "WebcamTool.h"
+#include "Obf.h"
 #include <windows.h>
 #include <vfw.h>
 #include <gdiplus.h>

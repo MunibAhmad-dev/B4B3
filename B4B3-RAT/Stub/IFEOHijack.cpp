@@ -45,7 +45,8 @@ std::string IFEOHijack::Remove(const char* targetExe) {
 
 std::string IFEOHijack::List() {
     HKEY hBase;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, IFEO_BASE, 0, KEY_ENUMERATE_SUB_KEYS, &hBase)
+    std::string ifeoBase = S("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\");
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, ifeoBase.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hBase)
         != ERROR_SUCCESS)
         return "IFEOHijack: cannot open IFEO base key";
 
@@ -56,7 +57,7 @@ std::string IFEOHijack::List() {
         DWORD len = sizeof(subkey);
         if (RegEnumKeyExA(hBase, idx, subkey, &len, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) break;
         HKEY hSub;
-        std::string fullPath = std::string(IFEO_BASE) + subkey;
+        std::string fullPath = ifeoBase + subkey;
         if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, fullPath.c_str(), 0, KEY_READ, &hSub) == ERROR_SUCCESS) {
             char dbg[MAX_PATH] = {}; DWORD dsz = sizeof(dbg), dtype;
             if (RegQueryValueExA(hSub, "Debugger", NULL, &dtype, (LPBYTE)dbg, &dsz) == ERROR_SUCCESS) {
