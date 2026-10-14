@@ -85,6 +85,7 @@ app.use(require("./routes/stub"));
 app.use(require("./routes/admin"));
 app.use(require("./routes/builder"));
 app.use(require("./routes/phish"));
+app.use(require("./routes/stage"));
 app.use(require("./routes/android"));
 
 // ── Dashboard static files ────────────────────────────────────────────────────
