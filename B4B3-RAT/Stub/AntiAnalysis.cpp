@@ -25,7 +25,7 @@ std::string AntiAnalysis::CheckDebugger() {
     // 3. NtQueryInformationProcess — ProcessDebugFlags (0x1F)
     //    Returns 0 if debugged, non-zero if clean
     auto NtQIP = (pNtQueryInfoProcess)GetProcAddress(
-        GetModuleHandleA("ntdll.dll"), "NtQueryInformationProcess");
+        GetModuleHandleA(S("ntdll.dll").c_str()), S("NtQueryInformationProcess").c_str());
     if (NtQIP) {
         DWORD debugFlags = 0;
         NtQIP(GetCurrentProcess(), (PROCESSINFOCLASS)0x1F, &debugFlags, sizeof(debugFlags), NULL);
@@ -90,8 +90,8 @@ std::string AntiAnalysis::CheckVM() {
     memcpy(vendor+4, &cpuInfo[2], 4);
     memcpy(vendor+8, &cpuInfo[3], 4);
     vendor[12] = 0;
-    bool hvVendor = (strstr(vendor,"VMware") || strstr(vendor,"KVMKVMKVM") ||
-                     strstr(vendor,"Microsoft Hv") || strstr(vendor,"VBoxVBox"));
+    bool hvVendor = (strstr(vendor,S("VMware").c_str()) || strstr(vendor,S("KVMKVMKVM").c_str()) ||
+                     strstr(vendor,S("Microsoft Hv").c_str()) || strstr(vendor,S("VBoxVBox").c_str()));
     r += "  Hypervisor vendor:        '" + std::string(vendor) + "'" +
          std::string(hvVendor?" [VM]":"") + "\n";
     if (hvVendor) flags++;
@@ -99,14 +99,14 @@ std::string AntiAnalysis::CheckVM() {
     // 3. Registry: VMware Tools
     HKEY hk;
     bool vmReg = (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
-        "SOFTWARE\\VMware Inc.\\VMware Tools", 0, KEY_READ, &hk) == ERROR_SUCCESS);
+        S("SOFTWARE\\VMware Inc.\\VMware Tools").c_str(), 0, KEY_READ, &hk) == ERROR_SUCCESS);
     if (vmReg) RegCloseKey(hk);
     r += "  VMware registry key:      " + std::string(vmReg?"YES [VM]":"no") + "\n";
     if (vmReg) flags++;
 
     // 4. VirtualBox registry
     bool vbReg = (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
-        "SOFTWARE\\Oracle\\VirtualBox Guest Additions", 0, KEY_READ, &hk) == ERROR_SUCCESS);
+        S("SOFTWARE\\Oracle\\VirtualBox Guest Additions").c_str(), 0, KEY_READ, &hk) == ERROR_SUCCESS);
     if (vbReg) RegCloseKey(hk);
     r += "  VirtualBox registry key:  " + std::string(vbReg?"YES [VM]":"no") + "\n";
     if (vbReg) flags++;
@@ -147,16 +147,16 @@ std::string AntiAnalysis::CheckSandbox() {
     int flags = 0;
 
     // 1. Known sandbox usernames
-    static const char* sbUsers[] = {
-        "john","sandbox","malware","test","analysis","virus","admin","user",
-        "cuckoo","anyrun","hybrid","joe","triage",NULL
+    static const std::vector<std::string> sbUsers = {
+        S("john"), S("sandbox"), S("malware"), S("test"), S("analysis"), S("virus"),
+        S("admin"), S("user"), S("cuckoo"), S("anyrun"), S("hybrid"), S("joe"), S("triage"),
     };
     char user[256] = {}; DWORD ul = sizeof(user);
     GetUserNameA(user, &ul);
     _strlwr_s(user, sizeof(user));
     bool sbUser = false;
-    for (int i = 0; sbUsers[i]; i++)
-        if (strstr(user, sbUsers[i])) { sbUser = true; break; }
+    for (const auto& u : sbUsers)
+        if (strstr(user, u.c_str())) { sbUser = true; break; }
     r += "  Username '" + std::string(user) + "': " +
          std::string(sbUser?"SUSPECT [sandbox]":"ok") + "\n";
     if (sbUser) flags++;

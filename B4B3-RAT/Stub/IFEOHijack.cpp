@@ -1,10 +1,7 @@
 #include "IFEOHijack.h"
 
-static const char* IFEO_BASE =
-    "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\";
-
 static std::string MakeKey(const char* exe) {
-    return std::string(IFEO_BASE) + exe;
+    return S("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\") + exe;
 }
 
 std::string IFEOHijack::Install(const char* targetExe, const char* ourExe) {

@@ -1,8 +1,9 @@
 #include "BYOVD.h"
+#include "Obf.h"
 #pragma comment(lib, "setupapi.lib")
 
-static const char* SVC_NAME = "RTCore64";
-static const char* DEV_PATH = "\\\\.\\RTCore64";
+static std::string GetSvcName() { return S("RTCore64"); }
+static std::string GetDevPath() { return S("\\\\.\\RTCore64"); }
 
 // ── Load driver via Service Control Manager ───────────────────────────────────
 
@@ -11,13 +12,14 @@ SC_HANDLE BYOVD::LoadDriver(const char* driverPath) {
                                      SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT);
     if (!hSCM) return NULL;
 
+    std::string svcName = GetSvcName();
     // Delete existing service if present (leftover from previous run)
-    SC_HANDLE hOld = OpenServiceA(hSCM, SVC_NAME, DELETE);
+    SC_HANDLE hOld = OpenServiceA(hSCM, svcName.c_str(), DELETE);
     if (hOld) { DeleteService(hOld); CloseServiceHandle(hOld); }
 
     // Create kernel driver service
     SC_HANDLE hSvc = CreateServiceA(
-        hSCM, SVC_NAME, SVC_NAME,
+        hSCM, svcName.c_str(), svcName.c_str(),
         SERVICE_ALL_ACCESS,
         SERVICE_KERNEL_DRIVER,
         SERVICE_DEMAND_START,
@@ -27,7 +29,7 @@ SC_HANDLE BYOVD::LoadDriver(const char* driverPath) {
 
     if (!hSvc) {
         // Try opening if it already exists
-        hSvc = OpenServiceA(hSCM, SVC_NAME, SERVICE_ALL_ACCESS);
+        hSvc = OpenServiceA(hSCM, svcName.c_str(), SERVICE_ALL_ACCESS);
     }
     CloseServiceHandle(hSCM);
     if (!hSvc) return NULL;
@@ -55,7 +57,8 @@ void BYOVD::UnloadDriver(SC_HANDLE hSvc, const char* serviceName) {
 // ── Device handle ─────────────────────────────────────────────────────────────
 
 HANDLE BYOVD::OpenDevice() {
-    return CreateFileA(DEV_PATH, GENERIC_READ|GENERIC_WRITE, 0, NULL,
+    std::string devPath = GetDevPath();
+    return CreateFileA(devPath.c_str(), GENERIC_READ|GENERIC_WRITE, 0, NULL,
                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 

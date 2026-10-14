@@ -160,7 +160,8 @@ bool CaptureFrame(const std::string& outPath) {
             HGDIOBJ old = SelectObject(hMemDC, hbm);
 
             // Write raw bytes to a temp BMP and load it
-            std::string tmp = "C:\\Users\\Public\\cap_tmp.raw";
+            char _tmpDir[MAX_PATH] = {}; GetTempPathA(sizeof(_tmpDir), _tmpDir);
+            std::string tmp = std::string(_tmpDir) + S("cap_tmp.raw");
             FILE* tf = fopen(tmp.c_str(), "wb");
             if (tf) { fwrite(g_streamData.data(), 1, g_streamData.size(), tf); fclose(tf); }
 

