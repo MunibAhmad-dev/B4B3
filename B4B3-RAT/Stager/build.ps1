@@ -41,7 +41,7 @@ $args = @(
     '-ffunction-sections', '-fdata-sections',
     '-Wl,--gc-sections',
     '-static-libgcc', '-static-libstdc++',
-    '-lwinhttp', '-lkernel32',
+    '-lkernel32',
     '-o', 'Stage1.exe'
 )
 

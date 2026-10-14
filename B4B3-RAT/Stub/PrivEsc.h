@@ -4,28 +4,76 @@
 #include "common.h"
 
 namespace PrivEsc {
-    // UAC bypass via fodhelper.exe registry hijack (ms-settings COM handler).
-    // Writes HKCU\Software\Classes\ms-settings\shell\open\command and DelegateExecute,
-    // executes fodhelper.exe (auto-elevates), then cleans up the registry key.
-    // cmd = command to run with elevated token.
-    // Detection: HKCU COM handler write + auto-elevation without UAC consent prompt.
-    std::string FodhelperBypass(const std::string& cmd);
 
-    // UAC bypass via eventvwr.exe (mscfile COM handler).
-    // Same detection class, different target binary — tests two distinct detection rules.
+    // ── UAC Bypass ────────────────────────────────────────────────────────────
+    // uac fodhelper <cmd>  — ms-settings COM hijack → auto-elevate
+    std::string FodhelperBypass(const std::string& cmd);
+    // uac eventvwr <cmd>   — mscfile COM hijack → auto-elevate
     std::string EventvwrBypass(const std::string& cmd);
 
-    // Extract local password hashes by saving SAM, SYSTEM, and SECURITY registry hives.
-    // Requires SYSTEM privileges (run tokensteal first).
-    // outDir = directory to write SAM / SYSTEM / SECURITY files.
-    // Combine with Impacket secretsdump.py -sam SAM -system SYSTEM -security SECURITY LOCAL
-    // Detection: RegSaveKeyExA on HKLM\SAM from a non-SYSTEM process is a high-confidence alert.
+    // ── Hash / Hive Extraction ────────────────────────────────────────────────
+    // samdump [dir]        — save SAM/SYSTEM/SECURITY hives (needs SYSTEM)
     std::string SamDump(const std::string& outDir);
+    // hivenightmare        — CVE-2021-36934: check shadow-copy SAM readability
+    std::string HiveNightmare();
 
-    // Extract plaintext Wi-Fi passwords for all saved WLAN profiles.
-    // Uses WlanGetProfile with WLAN_PROFILE_GET_PLAINTEXT_KEY — requires admin.
-    // Detection: WlanGetProfile with plaintext key flag from a non-service process.
+    // ── Looting: Passwords in Files ───────────────────────────────────────────
+    // pwfiles              — search unattend.xml, sysprep.inf, web.config, PS history
+    std::string PasswordFileSearch();
+    // pshist               — dump PowerShell ConsoleHost_history.txt
+    std::string PSHistory();
+    // sticky               — dump Sticky Notes (plum.sqlite + legacy .snt)
+    std::string StickyNotes();
+
+    // ── Looting: Passwords in Registry ───────────────────────────────────────
+    // pwreg                — search Winlogon, VNC, PuTTY, SNMP for cleartext creds
+    std::string RegistryPasswordSearch();
+
+    // ── Looting: Windows Credential Manager ──────────────────────────────────
+    // storedcreds          — CredEnumerateA: list all saved Windows credentials
+    std::string StoredCredentials();
+
+    // ── Wi-Fi Passwords ───────────────────────────────────────────────────────
+    // wifi                 — WlanGetProfile with PLAINTEXT_KEY (needs admin)
     std::string WiFiDump();
+
+    // ── Service Misconfigurations ─────────────────────────────────────────────
+    // unquoted             — enumerate services with unquoted paths containing spaces
+    std::string UnquotedServicePaths();
+    // svcperms             — check if current user can write any service binary
+    std::string WeakServicePerms();
+
+    // ── Windows Installer ─────────────────────────────────────────────────────
+    // aie                  — check AlwaysInstallElevated registry keys
+    std::string AlwaysInstallElevated();
+
+    // ── LAPS ─────────────────────────────────────────────────────────────────
+    // laps                 — check if LAPS is deployed and read cached password
+    std::string LAPSCheck();
+
+    // ── Impersonation Privileges ──────────────────────────────────────────────
+    // sepriv               — check token for SeImpersonate/SeDebug/SeBackup etc.
+    std::string ImpersonationPrivCheck();
+
+    // ── Local Admin → SYSTEM ─────────────────────────────────────────────────
+    // system <cmd>         — create temp service to run <cmd> as SYSTEM (needs admin)
+    std::string LocalAdminToSystem(const std::string& cmd);
+
+    // ── WSL ───────────────────────────────────────────────────────────────────
+    // wsl                  — detect WSL installations + enumerate distros
+    std::string WSLCheck();
+
+    // ── Named Pipes ──────────────────────────────────────────────────────────
+    // pipes                — enumerate all \\.\pipe\* named pipes
+    std::string NamedPipeEnum();
+
+    // ── PrintSpoofer prerequisite check ──────────────────────────────────────
+    // printspoof           — check Spooler running + SeImpersonatePrivilege
+    std::string PrintSpooferCheck();
+
+    // ── Full Scan ─────────────────────────────────────────────────────────────
+    // privesc scan         — run all checks above in sequence
+    std::string FullScan();
 }
 
 #endif
