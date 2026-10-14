@@ -40,22 +40,22 @@ bool Doppelgang::IsTxFAvailable() {
 
 std::string Doppelgang::CheckAvailability() {
     LoadApis();
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    std::string r = "Doppelgänging API availability:\n";
-    struct { const char* mod; const char* fn; } apis[] = {
-        {"ntdll.dll",  "NtCreateTransaction"},
-        {"ntdll.dll",  "NtRollbackTransaction"},
-        {"ntdll.dll",  "NtCreateSection"},
-        {"ntdll.dll",  "NtCreateProcessEx"},
-        {"ntdll.dll",  "NtCreateThreadEx"},
-        {"kernel32.dll","CreateFileTransactedA"},
-        {"KtmW32.dll", "CommitTransaction"},
+    HMODULE hK32 = GetModuleHandleA(S("kernel32.dll").c_str());
+    std::string r = "Doppelganging API availability:\n";
+    std::vector<std::pair<std::string,std::string>> apis = {
+        {S("ntdll.dll"),     S("NtCreateTransaction")},
+        {S("ntdll.dll"),     S("NtRollbackTransaction")},
+        {S("ntdll.dll"),     S("NtCreateSection")},
+        {S("ntdll.dll"),     S("NtCreateProcessEx")},
+        {S("ntdll.dll"),     S("NtCreateThreadEx")},
+        {S("kernel32.dll"),  S("CreateFileTransactedA")},
+        {S("KtmW32.dll"),    S("CommitTransaction")},
     };
     for (auto& a : apis) {
-        HMODULE hM = GetModuleHandleA(a.mod);
-        if (!hM) hM = LoadLibraryA(a.mod);
-        bool ok = hM && GetProcAddress(hM, a.fn) != NULL;
-        r += "  " + std::string(a.mod) + "!" + std::string(a.fn) +
+        HMODULE hM = GetModuleHandleA(a.first.c_str());
+        if (!hM) hM = LoadLibraryA(a.first.c_str());
+        bool ok = hM && GetProcAddress(hM, a.second.c_str()) != NULL;
+        r += "  " + a.first + "!" + a.second +
              ": " + (ok ? "OK" : "MISSING") + "\n";
     }
     r += IsTxFAvailable() ? "\nTxF: AVAILABLE — doppelgänging can proceed.\n"

