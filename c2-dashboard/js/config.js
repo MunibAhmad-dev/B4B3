@@ -2,7 +2,7 @@
 //
 // Option A — Same origin (recommended):
 //   Leave API_BASE as "" and open the dashboard from the backend itself:
-//   http://localhost:4444/login.html
+//   https://localhost:443/login.html
 //
 // Option B — Go Live / Live Server (different port):
 //   Set API_BASE to the backend URL below, then start backend with:

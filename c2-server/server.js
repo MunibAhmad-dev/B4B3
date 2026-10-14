@@ -8,7 +8,7 @@
  *
  * Environment variables:
  *   C2_AUTH       Bot auth key     (default: changeme)
- *   C2_PORT       Port             (default: 4444)
+ *   C2_PORT       Port             (default: 443)
  *   ADMIN_PASS    Dashboard pw     (default: admin123)
  *   CORS_ORIGIN   Frontend origin  (e.g. https://dashboard.example.com)
  *                 Leave blank when frontend is served by nginx on same host.

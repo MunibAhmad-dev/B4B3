@@ -4,7 +4,7 @@ const path = require("path");
 
 const AUTH_KEY    = process.env.C2_AUTH    || "changeme";
 const ADMIN_PASS  = process.env.ADMIN_PASS || "admin123";
-const PORT        = parseInt(process.env.C2_PORT || "4444", 10);
+const PORT        = parseInt(process.env.C2_PORT || "443", 10);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "";
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
 

