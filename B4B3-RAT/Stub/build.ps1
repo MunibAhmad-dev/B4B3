@@ -92,7 +92,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'windres failed' -ForegroundColor Red; exi
 # Step 2: compile + link
 Write-Host '[2/3] Compiling and linking...'
 $compilerArgs = $Sources + 'Stub_res.o' + @(
-    '-std=c++17', '-O2', '-mwindows',
+    '-std=c++17', '-O1', '-mwindows',
     '-s',
     '-fno-ident',
     '-fno-threadsafe-statics',
